@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot AP2T - Control Panel</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="sidebar">
+        <h2>🤖 Bot Admin</h2>
+        <ul>
+            <li class="active" data-tab="dashboard">Dashboard</li>
+            <li data-tab="settings">Config (.env)</li>
+            <li data-tab="profiles">Profiles</li>
+            <li data-tab="users">Users List</li>
+        </ul>
+    </div>
+    
+    <div class="main-content">
+        <header>
+            <h1>Control Panel</h1>
+            <div class="status-badge" id="botStatus">Checking Status...</div>
+        </header>
+
+        <!-- DASHBOARD TAB -->
+        <section id="dashboard" class="tab-content active">
+            <div class="card">
+                <h3>System Information</h3>
+                <p><strong>Hardware ID (UUID):</strong> <span id="hwidDisplay">...</span></p>
+                <p><strong>License Status:</strong> <span id="licenseStatus">...</span></p>
+                <button onclick="fetchStatus()">Refresh Status</button>
+            </div>
+        </section>
+
+        <!-- SETTINGS TAB -->
+        <section id="settings" class="tab-content">
+            <div class="card">
+                <h3>Environment Variables</h3>
+                <form id="envForm">
+                    <div id="envFields"></div>
+                    <button type="submit" class="btn-primary">Save Settings</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- PROFILES TAB -->
+        <section id="profiles" class="tab-content">
+            <div class="card">
+                <h3>Saved AP2T Profiles</h3>
+                <table id="profilesTable">
+                    <thead>
+                        <tr>
+                            <th>Profile Name</th>
+                            <th>AP2T Username</th>
+                            <th>Webmail Username</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- USERS TAB -->
+        <section id="users" class="tab-content">
+            <div class="card">
+                <h3>Daftar Staf Telegram (Read-Only)</h3>
+                <p style="color: #a0a0a0; font-size: 13px; margin-bottom: 15px;"><i>Pendaftaran staf baru hanya bisa dilakukan oleh Admin Utama melalui perintah <b>/tambah_user</b> di Telegram.</i></p>
+                <table id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>Telegram Chat ID</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
