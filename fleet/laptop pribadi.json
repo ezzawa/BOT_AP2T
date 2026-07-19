@@ -1,6 +1,11 @@
 {
   "pc_name": "laptop pribadi",
-  "last_online": "19/7/2026, 15.29.56",
+  "last_online": "19/7/2026, 15.30.07",
   "last_updated": "19/7/2026, 14.36.07",
-  "registered_users": []
+  "registered_users": [
+    {
+      "id": "5590322784",
+      "nama": "test"
+    }
+  ]
 }
