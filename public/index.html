@@ -14,14 +14,21 @@
             <li class="active" data-tab="dashboard">Dashboard</li>
             <li data-tab="settings">Config (.env)</li>
             <li data-tab="profiles">Profiles</li>
-            <li data-tab="users">Users List</li>
+            <li data-tab="users">Control Panel</li>
+            <li data-tab="panduan">Panduan Bot</li>
         </ul>
     </div>
     
     <div class="main-content">
         <header>
-            <h1>Control Panel</h1>
-            <div class="status-badge" id="botStatus">Checking Status...</div>
+            <h1>Bot AP2T Web Dashboard</h1>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <div class="status-badge" id="botStatus">Checking Status...</div>
+                <div id="adminLoginContainer" style="display: flex; gap: 5px;">
+                    <input type="password" id="adminPwdInput" placeholder="Password Admin" style="padding: 5px; font-size: 12px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff; width: 120px;">
+                    <button id="adminLoginBtn" class="btn-primary" onclick="adminLogin()" style="padding: 5px 10px; font-size: 12px; border-radius: 4px;">Login 🔒</button>
+                </div>
+            </div>
         </header>
 
         <!-- DASHBOARD TAB -->
@@ -36,26 +43,67 @@
 
         <!-- SETTINGS TAB -->
         <section id="settings" class="tab-content">
-            <div class="card">
-                <h3>Environment Variables</h3>
-                <form id="envForm">
-                    <div id="envFields"></div>
-                    <button type="submit" class="btn-primary">Save Settings</button>
-                </form>
-            </div>
+            <form id="envForm" style="margin-top: 20px;">
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
+                    <i>Silakan ubah kredensial AP2T dan Webmail di sini. Perubahan akan merestart bot secara otomatis.</i>
+                </p>
+                <div id="envFields">
+                    <!-- Dinamis via JS -->
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn-primary">Simpan Config & Restart Bot</button>
+                    <button type="button" class="btn-primary" style="background-color: #f59e0b;" onclick="saveEnvAsProfile()">Simpan Sebagai Profil Baru...</button>
+                </div>
+            </form>
         </section>
 
-        <!-- PROFILES TAB -->
+        <!-- PROFILE AP2T TAB -->
         <section id="profiles" class="tab-content">
-            <div class="card">
-                <h3>Saved AP2T Profiles</h3>
+            <h2>Manajemen Akun AP2T</h2>
+            
+            <div class="card" style="margin-bottom: 20px;">
+                <h3 style="margin-bottom: 15px; color: #60a5fa;">Edit Profil (Klik tombol Edit di tabel)</h3>
+                <form id="profileForm" onsubmit="event.preventDefault(); saveProfileFromForm();">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Nama Profil (Tidak bisa diubah)</label>
+                            <input type="text" id="profName" placeholder="Pilih profil dari tabel di bawah..." readonly style="background-color: #2a2a2a; color: #888; cursor: not-allowed;" required>
+                        </div>
+                        <div></div>
+                        
+                        <div>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Username AP2T</label>
+                            <input type="text" id="profAp2tUser" required>
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Password AP2T</label>
+                            <input type="text" id="profAp2tPass" required>
+                        </div>
+                        
+                        <div>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Username Webmail (Pusat\uid)</label>
+                            <input type="text" id="profWebUser" required>
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Password Webmail</label>
+                            <input type="text" id="profWebPass" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary" style="margin-top: 15px;">Simpan Profil</button>
+                </form>
+            </div>
+
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
+                <i>Daftar profil yang tersimpan di profiles.json. Klik "Edit" untuk mengubah password, atau "Pakai Akun" untuk menjadikan profil aktif.</i>
+            </p>
+            <div class="table-container">
                 <table id="profilesTable">
                     <thead>
                         <tr>
-                            <th>Profile Name</th>
-                            <th>AP2T Username</th>
-                            <th>Webmail Username</th>
-                            <th>Action</th>
+                            <th>Nama Profil</th>
+                            <th>Username AP2T</th>
+                            <th>Username Webmail</th>
+                            <th style="width: 200px;">Aksi</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -63,20 +111,81 @@
             </div>
         </section>
 
-        <!-- USERS TAB -->
+        <!-- CONTROL PANEL TAB -->
         <section id="users" class="tab-content">
             <div class="card">
-                <h3>Daftar Staf Telegram (Read-Only)</h3>
-                <p style="color: #a0a0a0; font-size: 13px; margin-bottom: 15px;"><i>Pendaftaran staf baru hanya bisa dilakukan oleh Admin Utama melalui perintah <b>/tambah_user</b> di Telegram.</i></p>
+                <h3>🖥️ Status PC Cabang (Fleet Monitor)</h3>
+                <p style="color: #a0a0a0; font-size: 13px; margin-bottom: 15px;"><i>Memantau seluruh komputer yang menjalankan bot ini (via GitHub).</i></p>
+                <table id="fleetTable">
+                    <thead>
+                        <tr>
+                            <th>Nama PC</th>
+                            <th>Status Terakhir (Online)</th>
+                            <th>Update Terakhir (Versi)</th>
+                            <th>Daftar Staf Aktif</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fleetTbody">
+                        <tr><td colspan="4" style="text-align: center;">Mengambil data dari GitHub...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <h3>👤 Daftar Staf Telegram Lokal (PC Ini)</h3>
+                <p style="color: #a0a0a0; font-size: 13px; margin-bottom: 15px;"><i>Staf yang terdaftar HANYA di PC ini. (Gunakan <b>/tambah_user</b> di Telegram untuk menambah).</i></p>
                 <table id="usersTable">
                     <thead>
                         <tr>
+                            <th>Nama Staf</th>
                             <th>Telegram Chat ID</th>
-                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
                 </table>
+            </div>
+        </section>
+
+        <!-- PANDUAN TAB -->
+        <section id="panduan" class="tab-content">
+            <div class="card">
+                <h3>📖 Panduan Penggunaan Bot</h3>
+                <p>Berikut adalah beberapa panduan penting untuk mengatur dan menggunakan bot Anda.</p>
+                
+                <h4 style="margin-top:20px; color:#60a5fa;">1. Panduan Koneksi Google Sheets (Rekap CT)</h4>
+                <div style="background-color: #2a2a2a; padding: 15px; border-radius: 6px; margin-top: 10px; font-size: 14px; font-family: monospace;">
+                    <p style="color: #a0a0a0;">// 1. Buat Spreadsheet baru di Google Sheets.</p>
+                    <p style="color: #a0a0a0;">// 2. Buat header di baris 1 (A1 - G1) persis seperti ini: waktu, idpel, no_gangguan, token, nama, tarif_daya, pembuat</p>
+                    <p style="color: #a0a0a0;">// 3. Klik menu Extensions > Apps Script.</p>
+                    <p style="color: #a0a0a0;">// 4. Hapus kode bawaan, dan COPY-PASTE kode sakti di bawah ini:</p>
+                    <br>
+                    <pre style="color: #4ade80; overflow-x: auto;">
+function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+    
+    sheet.appendRow([
+      data.waktu,
+      data.idpel,
+      data.no_gangguan,
+      data.token,
+      data.nama,
+      data.tarif_daya,
+      data.pembuat
+    ]);
+    
+    return ContentService.createTextOutput(JSON.stringify({ "status": "sukses" })).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ "status": "error", "pesan": error.message })).setMimeType(ContentService.MimeType.JSON);
+  }
+}</pre>
+                    <br>
+                    <p style="color: #a0a0a0;">// 5. Klik Save 💾, lalu klik Deploy > New Deployment.</p>
+                    <p style="color: #a0a0a0;">// 6. Pilih tipe Web App. Bagian 'Who has access' pilih 'Anyone'.</p>
+                    <p style="color: #a0a0a0;">// 7. Klik Deploy. Nanti akan dapat Web App URL panjang.</p>
+                    <p style="color: #a0a0a0;">// 8. Copy URL tersebut dan paste ke kolom GOOGLE_SHEETS_URL di tab Config (.env) web ini!</p>
+                </div>
             </div>
         </section>
     </div>
