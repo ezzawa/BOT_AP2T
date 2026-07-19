@@ -73,6 +73,8 @@ const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) { console.error("TELEGRAM_BOT_TOKEN belum diset"); process.exit(1); }
 const bot = new TelegramBot(token, { polling: true });
 
+// (Logic moved to the existing processUpdate interceptor)
+
 // --- OVERRIDE BOT.SENDMESSAGE UNTUK STATUS PROSES BERJALAN ---
 // Fitur ini menggabungkan pesan-pesan proses menjadi 1 pesan dinamis (edit message)
 // agar chat Telegram tidak dipenuhi spam log.
@@ -82,28 +84,60 @@ const statusMessages = {};
 // Reset grup pesan setiap kali user memberikan perintah baru
 bot.on('message', (msg) => {
     if (msg && msg.chat) delete statusMessages[msg.chat.id];
+    
+    // Feedback format salah
+    if (msg && msg.text && msg.text.startsWith('/')) {
+        const cmds = {
+            '/tambah_user': 'Gunakan: `/tambah_user <ID_Telegram> <Nama>`',
+            '/ct': 'Gunakan: `/ct <No_Meter/IDPEL>`',
+            '/reset_ct': 'Gunakan: `/reset_ct <No_Meter/IDPEL>`',
+            '/cetak_token': 'Gunakan: `/cetak_token <No_Meter/IDPEL>`',
+            '/cek_token': 'Gunakan: `/cek_token <No_Meter/IDPEL>`',
+            '/ambil_token': 'Gunakan: `/ambil_token <No_Meter/IDPEL>`',
+            '/cek_pelanggan': 'Gunakan: `/cek_pelanggan <No_Meter/IDPEL>`',
+            '/set_ap2t': 'Gunakan: `/set_ap2t <Username> <Password>`',
+            '/set_webmail': 'Gunakan: `/set_webmail <pusat\\uid> <Password>`',
+            '/simpan_akun': 'Gunakan: `/simpan_akun <Nama_Profil> <User_AP2T> <Pass_AP2T> <User_Webmail> <Pass_Webmail>`',
+            '/pakai_akun': 'Gunakan: `/pakai_akun <Nama_Profil>`',
+            '/keygen': 'Gunakan: `/keygen <Hari>`',
+            '/set_license': 'Gunakan: `/set_license <License_Key>`'
+        };
+        const text = msg.text.trim();
+        const command = text.split(' ')[0].toLowerCase();
+        
+        if (cmds[command]) {
+            const parts = text.split(' ').filter(p => p !== '');
+            if (parts.length === 1) {
+                bot.sendMessage(msg.chat.id, `⚠️ *Format Perintah Salah / Tidak Lengkap*\n\n${cmds[command]}`, {parse_mode: 'Markdown'});
+            }
+        }
+    }
 });
 
 bot.sendMessage = async (chatId, text, options) => {
     // Deteksi apakah pesan ini adalah pesan "progress" 
-    const isProgress = /^[⏳🔍⚙️]|\[\*\]|\[i\]|Membuka|Mengisi|Memasukkan|Menekan|Memeriksa/i.test(text);
+    const isProgress = /^(⏳|🔍|✅|❌|🟢|🔴|🟡|⚙️|🚀|🤖|\[\*\]|\[i\]|\[-\]|\[\+\]|\[x\])/i.test(text) || /^(Membuka|Mengisi|Memasukkan|Menekan|Memeriksa|Menunggu|Menyalin|Navigasi|Membersihkan|Mendeteksi|Memilih|Mempersiapkan|Memulai|Mencari|Melanjutkan|Mengecek)/i.test(text) || text.endsWith('...');
+    
+    // Jangan tangkap pesan hasil akhir yang penting
+    if (text.includes('TOKEN CLEAR TAMPER') || text.includes('Berhasil berganti ke profil') || text.includes('Hasil Pencarian')) {
+        return await originalSendMessage(chatId, text, options);
+    }
     
     // Jangan satukan jika pesan punya tombol (reply_markup) atau format khusus
     const hasSpecialOptions = options && (options.reply_markup || options.parse_mode);
 
     if (isProgress && !hasSpecialOptions) {
         if (!statusMessages[chatId]) {
-            statusMessages[chatId] = { msgId: null, lines: [text] };
-            const m = await originalSendMessage(chatId, `⚙️ *BOT AP2T SEDANG BEKERJA*\n_Silakan tunggu..._\n\n> ${text}`, { parse_mode: 'Markdown' }).catch(()=>null);
+            statusMessages[chatId] = { msgId: null, text: text };
+            const m = await originalSendMessage(chatId, `🤖 *BOT AP2T SEDANG BEKERJA*\n_Silakan tunggu..._\n\n> ${text}`, { parse_mode: 'Markdown' }).catch(()=>null);
             if (m) statusMessages[chatId].msgId = m.message_id;
             // Selalu return object minimal agar statusMsg.message_id tidak error di pemanggil
             return m || { message_id: statusMessages[chatId].msgId || 0, chat: { id: chatId } };
         } else {
             let state = statusMessages[chatId];
-            state.lines.push(text);
-            if (state.lines.length > 5) state.lines.shift(); // Maksimal tampilkan 5 baris histori proses
+            state.text = text; // Langsung ganti (hilang ke alur selanjutnya)
             
-            const newText = `⚙️ *BOT AP2T SEDANG BEKERJA*\n_Silakan tunggu..._\n\n` + state.lines.map(l => `> ${l}`).join('\n');
+            const newText = `🤖 *BOT AP2T SEDANG BEKERJA*\n_Silakan tunggu..._\n\n> ${state.text}`;
             if (state.msgId) {
                 await bot.editMessageText(newText, { chat_id: chatId, message_id: state.msgId, parse_mode: 'Markdown' }).catch(async (e) => {
                     // Jika pesan gagal di-edit (misal terhapus), buat yang baru
@@ -140,9 +174,21 @@ const EXPECTED_LICENSE = crypto.createHash('sha256').update(HWID + "AP2T_PLN_SEC
 
 let adminChatId = process.env.ADMIN_CHAT_ID || process.env.AUTHORIZED_CHAT_ID || null;
 
+const botStartTime = Math.floor(Date.now() / 1000);
+const notifiedOfflineUsers = {};
 const originalProcessUpdate = bot.processUpdate.bind(bot);
 bot.processUpdate = async (update) => {
     const msg = update.message || update.callback_query?.message;
+    
+    // --- MENCEGAH PENUMPUKAN PERINTAH SAAT BOT OFFLINE ---
+    if (msg && msg.date && msg.date < botStartTime) {
+        if (!notifiedOfflineUsers[msg.chat.id]) {
+            bot.sendMessage(msg.chat.id, `⚠️ **PERINTAH DIABAIKAN**\nMohon maaf, pesan/perintah yang Anda kirim saat Bot/PC sedang **Mati (Offline)** tidak diproses untuk mencegah penumpukan tugas (spam).\n\nSilakan kirim ulang perintah Anda sekarang.`, { parse_mode: 'Markdown' });
+            notifiedOfflineUsers[msg.chat.id] = true;
+        }
+        return; 
+    }
+
     if (msg && msg.chat) {
         const chatIdStr = msg.chat.id.toString();
         const text = (update.message && update.message.text) ? update.message.text : '';
@@ -177,10 +223,14 @@ bot.processUpdate = async (update) => {
         // 2. Cek apakah ini user terdaftar
         let users = [];
         try { users = JSON.parse(fs.readFileSync(path.join(__dirname, 'users.json'))).users || []; } catch(e){}
-        const isUser = users.includes(chatIdStr);
+        const isUser = users.some(u => (typeof u === 'object' ? u.id : u) === chatIdStr);
         
         if (!isAdmin && !isUser) {
-            bot.sendMessage(msg.chat.id, `⛔ Anda tidak terdaftar untuk menggunakan bot di komputer ini.\n(Chat ID Anda: \`${chatIdStr}\`)\nBerikan Chat ID ini ke Admin untuk didaftarkan.`, {parse_mode: 'Markdown'});
+            bot.sendMessage(msg.chat.id, `⛔ *AKSES DITOLAK*\nAnda belum terdaftar untuk menggunakan bot di komputer ini.\n\nSilakan *Forward (Teruskan)* pesan angka di bawah ini kepada Admin agar Anda didaftarkan:`, {parse_mode: 'Markdown'});
+            setTimeout(() => {
+                bot.sendMessage(msg.chat.id, `\`${chatIdStr}\``, {parse_mode: 'Markdown'});
+            }, 500);
+            return;
             return;
         }
 
@@ -450,6 +500,10 @@ function setupPageHandlers() {
 async function handleOwaSessionReset(chatId) {
     bot.sendMessage(chatId, `[i] Buka Webmail OWA untuk klik link Reset Session...`);
     let mailPage = await browser.newPage();
+    mailPage.on('dialog', async dialog => {
+        if (chatId) bot.sendMessage(chatId, `[i] Menutup popup Webmail: ${dialog.message()}`);
+        await dialog.accept().catch(()=>{});
+    });
     try {
         await mailPage.goto('https://webmail.pln.co.id/owa/auth/logon.aspx?replaceCurrent=1&url=https%3a%2f%2fwebmail.pln.co.id%2fowa', { waitUntil: 'networkidle2', timeout: 30000 });
 
@@ -612,6 +666,10 @@ async function handleOwaSessionReset(chatId) {
 async function handleOwaMacReset(chatId) {
     bot.sendMessage(chatId, `🔄 Reset MAC Address via Webmail OWA...`);
     let mailPage = await browser.newPage();
+    mailPage.on('dialog', async dialog => {
+        if (chatId) bot.sendMessage(chatId, `[i] Menutup popup Webmail: ${dialog.message()}`);
+        await dialog.accept().catch(()=>{});
+    });
     try {
         await mailPage.goto('https://webmail.pln.co.id/owa/auth/logon.aspx?replaceCurrent=1&url=https%3a%2f%2fwebmail.pln.co.id%2fowa', { waitUntil: 'networkidle2', timeout: 30000 });
 
@@ -963,7 +1021,7 @@ async function login(accountType, chatId) {
             bot.sendMessage(chatId, `[i] Mengisi form Reset Session...`);
             // Format email
             let emailUser = credentials.webmail.username;
-            if (emailUser.includes('/') || emailUser.includes('\\')) emailUser = emailUser.split(/[\/\\]/).pop(); // Hapus pusat/ atau pusat\
+            emailUser = emailUser.replace(/^.*[\\\/]/, ''); // Hapus domain seperti pusat\ atau uid\
             if (!emailUser.includes('@')) emailUser += '@pln.co.id';
 
             await page.evaluate((userId, email) => {
@@ -1152,37 +1210,49 @@ bot.onText(/\/set_license (.+)/, (msg, match) => {
 
 bot.onText(/\/tambah_user (.+)/, (msg, match) => {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
-    const newUser = match[1].trim();
+    const input = match[1].trim().split(' ');
+    if (input.length < 2) return bot.sendMessage(msg.chat.id, "⚠️ Format salah.\nGunakan: `/tambah_user <chat_id> <nama>`\nContoh: `/tambah_user 12345678 Budi PLN`", {parse_mode: 'Markdown'});
+    
+    const newId = input[0];
+    const newName = input.slice(1).join(' ');
+    
     const usersPath = path.join(__dirname, 'users.json');
     let usersData = { users: [] };
     if (fs.existsSync(usersPath)) {
         try { usersData = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch(e){}
     }
-    if (!usersData.users.includes(newUser)) {
-        usersData.users.push(newUser);
+    
+    const exists = usersData.users.some(u => (typeof u === 'object' ? u.id : u) === newId);
+    if (!exists) {
+        usersData.users.push({ id: newId, nama: newName });
         fs.writeFileSync(usersPath, JSON.stringify(usersData, null, 2));
-        bot.sendMessage(msg.chat.id, `✅ User \`${newUser}\` berhasil didaftarkan! Mereka sekarang bisa mengontrol bot di komputer ini.`, {parse_mode: 'Markdown'});
+        bot.sendMessage(msg.chat.id, `✅ Staf *${newName}* (\`${newId}\`) berhasil didaftarkan di PC ini!`, {parse_mode: 'Markdown'});
+        updateGitHubStatus(); // Lapor status
     } else {
-        bot.sendMessage(msg.chat.id, `⚠️ User \`${newUser}\` sudah terdaftar.`);
+        bot.sendMessage(msg.chat.id, `⚠️ User dengan ID \`${newId}\` sudah terdaftar.`);
     }
 });
 
-bot.onText(/\/hapus_user (.+)/, (msg, match) => {
+bot.onText(/\/hapus_user/, (msg) => {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
-    const targetUser = match[1].trim();
+    
     const usersPath = path.join(__dirname, 'users.json');
     let usersData = { users: [] };
     if (fs.existsSync(usersPath)) {
         try { usersData = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch(e){}
     }
-    const initialLen = usersData.users.length;
-    usersData.users = usersData.users.filter(u => u !== targetUser);
-    if (usersData.users.length < initialLen) {
-        fs.writeFileSync(usersPath, JSON.stringify(usersData, null, 2));
-        bot.sendMessage(msg.chat.id, `✅ User \`${targetUser}\` berhasil dihapus.`, {parse_mode: 'Markdown'});
-    } else {
-        bot.sendMessage(msg.chat.id, `⚠️ User \`${targetUser}\` tidak ditemukan.`);
-    }
+    
+    if (usersData.users.length === 0) return bot.sendMessage(msg.chat.id, "Tidak ada user terdaftar di PC ini.");
+    
+    const inlineKeyboard = usersData.users.map(u => {
+        let id = typeof u === 'object' ? u.id : u;
+        let nama = typeof u === 'object' ? u.nama : u;
+        return [{ text: `❌ Hapus: ${nama} (${id})`, callback_data: `deluser_${id}` }];
+    });
+    
+    bot.sendMessage(msg.chat.id, "Pilih staf yang ingin dihapus aksesnya dari PC ini:", {
+        reply_markup: { inline_keyboard: inlineKeyboard }
+    });
 });
 
 bot.onText(/\/daftar_user/, (msg) => {
@@ -1247,10 +1317,31 @@ bot.on('callback_query', async (query) => {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cetak_token <no_agenda>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_cektoken') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_token <no_agenda>`", { parse_mode: 'Markdown' });
+    } else if (data === 'cmd_logout') {
+        bot.sendMessage(chatId, "Kirimkan perintah /logout untuk keluar dari sesi AP2T saat ini.");
+    } else if (data.startsWith('deluser_')) {
+        if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, "⛔ Akses ditolak.");
+        const delId = data.replace('deluser_', '');
+        const usersPath = path.join(__dirname, 'users.json');
+        let usersData = { users: [] };
+        if (fs.existsSync(usersPath)) {
+            try { usersData = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch(e){}
+        }
+        const initialLen = usersData.users.length;
+        usersData.users = usersData.users.filter(u => (typeof u === 'object' ? u.id : u) !== delId);
+        if (usersData.users.length < initialLen) {
+            fs.writeFileSync(usersPath, JSON.stringify(usersData, null, 2));
+            bot.editMessageText(`✅ Staf dengan ID \`${delId}\` berhasil dihapus aksesnya dari PC ini.`, {
+                chat_id: chatId,
+                message_id: query.message.message_id,
+                parse_mode: 'Markdown'
+            });
+            updateGitHubStatus(); // Lapor status
+        } else {
+            bot.sendMessage(chatId, `⚠️ User \`${delId}\` tidak ditemukan.`);
+        }
     } else if (data === 'cmd_cekpel') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_pelanggan <idpel_atau_nometer>`", { parse_mode: 'Markdown' });
-    } else if (data === 'cmd_logout') {
-        bot.sendMessage(chatId, "Ketik /logout untuk keluar.");
     }
 });
 
@@ -3664,8 +3755,119 @@ if (adminChatId) {
         { command: 'tambah_user', description: '👑 Tambah Staf' },
         { command: 'hapus_user', description: '👑 Hapus Staf' },
         { command: 'keygen', description: '👑 Buat Lisensi HWID' },
-        { command: 'upload_perbaikan', description: '👑 Upload Update GitHub' },
-        { command: 'update_bot', description: '👑 Download Update GitHub' }
+        { command: 'upload_perbaikan', description: '⬆️ Upload Update GitHub' },
+        { command: 'update_bot', description: '⬇️ Download Update GitHub' },
+        { command: 'lapor_status', description: '📡 Kirim Laporan Telemetri PC' }
     ];
     bot.setMyCommands(adminCommands, { scope: { type: 'chat', chat_id: adminChatId } }).catch(e => console.log("Failed to set admin commands", e.message));
 }
+
+// ============================================
+// GITHUB TELEMETRY SYSTEM
+// ============================================
+async function updateGitHubStatus() {
+    const token = process.env.GITHUB_TOKEN;
+    const repo = process.env.GITHUB_REPO;
+    const branch = process.env.GITHUB_BRANCH || 'main';
+    const pcName = process.env.PC_NAME || require('os').hostname();
+    
+    if (!token || !repo) return false;
+    
+    const axios = require('axios');
+    const usersPath = path.join(__dirname, 'users.json');
+    let usersData = { users: [] };
+    if (fs.existsSync(usersPath)) {
+        try { usersData = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch(e){}
+    }
+    
+    const normalizedUsers = usersData.users.map(u => {
+        return typeof u === 'object' ? u : { id: u, nama: 'Tanpa Nama' };
+    });
+    
+    let lastUpdated = 'Unknown';
+    try {
+        const stats = fs.statSync(__filename);
+        lastUpdated = new Date(stats.mtime).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+    } catch(e){}
+    
+    const payloadData = {
+        pc_name: pcName,
+        last_online: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
+        last_updated: lastUpdated,
+        registered_users: normalizedUsers
+    };
+    
+    const fileContent = JSON.stringify(payloadData, null, 2);
+    const contentBase64 = Buffer.from(fileContent).toString('base64');
+    
+    const url = `https://api.github.com/repos/${repo}/contents/fleet/${pcName}.json?ref=${branch}`;
+    const headers = { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' };
+    
+    try {
+        let sha = null;
+        try {
+            const getRes = await axios.get(url, { headers });
+            sha = getRes.data.sha;
+        } catch (e) {
+            if (e.response && e.response.status !== 404) throw e;
+        }
+        
+        const payload = {
+            message: `Update telemetry for ${pcName}`,
+            content: contentBase64,
+            branch: branch
+        };
+        if (sha) payload.sha = sha;
+        
+        await axios.put(url, payload, { headers });
+        console.log(`Telemetry for ${pcName} updated on GitHub.`);
+        return true;
+    } catch (error) {
+        console.error("Gagal update telemetry:", error.message);
+        return false;
+    }
+}
+
+setTimeout(updateGitHubStatus, 5000);
+
+bot.onText(/\/lapor_status/, async (msg) => {
+    if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
+    const loadMsg = await bot.sendMessage(msg.chat.id, "📡 Mengirim sinyal telemetri PC ini ke GitHub...");
+    const success = await updateGitHubStatus();
+    if (success) {
+        bot.editMessageText("✅ Laporan telemetri berhasil dikirim ke GitHub!", { chat_id: msg.chat.id, message_id: loadMsg.message_id });
+    } else {
+        bot.editMessageText("❌ Gagal mengirim laporan telemetri. Cek konfigurasi GitHub Token/Repo di web.", { chat_id: msg.chat.id, message_id: loadMsg.message_id });
+    }
+});
+
+// ============================================
+// PROGRESS TRACKER (EDITABLE MESSAGES)
+// ============================================
+class ProgressTracker {
+    constructor(bot, chatId, initialText) {
+        this.bot = bot;
+        this.chatId = chatId;
+        this.text = initialText;
+        this.messageId = null;
+    }
+    
+    async start() {
+        try {
+            const sent = await this.bot.sendMessage(this.chatId, this.text, { parse_mode: 'Markdown' });
+            this.messageId = sent.message_id;
+        } catch (e) { console.error("Error starting tracker", e.message); }
+    }
+    
+    async update(newText) {
+        this.text = newText;
+        if (this.messageId) {
+            try {
+                await this.bot.editMessageText(this.text, { chat_id: this.chatId, message_id: this.messageId, parse_mode: 'Markdown' });
+            } catch(e) {}
+        } else {
+            await this.start();
+        }
+    }
+}
+global.ProgressTracker = ProgressTracker;
