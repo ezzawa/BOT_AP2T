@@ -70,7 +70,24 @@ app.post('/api/env', (req, res) => {
     const currentEnv = getEnv();
     const newEnv = { ...currentEnv, ...data };
     saveEnv(newEnv);
-    res.json({ success: true, message: 'Settings saved' });
+    res.json({ success: true, message: 'Settings saved. Restarting bot...' });
+    
+    // Restart Node process automatically so index.js picks up new env
+    setTimeout(() => {
+        process.exit(0);
+    }, 1000);
+});
+
+app.post('/api/admin_login', (req, res) => {
+    const pwd = req.body.password;
+    const env = getEnv();
+    const correctPassword = env.ADMIN_PASSWORD || 'admin123';
+    
+    if (pwd === correctPassword) {
+        res.json({ success: true });
+    } else {
+        res.json({ success: false });
+    }
 });
 
 // Profiles
@@ -95,6 +112,32 @@ app.post('/api/users', (req, res) => {
     const data = req.body;
     fs.writeFileSync(usersPath, JSON.stringify(data, null, 2));
     res.json({ success: true, message: 'Users updated' });
+});
+
+app.get('/api/fleet', async (req, res) => {
+    const env = getEnv();
+    if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return res.json({ error: 'GitHub belum dikonfigurasi' });
+    
+    try {
+        const axios = require('axios');
+        const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/fleet?ref=${env.GITHUB_BRANCH || 'main'}`;
+        const headers = { Authorization: `token ${env.GITHUB_TOKEN}` };
+        
+        const dirRes = await axios.get(url, { headers });
+        if (!Array.isArray(dirRes.data)) return res.json({ fleet: [] });
+        
+        const fleetData = [];
+        for (const file of dirRes.data) {
+            if (file.name.endsWith('.json')) {
+                const fileRes = await axios.get(file.download_url, { headers });
+                fleetData.push(fileRes.data);
+            }
+        }
+        res.json({ fleet: fleetData });
+    } catch (e) {
+        if (e.response && e.response.status === 404) return res.json({ fleet: [] }); // Belum ada folder fleet
+        res.status(500).json({ error: e.message });
+    }
 });
 
 const PORT = 3000;
