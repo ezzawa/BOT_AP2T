@@ -1109,10 +1109,12 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
     const branch = process.env.GITHUB_BRANCH || 'main';
     if (!token || !repo) return bot.sendMessage(msg.chat.id, "❌ Konfigurasi GITHUB_TOKEN atau GITHUB_REPO belum diatur di .env");
     
-    bot.sendMessage(msg.chat.id, "⏳ Sedang mengunggah perbaikan ke GitHub...");
+    const statusMsg = await bot.sendMessage(msg.chat.id, "⏳ Sedang memeriksa dan mengunggah perbaikan ke GitHub...\nMohon tunggu sebentar...");
     const filesToSync = ['index.js', 'server.js', 'public/index.html', 'public/style.css', 'public/app.js'];
     const axios = require('axios');
     let successCount = 0;
+    let sameCount = 0;
+    let failCount = 0;
     
     for (const file of filesToSync) {
         try {
@@ -1142,10 +1144,29 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
             await axios.put(url, payload, { headers });
             successCount++;
         } catch (e) {
-            console.error(`Gagal upload ${file}:`, e.message);
+            if (e.response && e.response.status === 422) {
+                sameCount++;
+            } else {
+                console.error(`Gagal upload ${file}:`, e.message);
+                failCount++;
+            }
         }
     }
-    bot.sendMessage(msg.chat.id, `✅ Upload selesai! Berhasil mengunggah ${successCount} file ke GitHub.\nSekarang Anda bisa menjalankan /update_bot di PC lain.`);
+    
+    let resultMsg = `*Hasil Sinkronisasi GitHub:*\n`;
+    if (successCount > 0) resultMsg += `✅ *${successCount} File Diunggah*\n`;
+    if (sameCount > 0) resultMsg += `ℹ️ *${sameCount} File Sudah Versi Terbaru* (Tidak ada perubahan)\n`;
+    if (failCount > 0) resultMsg += `❌ *${failCount} File Gagal*\n`;
+    
+    if (successCount > 0) {
+        resultMsg += `\nSekarang Anda bisa menjalankan \`/update_bot\` di PC lain.`;
+    }
+    
+    bot.editMessageText(resultMsg, {
+        chat_id: msg.chat.id,
+        message_id: statusMsg.message_id,
+        parse_mode: 'Markdown'
+    }).catch(() => {});
 });
 
 bot.onText(/\/update_bot/, async (msg) => {
