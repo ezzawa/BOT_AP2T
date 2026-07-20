@@ -155,7 +155,7 @@
                 <h4 style="margin-top:20px; color:#60a5fa;">1. Panduan Koneksi Google Sheets (Rekap CT)</h4>
                 <div style="background-color: #2a2a2a; padding: 15px; border-radius: 6px; margin-top: 10px; font-size: 14px; font-family: monospace;">
                     <p style="color: #a0a0a0;">// 1. Buat Spreadsheet baru di Google Sheets.</p>
-                    <p style="color: #a0a0a0;">// 2. Buat header di baris 1 (A1 - G1) persis seperti ini: waktu, idpel, no_gangguan, token, nama, tarif_daya, pembuat</p>
+                    <p style="color: #a0a0a0;">// 2. Buat header di baris 1 (A1 - H1) persis seperti ini: waktu, id_pelanggan, nama, tarif, daya, no_gangguan, token, pembuat</p>
                     <p style="color: #a0a0a0;">// 3. Klik menu Extensions > Apps Script.</p>
                     <p style="color: #a0a0a0;">// 4. Hapus kode bawaan, dan COPY-PASTE kode sakti di bawah ini:</p>
                     <br>
@@ -168,10 +168,11 @@ function doPost(e) {
     sheet.appendRow([
       data.waktu,
       data.idpel,
-      data.no_gangguan,
-      data.token,
       data.nama,
-      data.tarif_daya,
+      data.tarif,
+      data.daya,
+      data.nogan,
+      data.token,
       data.pembuat
     ]);
     
