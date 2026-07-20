@@ -115,48 +115,53 @@ bot.on('message', (msg) => {
 });
 
 bot.sendMessage = async (chatId, text, options) => {
-    // Deteksi apakah pesan ini adalah pesan "progress" 
-    const isProgress = /^(⏳|🔍|✅|❌|🟢|🔴|🟡|⚙️|🚀|🤖|\[\*\]|\[i\]|\[-\]|\[\+\]|\[x\])/i.test(text) || /^(Membuka|Mengisi|Memasukkan|Menekan|Memeriksa|Menunggu|Menyalin|Navigasi|Membersihkan|Mendeteksi|Memilih|Mempersiapkan|Memulai|Mencari|Melanjutkan|Mengecek)/i.test(text) || text.endsWith('...');
+    // 1. Definisikan pesan akhir yang MURNI (jangan ditangkap ke dalam bubble)
+    const isFinalOrError = text.includes('TOKEN CLEAR TAMPER') || 
+                           text.includes('Berhasil berganti ke profil') || 
+                           text.includes('Hasil Pencarian') ||
+                           text.includes('Kode enkripsi:') ||
+                           text.includes('No Agenda ditemukan:') ||
+                           text.toLowerCase().includes('error');
+
+    // 2. Cek format khusus
+    const hasSpecialOptions = options && (options.reply_markup || (options.parse_mode && options.parse_mode.toLowerCase() === 'html'));
+
+    const now = Date.now();
     
-    // Jangan tangkap pesan hasil akhir yang penting
-    if (text.includes('TOKEN CLEAR TAMPER') || text.includes('Berhasil berganti ke profil') || text.includes('Hasil Pencarian')) {
+    // 3. Jika pesan akhir, error, atau format HTML, kirim terpisah dan reset bubble
+    if (isFinalOrError || hasSpecialOptions) {
+        delete statusMessages[chatId];
         return await originalSendMessage(chatId, text, options);
     }
-    
-    // Jangan satukan jika pesan punya tombol (reply_markup) atau format khusus
-    const hasSpecialOptions = options && (options.reply_markup || options.parse_mode);
 
-    if (isProgress && !hasSpecialOptions) {
-        if (!statusMessages[chatId]) {
-            statusMessages[chatId] = { msgId: null, text: text };
-            const m = await originalSendMessage(chatId, `🤖 *BOT AP2T SEDANG BEKERJA*\n_Silakan tunggu..._\n\n> ${text}`, { parse_mode: 'Markdown' }).catch(()=>null);
-            if (m) statusMessages[chatId].msgId = m.message_id;
-            // Selalu return object minimal agar statusMsg.message_id tidak error di pemanggil
-            return m || { message_id: statusMessages[chatId].msgId || 0, chat: { id: chatId } };
-        } else {
-            let state = statusMessages[chatId];
-            state.text = text; // Langsung ganti (hilang ke alur selanjutnya)
-            
-            const newText = `🤖 *BOT AP2T SEDANG BEKERJA*\n_Silakan tunggu..._\n\n> ${state.text}`;
-            if (state.msgId) {
-                await bot.editMessageText(newText, { chat_id: chatId, message_id: state.msgId, parse_mode: 'Markdown' }).catch(async (e) => {
-                    // Jika pesan gagal di-edit (misal terhapus), buat yang baru
-                    if(e.message && e.message.includes('not found')) {
-                        const m = await originalSendMessage(chatId, newText, { parse_mode: 'Markdown' }).catch(()=>null);
-                        if (m) state.msgId = m.message_id;
-                    }
-                });
-                return { message_id: state.msgId, chat: { id: chatId } };
-            } else {
-                return { message_id: 0, chat: { id: chatId } };
-            }
-        }
+    // 4. Reset bubble jika umurnya sudah lebih dari 45 detik (menandakan command baru)
+    if (statusMessages[chatId] && (now - statusMessages[chatId].lastUpdate > 45000)) {
+        delete statusMessages[chatId];
+    }
+
+    // 5. Anggap pesan lainnya sebagai progres (gabungkan ke dalam 1 bubble)
+    if (!statusMessages[chatId]) {
+        statusMessages[chatId] = { msgId: null, text: text, lastUpdate: now };
+        const m = await originalSendMessage(chatId, `🤖 *BOT AP2T SEDANG BEKERJA*\n_Silakan tunggu..._\n\n> ${text}`, { parse_mode: 'Markdown' }).catch(()=>null);
+        if (m) statusMessages[chatId].msgId = m.message_id;
+        return m || { message_id: statusMessages[chatId].msgId || 0, chat: { id: chatId } };
     } else {
-        // Hapus grup log jika bot mengirimkan hasil akhir (sukses/gagal/alert)
-        if (/^[✅❌🎉🛑⚠️]/.test(text) || text.toLowerCase().includes('berhasil') || text.toLowerCase().includes('gagal')) {
-            delete statusMessages[chatId];
+        let state = statusMessages[chatId];
+        state.text = text;
+        state.lastUpdate = now;
+        
+        const newText = `🤖 *BOT AP2T SEDANG BEKERJA*\n_Silakan tunggu..._\n\n> ${state.text}`;
+        if (state.msgId) {
+            await bot.editMessageText(newText, { chat_id: chatId, message_id: state.msgId, parse_mode: 'Markdown' }).catch(async (e) => {
+                if(e.message && e.message.includes('not found')) {
+                    const m = await originalSendMessage(chatId, newText, { parse_mode: 'Markdown' }).catch(()=>null);
+                    if (m) state.msgId = m.message_id;
+                }
+            });
+            return { message_id: state.msgId, chat: { id: chatId } };
+        } else {
+            return { message_id: 0, chat: { id: chatId } };
         }
-        return await originalSendMessage(chatId, text, options);
     }
 };
 // ----------------------------------------------------------------
@@ -3693,12 +3698,9 @@ bot.onText(/\/cek_token (.+)/, async (msg, match) => {
                     width: Math.max(1024, Math.ceil(boundingBox.width) + 40),
                     height: Math.max(768, Math.ceil(boundingBox.height) + 40)
                 });
-
-                const ssPath = require('path').join(__dirname, `monitoring_${target}.png`);
                 
                 // Screenshot exactly the table container but limit dimensions for Telegram
-                await tablePage.screenshot({ 
-                    path: ssPath, 
+                const ssBuffer = await tablePage.screenshot({ 
                     clip: {
                         x: 0,
                         y: 0,
@@ -3708,7 +3710,7 @@ bot.onText(/\/cek_token (.+)/, async (msg, match) => {
                 });
                 await tablePage.close();
 
-                await bot.sendPhoto(chatId, ssPath, { caption: `✅ Data Monitoring Token untuk ${target} (Format Tabel)` });
+                await bot.sendPhoto(chatId, ssBuffer, { caption: `? Data Monitoring Token untuk ${target} (Format Tabel)` }, { filename: `monitoring_${target}.png`, contentType: `image/png` });
                 await bot.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
             } else {
                 await bot.editMessageText(`❌ Data tidak ditemukan dalam tabel.`, { chat_id: chatId, message_id: statusMsg.message_id });
