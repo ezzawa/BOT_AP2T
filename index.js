@@ -900,7 +900,7 @@ async function login(accountType, chatId) {
         let kodeEnkripsi = '';
         try {
             kodeEnkripsi = await getEncryptionCodeFromApp(chatId);
-            bot.sendMessage(chatId, `🔑 Kode enkripsi: \`${kodeEnkripsi}\``, { parse_mode: 'Markdown' });
+            // bot.sendMessage(chatId, `🔑 Kode enkripsi: \`${kodeEnkripsi}\``, { parse_mode: 'Markdown' });
         } catch (encErr) {
             console.error('Auto enkripsi gagal:', encErr.message);
             bot.sendMessage(chatId, `⚠️ Auto-baca gagal (${encErr.message}).\nSilakan kirim kode enkripsi manual (timeout 90 detik):`);
