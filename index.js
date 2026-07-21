@@ -1003,6 +1003,55 @@ async function login(accountType, chatId) {
             return await login(accountType, chatId);
         }
 
+        // >> TAMBAHAN LOGIC SALAH PASSWORD
+        if (content.includes('User/password tidak ditemukan')) {
+            bot.sendMessage(chatId, `❌ **GAGAL LOGIN AP2T: PASSWORD SALAH!**\n\nUser ID: \`${credentials[accountType].username}\`\nPassword Lama: \`${credentials[accountType].password}\`\n\n⚠️ Silakan balas pesan ini dengan **Password Baru** AP2T Anda:`, { parse_mode: 'Markdown' });
+
+            let waitingManual = true;
+            let newPassword = null;
+            const manualHandler = (msg) => {
+                if (msg.chat.id === chatId && msg.text && !msg.text.startsWith('/')) {
+                    newPassword = msg.text.trim();
+                    waitingManual = false;
+                    bot.removeListener('message', manualHandler);
+                }
+            };
+            bot.on('message', manualHandler);
+            
+            // Tunggu maksimal 3 menit
+            let countdown = 180;
+            while (waitingManual && countdown > 0) {
+                await new Promise(r => setTimeout(r, 1000));
+                countdown--;
+            }
+
+            if (!waitingManual && newPassword) {
+                bot.sendMessage(chatId, `✅ Password baru diterima: \`${newPassword}\`\nMenyimpan dan mencoba login ulang...`, { parse_mode: 'Markdown' });
+                
+                // Simpan password baru
+                credentials[accountType].password = newPassword;
+                if (accountType === 'main') {
+                    updateEnv('MAIN_PASSWORD', newPassword);
+                    updateProfileCredential('ap2t', credentials.main.username, newPassword);
+                }
+                
+                // Klik OK di popup
+                await page.evaluate(() => {
+                    const btns = Array.from(document.querySelectorAll('.ext-mb-btn button, .x-window-mc button, button'));
+                    const okBtn = btns.find(b => b.textContent === 'OK');
+                    if (okBtn) okBtn.click();
+                });
+                await new Promise(r => setTimeout(r, 1000));
+
+                // Coba login ulang
+                return await login(accountType, chatId);
+            } else {
+                bot.removeListener('message', manualHandler);
+                bot.sendMessage(chatId, `❌ Waktu habis (3 menit). Proses login dibatalkan.`);
+                return false;
+            }
+        }
+
         // >> TAMBAHAN LOGIC RESET SESSION
         if (content.includes('User ID yang sama sedang digunakan di tempat lain')) {
             bot.sendMessage(chatId, `[i] Sesi nyangkut (User ID sedang digunakan). Melakukan Reset Session otomatis...`);
@@ -1091,6 +1140,57 @@ async function login(accountType, chatId) {
         return false;
     }
 }
+
+async function testWebmailLogin(chatId) {
+    try {
+        await initBrowser(chatId);
+        const mailPage = await browser.newPage();
+        
+        bot.sendMessage(chatId, `⏳ Mencoba login ke Webmail OWA...`);
+        await mailPage.goto('https://webmail.pln.co.id/owa/auth/logon.aspx?replaceCurrent=1&url=https%3a%2f%2fwebmail.pln.co.id%2fowa', { waitUntil: 'networkidle2', timeout: 30000 });
+        
+        await mailPage.waitForSelector('#username', { timeout: 15000 }).catch(()=>{});
+        
+        await mailPage.evaluate(() => { const u = document.getElementById('username'); if(u) u.value = ''; });
+        await mailPage.type('#username', credentials.webmail.username).catch(()=>{});
+        
+        await mailPage.click('#passwordText').catch(()=>{});
+        await mailPage.waitForSelector('#password', { timeout: 2000, visible: true }).catch(()=>{});
+        
+        await mailPage.evaluate(() => { const p = document.getElementById('password'); if(p) p.value = ''; });
+        await mailPage.type('#password', credentials.webmail.password).catch(()=>{});
+        
+        await mailPage.evaluate((u, p) => {
+            const passEl = document.getElementById('password');
+            if (passEl && passEl.value !== p) passEl.value = p;
+            const userEl = document.getElementById('username');
+            if (userEl && userEl.value !== u) userEl.value = u;
+        }, credentials.webmail.username, credentials.webmail.password).catch(()=>{});
+
+        bot.sendMessage(chatId, `🔄 Memeriksa hasil login...`);
+        await Promise.all([
+            mailPage.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => null),
+            mailPage.click('.btn').catch(() => null)
+        ]);
+
+        const pageUrl = mailPage.url();
+        const isError = await mailPage.evaluate(() => {
+            return document.body.innerHTML.includes('The user name or password you entered isn\'t correct') || 
+                   document.body.innerHTML.includes('salah') ||
+                   document.body.innerHTML.includes('incorrect');
+        });
+
+        if (isError || pageUrl.includes('logon.aspx')) {
+            bot.sendMessage(chatId, `❌ **LOGIN WEBMAIL GAGAL**\nUsername atau Password Webmail OWA salah/kadaluarsa.\n\nUsername: \`${credentials.webmail.username}\`\nPassword Lama: \`${credentials.webmail.password}\`\n\nSilakan perbaiki menggunakan perintah:\n\`/set_webmail <username> <password>\``, {parse_mode: 'Markdown'});
+        } else {
+            bot.sendMessage(chatId, `✅ **LOGIN WEBMAIL BERHASIL!**\nKredensial webmail valid dan berhasil masuk ke OWA.`, {parse_mode: 'Markdown'});
+        }
+        await mailPage.close().catch(()=>{});
+    } catch(e) {
+        bot.sendMessage(chatId, `❌ Gagal membuka webmail: ${e.message}`);
+    }
+}
+
 // ===== FUNGSI: Smart Login =====
 async function startSmartLogin(chatId) {
     bot.sendMessage(chatId, `🚀 Memulai proses login...`);
@@ -1389,6 +1489,14 @@ bot.onText(/\/login/, async (msg) => {
     finally { isLoggingIn = false; }
 });
 
+bot.onText(/\/login_webmail/, async (msg) => {
+    const chatId = msg.chat.id;
+    if (isLoggingIn) return bot.sendMessage(chatId, `[i] Bot sedang sibuk (sedang login). Mohon tunggu...`);
+    isLoggingIn = true;
+    try { await testWebmailLogin(chatId); }
+    finally { isLoggingIn = false; }
+});
+
 bot.onText(/\/reset_akun/, async (msg) => {
     const chatId = msg.chat.id;
     bot.sendMessage(chatId, `[*] Mereset semua koneksi...`);
@@ -1459,6 +1567,34 @@ const updateEnv = (key, value) => {
     fs.writeFileSync(envPath, envContent.trim() + '\n');
 };
 
+const updateProfileCredential = (type, username, newPassword) => {
+    const path = require('path');
+    const fs = require('fs');
+    const profilesPath = path.join(__dirname, 'profiles.json');
+    if (!fs.existsSync(profilesPath)) return;
+    try {
+        let profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+        let updated = false;
+        for (const key in profiles) {
+            const p = profiles[key];
+            if (type === 'ap2t') {
+                if ((p.ap2t && p.ap2t.username === username) || p.ap2t_user === username) {
+                    if (p.ap2t) p.ap2t.password = newPassword;
+                    else p.ap2t_pass = newPassword;
+                    updated = true;
+                }
+            } else if (type === 'webmail') {
+                if ((p.webmail && p.webmail.username === username) || p.web_user === username) {
+                    if (p.webmail) p.webmail.password = newPassword;
+                    else p.web_pass = newPassword;
+                    updated = true;
+                }
+            }
+        }
+        if (updated) fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2));
+    } catch(e) {}
+};
+
 bot.onText(/\/set_ap2t (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     const parts = match[1].trim().split(/\s+/);
@@ -1473,6 +1609,7 @@ bot.onText(/\/set_ap2t (.+)/, async (msg, match) => {
 
     updateEnv('MAIN_USERNAME', ap2tUser);
     updateEnv('MAIN_PASSWORD', ap2tPass);
+    updateProfileCredential('ap2t', ap2tUser, ap2tPass);
 
     bot.sendMessage(chatId, `[+] Akun AP2T berhasil diubah menjadi: **${ap2tUser}**`, { parse_mode: 'Markdown' });
 });
@@ -1491,6 +1628,7 @@ bot.onText(/\/set_webmail (.+)/, async (msg, match) => {
 
     updateEnv('WEBMAIL_USERNAME', webUser);
     updateEnv('WEBMAIL_PASSWORD', webPass);
+    updateProfileCredential('webmail', webUser, webPass);
 
     bot.sendMessage(chatId, `[+] Akun Webmail berhasil diubah menjadi: **${webUser}**`, { parse_mode: 'Markdown' });
 });
@@ -3756,6 +3894,7 @@ bot.onText(/\/cek_pelanggan (.+)/, async (msg, match) => {
 const standardCommands = [
     { command: 'start', description: '⚡ Menu Utama' },
     { command: 'login', description: '🔑 Masuk ke sistem AP2T' },
+    { command: 'login_webmail', description: '📧 Tes Login khusus Webmail' },
     { command: 'ct', description: '🛠️ Buat Clear Tamper otomatis' },
     { command: 'reset_ct', description: '🔄 Reset memori proses CT' },
     { command: 'cetak_token', description: '🖨️ Cetak tiket Token PDF' },
