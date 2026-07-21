@@ -4,6 +4,32 @@ const puppeteer = require('puppeteer');
 const { exec, execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+
+// Helper function to wait for an inline keyboard callback
+function waitForUserInteraction(messageId, timeoutMs = 300000) {
+    return new Promise((resolve, reject) => {
+        let isResolved = false;
+        const timer = setTimeout(() => {
+            if (!isResolved) {
+                isResolved = true;
+                bot.removeListener('callback_query', listener);
+                reject(new Error('TIMEOUT_INTERACTION'));
+            }
+        }, timeoutMs);
+
+        const listener = (query) => {
+            if (query.message && query.message.message_id === messageId) {
+                isResolved = true;
+                clearTimeout(timer);
+                bot.removeListener('callback_query', listener);
+                bot.answerCallbackQuery(query.id).catch(()=>{});
+                resolve(query.data);
+            }
+        };
+        bot.on('callback_query', listener);
+    });
+}
+
 const crypto = require('crypto');
 
 // Jalankan Web GUI Server lokal
@@ -292,6 +318,7 @@ let activeChatId = null;
 let commandQueue = [];
 let isProcessingCT = false;
 let isPaused = false; // Flag untuk pause
+let lastGlobalDialogMsg = "";
 
 // Helper untuk menahan eksekusi
 async function checkPause(chatId) {
@@ -306,6 +333,7 @@ async function checkPause(chatId) {
 
 // ===== FUNGSI: Eksekusi Antrean Global =====
 async function processQueue() {
+    console.log("[DEBUG] processQueue called. isProcessingCT=", isProcessingCT, " Queue length=", commandQueue.length);
     if (isProcessingCT || commandQueue.length === 0) return;
     isProcessingCT = true;
 
@@ -513,13 +541,16 @@ async function handleOwaSessionReset(chatId) {
     try {
         await mailPage.goto('https://webmail.pln.co.id/owa/auth/logon.aspx?replaceCurrent=1&url=https%3a%2f%2fwebmail.pln.co.id%2fowa', { waitUntil: 'networkidle2', timeout: 30000 });
 
+        bot.sendMessage(chatId, `⏳ Login ke Webmail...`);
+        let webUser = credentials.webmail.username;
+        if (!webUser.includes('\\')) webUser = 'pusat\\' + webUser;
+
         await mailPage.waitForSelector('#username', { timeout: 15000 });
         try {
             await mailPage.click('#username').catch(()=>{});
             await mailPage.evaluate(() => { const u = document.getElementById('username'); if(u) u.value = ''; });
-            await mailPage.type('#username', credentials.webmail.username).catch(()=>{});
+            await mailPage.type('#username', webUser).catch(()=>{});
             
-            // Atasi trik placeholder OWA (klik text palsu agar input password asli muncul)
             await mailPage.click('#passwordText').catch(()=>{});
             await mailPage.waitForSelector('#password', { timeout: 2000, visible: true }).catch(()=>{});
             
@@ -528,50 +559,33 @@ async function handleOwaSessionReset(chatId) {
             await mailPage.type('#password', credentials.webmail.password).catch(()=>{});
         } catch(e) {}
         
-        // Fallback murni JS jika UI OWA bermasalah
         await mailPage.evaluate((u, p) => {
             const passEl = document.getElementById('password') || document.querySelector('input[type="password"]');
             if (passEl && passEl.value !== p) passEl.value = p;
             const userEl = document.getElementById('username');
             if (userEl && userEl.value !== u) userEl.value = u;
-        }, credentials.webmail.username, credentials.webmail.password).catch(()=>{});
+        }, webUser, credentials.webmail.password).catch(()=>{});
 
         await Promise.all([
             mailPage.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => null),
-            mailPage.click('.signinbutton')
+            mailPage.click('.signinbutton').catch(()=>null)
         ]);
-
-        await new Promise(r => setTimeout(r, 2000));
-
-        // CEK JIKA GAGAL LOGIN (SALAH PASSWORD)
-        const isError = await mailPage.evaluate(() => {
-            const err = document.querySelector('.signInErrorText, #signInErrorDiv, #errTxt');
-            if (err && err.offsetParent !== null && err.textContent.trim().length > 0) return true;
-            return false;
-        }).catch(()=>false);
         
-        if (isError) {
-            bot.sendMessage(chatId, `❌ *GAGAL LOGIN WEBMAIL*\nUsername atau Password Webmail OWA salah/kadaluarsa.\n\nSilakan perbaiki menggunakan perintah:\n\`/set_webmail <username> <password>\``, {parse_mode: 'Markdown'});
-            throw new Error('Webmail login failed due to invalid credentials.');
+        // Cek login error Webmail
+        const isError = await mailPage.evaluate(() => {
+            return document.body.innerHTML.includes('The user name or password you entered isn\'t correct') || 
+                   document.body.innerHTML.includes('salah') ||
+                   document.body.innerHTML.includes('incorrect');
+        });
+        if (isError || mailPage.url().includes('logon.aspx')) {
+            throw new Error("Gagal login Webmail. Cek kembali password /set_webmail Anda.");
         }
 
-        bot.sendMessage(chatId, `⏳ Menunggu email pemberitahuan masuk (maks 2 menit)...`);
+        bot.sendMessage(chatId, `⏳ Menunggu email 'Reset Session' dari pusat...`);
         
         let elemHandle = null;
         let retries = 0;
-        const maxRetries = 24; // 24 * 5 detik = 120 detik (2 menit)
-
-        while (retries < maxRetries) {
-            // Cek dan tutup popup OWA jika muncul di tengah-tengah
-            await mailPage.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button, span, div, a, .ms-Button'));
-                const okBtn = buttons.find(b => {
-                    const txt = (b.textContent || '').trim().toUpperCase();
-                    return txt === 'OK' && b.offsetParent !== null;
-                });
-                if (okBtn) okBtn.click();
-            }).catch(() => {});
-
+        while (retries < 24) { // 2 menit
             const found = await mailPage.evaluate(() => {
                 const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
@@ -597,7 +611,7 @@ async function handleOwaSessionReset(chatId) {
         }
 
         if (elemHandle) {
-            bot.sendMessage(chatId, `📧 Membuka email Pemberitahuan Login...`);
+            bot.sendMessage(chatId, `🎯 Membuka email Reset Session...`);
             const box = await elemHandle.boundingBox();
             if (box) {
                 const cx = box.x + box.width / 2;
@@ -609,7 +623,6 @@ async function handleOwaSessionReset(chatId) {
             }
             await elemHandle.dispose();
 
-            // Cek popup limit storage yang mungkin muncul SETELAH membuka email
             await mailPage.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('button, span, div, a, .ms-Button'));
                 const okBtn = buttons.find(b => {
@@ -620,56 +633,88 @@ async function handleOwaSessionReset(chatId) {
             }).catch(() => {});
             await new Promise(r => setTimeout(r, 1000));
         } else {
-            bot.sendMessage(chatId, `⚠️ *TIDAK ADA EMAIL BARU*\nSudah menunggu 2 menit namun email *Reset Session* belum masuk dari pusat. Harap ulangi beberapa saat lagi.`, {parse_mode: 'Markdown'});
-            throw new Error('Tidak ada email baru masuk dalam waktu 2 menit (Session).');
+            // TIMEOUT: Tembak screenshot Webmail dan batalkan
+            const ssBuffer = await mailPage.screenshot();
+            await bot.sendPhoto(chatId, ssBuffer, { caption: `❌ *TIDAK ADA EMAIL BARU*\nSudah menunggu 2 menit namun email *Reset Session* belum masuk dari pusat. Proses dibatalkan agar tidak berulang.`, parse_mode: 'Markdown' });
+            throw new Error('ABORT_NO_EMAIL');
         }
 
-        bot.sendMessage(chatId, `[i] Menunggu isi email Reset Session muncul...`);
+        bot.sendMessage(chatId, `⏳ Menunggu isi email muncul di layar...`);
         await mailPage.waitForFunction(() => {
-            return Array.from(document.querySelectorAll('a')).some(a => a.textContent.toLowerCase().includes('reset'));
+            return Array.from(document.querySelectorAll('a')).some(a => a.textContent.trim().toLowerCase().includes('reset session'));
         }, { timeout: 10000 }).catch(() => { });
 
+        // Ambil screenshot isi email
+        const ssEmail = await mailPage.screenshot();
+        
+        // Cek link Reset Session
         const resetLinks = await mailPage.evaluate(() => {
             const links = Array.from(document.querySelectorAll('a'))
-                .filter(a => a.textContent.toLowerCase().includes('reset'))
+                .filter(a => a.textContent.trim().toLowerCase().includes('reset session'))
                 .map(a => a.href);
             return links;
         });
 
         if (resetLinks.length > 0) {
-            bot.sendMessage(chatId, `[i] Ditemukan link Reset Session. Mengklik link...`);
-            const resetPage = await browser.newPage();
-            resetPage.on('dialog', async dialog => { await dialog.accept(); });
-            try {
-                await resetPage.goto(resetLinks[0], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => { });
+            const optMsg = await bot.sendPhoto(chatId, ssEmail, { 
+                caption: `📸 Screenshot isi Email Session. Silakan konfirmasi untuk mereset:`,
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: `✅ Ya, Reset Session`, callback_data: `sess_yes` }],
+                        [{ text: `❌ Batalkan`, callback_data: `sess_cancel` }]
+                    ]
+                }
+            });
 
-                await resetPage.evaluate(() => {
-                    const btns = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn'));
-                    const target = btns.find(b => {
-                        const txt = (b.textContent || b.value || '').toLowerCase();
-                        return txt.includes('reset') || txt.includes('yes') || txt.includes('ok') || txt.includes('setuju');
-                    });
-                    if (target) target.click();
-                });
-                await new Promise(r => setTimeout(r, 3000));
-                await resetPage.close().catch(() => { });
-                bot.sendMessage(chatId, `[i] Reset Session berhasil dikonfirmasi!`);
-            } catch (e) {
-                console.log('Error klik reset link', e);
+            try {
+                const response = await waitForUserInteraction(optMsg.message_id, 300000); // 5 menit
+                if (response === 'sess_cancel') {
+                    bot.sendMessage(chatId, `❌ Proses Reset Session dibatalkan oleh pengguna.`);
+                    throw new Error('ABORT_USER');
+                } else if (response === 'sess_yes') {
+                    bot.sendMessage(chatId, `🔄 Menghapus Session...`);
+                    const delPage = await browser.newPage();
+                    delPage.on('dialog', async dialog => await dialog.accept());
+                    try {
+                        await delPage.goto(resetLinks[0], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
+                        // Klik tombol reset (biasanya "Ya" atau "OK") jika ada popup/konfirmasi di halaman tersebut
+                        await delPage.evaluate(() => {
+                            const btns = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn'));
+                            const target = btns.find(b => {
+                                const txt = (b.textContent || b.value || '').toLowerCase();
+                                return txt.includes('reset') || txt.includes('yes') || txt.includes('ok') || txt.includes('ya');
+                            });
+                            if (target) target.click();
+                        }).catch(() => {});
+                        await new Promise(r => setTimeout(r, 1000));
+                        const ssDel = await delPage.screenshot();
+                        await bot.sendPhoto(chatId, ssDel, { caption: `✅ Hasil klik Reset Session` });
+                    } catch(e) {} finally {
+                        await delPage.close().catch(()=>{});
+                    }
+                }
+            } catch(e) {
+                bot.sendMessage(chatId, `⏳ Waktu tunggu 5 menit habis. Proses dibatalkan.`);
+                throw new Error('ABORT_TIMEOUT');
             }
         } else {
-            bot.sendMessage(chatId, `[i] Link Reset Session tidak ditemukan di email.`);
+            bot.sendMessage(chatId, `⚠️ Link 'Reset Session' tidak ditemukan di email.`);
+            await bot.sendPhoto(chatId, ssEmail, { caption: `📸 Screenshot isi Email Session (Tidak ada link Reset Session)` });
+            throw new Error('ABORT_NO_LINK');
         }
 
         await mailPage.close().catch(() => { });
     } catch (err) {
         bot.sendMessage(chatId, `[i] Gagal reset session via OWA: ${err.message}`);
         if (mailPage) await mailPage.close().catch(() => { });
+        if (err.message !== 'ABORT_NO_EMAIL' && err.message !== 'ABORT_USER' && err.message !== 'ABORT_TIMEOUT' && err.message !== 'ABORT_NO_LINK') {
+            throw err;
+        }
     }
 }
 
 // ===== FUNGSI: Reset MAC via OWA =====
-async function handleOwaMacReset(chatId) {
+async function handleOwaMacReset(chatId, isManual = false) {
     bot.sendMessage(chatId, `🔄 Reset MAC Address via Webmail OWA...`);
     let mailPage = await browser.newPage();
     mailPage.on('dialog', async dialog => {
@@ -680,13 +725,15 @@ async function handleOwaMacReset(chatId) {
         await mailPage.goto('https://webmail.pln.co.id/owa/auth/logon.aspx?replaceCurrent=1&url=https%3a%2f%2fwebmail.pln.co.id%2fowa', { waitUntil: 'networkidle2', timeout: 30000 });
 
         bot.sendMessage(chatId, `⏳ Login ke Webmail...`);
+        let webUser = credentials.webmail.username;
+        if (!webUser.includes('\\')) webUser = 'pusat\\' + webUser;
+
         await mailPage.waitForSelector('#username', { timeout: 15000 });
         try {
             await mailPage.click('#username').catch(()=>{});
             await mailPage.evaluate(() => { const u = document.getElementById('username'); if(u) u.value = ''; });
-            await mailPage.type('#username', credentials.webmail.username).catch(()=>{});
+            await mailPage.type('#username', webUser).catch(()=>{});
             
-            // Atasi trik placeholder OWA (klik text palsu agar input password asli muncul)
             await mailPage.click('#passwordText').catch(()=>{});
             await mailPage.waitForSelector('#password', { timeout: 2000, visible: true }).catch(()=>{});
             
@@ -695,51 +742,33 @@ async function handleOwaMacReset(chatId) {
             await mailPage.type('#password', credentials.webmail.password).catch(()=>{});
         } catch(e) {}
         
-        // Fallback murni JS jika UI OWA bermasalah
         await mailPage.evaluate((u, p) => {
             const passEl = document.getElementById('password') || document.querySelector('input[type="password"]');
             if (passEl && passEl.value !== p) passEl.value = p;
             const userEl = document.getElementById('username');
             if (userEl && userEl.value !== u) userEl.value = u;
-        }, credentials.webmail.username, credentials.webmail.password).catch(()=>{});
+        }, webUser, credentials.webmail.password).catch(()=>{});
 
         await Promise.all([
             mailPage.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => null),
-            mailPage.click('.signinbutton')
+            mailPage.click('.signinbutton').catch(()=>null)
         ]);
-
-        // CEK JIKA GAGAL LOGIN (SALAH PASSWORD)
-        const isError = await mailPage.evaluate(() => {
-            const err = document.querySelector('.signInErrorText, #signInErrorDiv, #errTxt');
-            if (err && err.offsetParent !== null && err.textContent.trim().length > 0) return true;
-            return false;
-        }).catch(()=>false);
         
-        if (isError) {
-            bot.sendMessage(chatId, `❌ *GAGAL LOGIN WEBMAIL*\nUsername atau Password Webmail OWA salah/kadaluarsa.\n\nSilakan perbaiki menggunakan perintah:\n\`/set_webmail <username> <password>\``, {parse_mode: 'Markdown'});
-            throw new Error('Webmail login failed due to invalid credentials.');
+        // Cek login error Webmail
+        const isError = await mailPage.evaluate(() => {
+            return document.body.innerHTML.includes('The user name or password you entered isn\'t correct') || 
+                   document.body.innerHTML.includes('salah') ||
+                   document.body.innerHTML.includes('incorrect');
+        });
+        if (isError || mailPage.url().includes('logon.aspx')) {
+            throw new Error("Gagal login Webmail. Cek kembali password /set_webmail Anda.");
         }
 
-        bot.sendMessage(chatId, `⏳ Mencari email pemberitahuan AP2T terbaru...`);
-        await new Promise(r => setTimeout(r, 2000)); // Tunggu inbox load
-
-        bot.sendMessage(chatId, `⏳ Menunggu email pemberitahuan masuk (maks 2 menit)...`);
+        bot.sendMessage(chatId, `⏳ Menunggu email 'Pemberitahuan Login' (Reset MAC)...`);
         
         let elemHandle = null;
         let retries = 0;
-        const maxRetries = 24; // 24 * 5 detik = 120 detik (2 menit)
-
-        while (retries < maxRetries) {
-            // Cek dan tutup popup OWA jika muncul di tengah-tengah
-            await mailPage.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button, span, div, a, .ms-Button'));
-                const okBtn = buttons.find(b => {
-                    const txt = (b.textContent || '').trim().toUpperCase();
-                    return txt === 'OK' && b.offsetParent !== null;
-                });
-                if (okBtn) okBtn.click();
-            }).catch(() => {});
-
+        while (retries < 24) { // 2 menit
             const found = await mailPage.evaluate(() => {
                 const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
@@ -765,12 +794,11 @@ async function handleOwaMacReset(chatId) {
         }
 
         if (elemHandle) {
-            bot.sendMessage(chatId, `📧 Membuka email Pemberitahuan Login...`);
+            bot.sendMessage(chatId, `🎯 Membuka email Pemberitahuan Login...`);
             const box = await elemHandle.boundingBox();
             if (box) {
                 const cx = box.x + box.width / 2;
                 const cy = box.y + box.height / 2;
-                // Cukup SATU KALI klik kiri secara fisik agar tidak membuka tab baru
                 await mailPage.mouse.click(cx, cy);
                 await new Promise(r => setTimeout(r, 1000));
             } else {
@@ -778,7 +806,6 @@ async function handleOwaMacReset(chatId) {
             }
             await elemHandle.dispose();
 
-            // Cek popup limit storage yang mungkin muncul SETELAH membuka email
             await mailPage.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('button, span, div, a, .ms-Button'));
                 const okBtn = buttons.find(b => {
@@ -789,15 +816,20 @@ async function handleOwaMacReset(chatId) {
             }).catch(() => {});
             await new Promise(r => setTimeout(r, 1000));
         } else {
-            bot.sendMessage(chatId, `⚠️ *TIDAK ADA EMAIL BARU*\nSudah menunggu 2 menit namun email *Reset MAC* belum masuk dari pusat. Harap ulangi beberapa saat lagi.`, {parse_mode: 'Markdown'});
-            throw new Error('Tidak ada email baru masuk dalam waktu 2 menit (MAC).');
+            // TIMEOUT: Tembak screenshot Webmail dan batalkan
+            const ssBuffer = await mailPage.screenshot();
+            await bot.sendPhoto(chatId, ssBuffer, { caption: `❌ *TIDAK ADA EMAIL BARU*\nSudah menunggu 2 menit namun email *Reset MAC* belum masuk dari pusat. Proses dibatalkan agar tidak berulang.`, parse_mode: 'Markdown' });
+            throw new Error('ABORT_NO_EMAIL');
         }
 
         bot.sendMessage(chatId, `⏳ Menunggu isi email muncul di layar...`);
-        // Tunggu maksimal 10 detik agar link 'Hapus' muncul di layar
         await mailPage.waitForFunction(() => {
             return Array.from(document.querySelectorAll('a')).some(a => a.textContent.trim().toLowerCase() === 'hapus');
         }, { timeout: 10000 }).catch(() => { });
+
+        // Ambil screenshot isi email
+        const ssEmail = await mailPage.screenshot();
+        await bot.sendPhoto(chatId, ssEmail, { caption: `📸 Screenshot isi Email MAC` });
 
         // Ambil semua URL dari link "Hapus"
         const hapusLinks = await mailPage.evaluate(() => {
@@ -808,58 +840,90 @@ async function handleOwaMacReset(chatId) {
         });
 
         if (hapusLinks.length > 0) {
-            bot.sendMessage(chatId, `🔍 Ditemukan ${hapusLinks.length} MAC Address yang harus dihapus. Memproses satu per satu...`);
-
-            // Buka setiap link hapus di tab baru secara bergantian
-            for (let i = 0; i < hapusLinks.length; i++) {
-                bot.sendMessage(chatId, `🧹 Menghapus MAC Address N[+]${i + 1}...`);
-                const delPage = await browser.newPage();
-
-                // Otomatis klik OK jika ada popup konfirmasi dari AP2T saat menghapus MAC
-                delPage.on('dialog', async dialog => {
-                    await dialog.accept();
+            if (!isManual) {
+                // OTOMATIS HAPUS
+                bot.sendMessage(chatId, `⚡ Ditemukan ${hapusLinks.length} MAC Address. Proses hapus otomatis...`);
+                for (let i = 0; i < hapusLinks.length; i++) {
+                    bot.sendMessage(chatId, `🗑 Menghapus MAC Address ${i + 1}...`);
+                    const delPage = await browser.newPage();
+                    delPage.on('dialog', async dialog => await dialog.accept());
+                    try {
+                        await delPage.goto(hapusLinks[i], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
+                        await delPage.evaluate(() => {
+                            const btns = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn'));
+                            const target = btns.find(b => {
+                                const txt = (b.textContent || b.value || '').toLowerCase();
+                                return txt.includes('hapus') || txt.includes('yes') || txt.includes('ok');
+                            });
+                            if (target) target.click();
+                        }).catch(() => {});
+                        await new Promise(r => setTimeout(r, 1000));
+                        const ssDel = await delPage.screenshot();
+                        await bot.sendPhoto(chatId, ssDel, { caption: `✅ Hasil klik Hapus MAC ke-${i + 1}` });
+                    } catch(e) {} finally {
+                        await delPage.close().catch(()=>{});
+                    }
+                }
+            } else {
+                // INTERAKTIF (MANUAL)
+                const buttons = [];
+                for (let i = 0; i < hapusLinks.length; i++) {
+                    buttons.push([{ text: `🗑 Hapus MAC ${i + 1}`, callback_data: `mac_${i}` }]);
+                }
+                buttons.push([{ text: '❌ Batalkan', callback_data: `mac_cancel` }]);
+                
+                const optMsg = await bot.sendMessage(chatId, `Silakan pilih MAC Address yang ingin dihapus:`, {
+                    reply_markup: { inline_keyboard: buttons }
                 });
 
                 try {
-                    await delPage.goto(hapusLinks[i], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(e => console.log('Halaman hapus selesai dimuat (mengabaikan spinner)'));
-
-                    // JIKA ADA TOMBOL HAPUS/YES/OK DI HALAMAN TERSEBUT, KLIK OTOMATIS
-                    await delPage.evaluate(() => {
-                        const btns = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn'));
-                        const target = btns.find(b => {
-                            const txt = (b.textContent || b.value || '').toLowerCase();
-                            return txt.includes('hapus') || txt.includes('yes') || txt.includes('ok') || txt.includes('setuju');
-                        });
-                        if (target) target.click();
-                    });
-
-                    await new Promise(r => setTimeout(r, 3000));
-
-                    // AMBIL SCREENSHOT AGAR KITA BISA LIHAT HASILNYA
-                    const path = require('path');
-                    const fs = require('fs');
-                    const ssBuffer = await delPage.screenshot();
-                    await bot.sendPhoto(chatId, ssBuffer, { caption: `📸 Screenshot layar setelah klik Hapus MAC ke-${i + 1}` }, { filename: `screenshot_hapus.png`, contentType: 'image/png' });
-
-                } catch (err) {
-                    console.error(`Gagal menghapus MAC ${i + 1}:`, err);
-                } finally {
-                    await delPage.close().catch(() => { });
+                    const response = await waitForUserInteraction(optMsg.message_id, 300000); // 5 menit
+                    if (response === 'mac_cancel') {
+                        bot.sendMessage(chatId, `❌ Proses hapus MAC dibatalkan oleh pengguna.`);
+                        throw new Error('ABORT_USER');
+                    } else if (response.startsWith('mac_')) {
+                        const idx = parseInt(response.split('_')[1]);
+                        bot.sendMessage(chatId, `🔄 Menghapus MAC Address ${idx + 1}...`);
+                        const delPage = await browser.newPage();
+                        delPage.on('dialog', async dialog => await dialog.accept());
+                        try {
+                            await delPage.goto(hapusLinks[idx], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
+                            await delPage.evaluate(() => {
+                                const btns = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn'));
+                                const target = btns.find(b => {
+                                    const txt = (b.textContent || b.value || '').toLowerCase();
+                                    return txt.includes('hapus') || txt.includes('yes') || txt.includes('ok');
+                                });
+                                if (target) target.click();
+                            }).catch(() => {});
+                            await new Promise(r => setTimeout(r, 1000));
+                            const ssDel = await delPage.screenshot();
+                            await bot.sendPhoto(chatId, ssDel, { caption: `✅ Hasil klik Hapus MAC ke-${idx + 1}` });
+                        } catch(e) {} finally {
+                            await delPage.close().catch(()=>{});
+                        }
+                    }
+                } catch(e) {
+                    bot.sendMessage(chatId, `⏳ Waktu tunggu 5 menit habis. Proses dibatalkan.`);
+                    throw new Error('ABORT_TIMEOUT');
                 }
             }
-            bot.sendMessage(chatId, `✅ Semua MAC Address selesai diproses! Kembali ke AP2T...`);
         } else {
-            bot.sendMessage(chatId, `⚠️ Link 'Hapus' MAC Address tidak ditemukan di email. Mungkin salah buka email atau tidak ada MAC yang terdaftar.`);
+            bot.sendMessage(chatId, `⚠️ Link 'Hapus' MAC Address tidak ditemukan di email.`);
+            const ssEmail2 = await mailPage.screenshot();
+            await bot.sendPhoto(chatId, ssEmail2, { caption: `📸 Screenshot isi Email MAC (Tidak ada link Hapus)` });
+            throw new Error('ABORT_NO_LINK');
         }
-
-    } catch (e) {
-        bot.sendMessage(chatId, `❌ Error Webmail OWA: ${e.message}`);
-    } finally {
         await mailPage.close().catch(() => { });
+    } catch (e) {
+        if (mailPage) await mailPage.close().catch(() => { });
+        if (e.message !== 'ABORT_NO_EMAIL' && e.message !== 'ABORT_USER' && e.message !== 'ABORT_TIMEOUT' && e.message !== 'ABORT_NO_LINK') {
+             bot.sendMessage(chatId, `❌ Gagal memproses MAC Reset OWA: ${e.message}`);
+        }
+        throw e;
     }
 }
 
-// ===== FUNGSI: Login =====
 async function login(accountType, chatId) {
     try {
         await initBrowser(chatId);
@@ -1006,6 +1070,8 @@ async function login(accountType, chatId) {
 
         // >> TAMBAHAN LOGIC SALAH PASSWORD
         if (content.includes('User/password tidak ditemukan')) {
+            const ssPwd = await page.screenshot();
+            await bot.sendPhoto(chatId, ssPwd, { caption: `📸 Gagal login AP2T: Password Salah` });
             bot.sendMessage(chatId, `❌ **GAGAL LOGIN AP2T: PASSWORD SALAH!**\n\nUser ID: \`${credentials[accountType].username}\`\nPassword Lama: \`${credentials[accountType].password}\`\n\n⚠️ Silakan balas pesan ini dengan **Password Baru** AP2T Anda:`, { parse_mode: 'Markdown' });
 
             let waitingManual = true;
@@ -1055,6 +1121,8 @@ async function login(accountType, chatId) {
 
         // >> TAMBAHAN LOGIC RESET SESSION
         if (content.includes('User ID yang sama sedang digunakan di tempat lain')) {
+            const ssSess = await page.screenshot();
+            await bot.sendPhoto(chatId, ssSess, { caption: `📸 Gagal login AP2T: Sesi Nyangkut` });
             bot.sendMessage(chatId, `[i] Sesi nyangkut (User ID sedang digunakan). Melakukan Reset Session otomatis...`);
 
             // Klik OK di popup
@@ -1116,6 +1184,8 @@ async function login(accountType, chatId) {
         // << AKHIR LOGIC RESET SESSION
 
         if (content.includes('Mohon maaf User ID AP2T hanya diijinkan dari 2 MAC Address') || content.includes('dikirimkan ke email')) {
+            const ssMac = await page.screenshot();
+            await bot.sendPhoto(chatId, ssMac, { caption: `📸 Gagal login AP2T: Limit MAC Address` });
             bot.sendMessage(chatId, `⚠️ Limit MAC Address terdeteksi. Otomatis reset via OWA...`);
             await handleOwaMacReset(chatId);
             bot.sendMessage(chatId, `🔄 Login ulang setelah reset...`);
@@ -1130,7 +1200,9 @@ async function login(accountType, chatId) {
 
         const errorEl = await page.$(SELECTORS.errorMessage).catch(() => null);
         if (errorEl) {
+            const ssErr = await page.screenshot();
             const errText = await page.evaluate(el => el.textContent, errorEl);
+            await bot.sendPhoto(chatId, ssErr, { caption: `📸 Pesan web: ${errText.trim()}` });
             bot.sendMessage(chatId, `❌ Pesan web: ${errText.trim()}`);
         }
         return false;
@@ -1537,15 +1609,21 @@ bot.onText(/\/reset_akun/, async (msg) => {
 
 bot.onText(/\/ct (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
-    bot.sendMessage(chatId, `[*] Perintah CT diterima. Sedang memproses...`);
-
     const parts = match[1].trim().split(/\s+/);
+    
     if (parts.length < 2) {
-        return bot.sendMessage(chatId, `[!] Format salah. Gunakan: \`/ct <idpel> <no_gangguan>\``, { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, `[!] Format salah. Gunakan: /ct <idpel> <no_gangguan>`);
     }
     const [idpel, nogan] = parts;
 
+    if (idpel.length !== 11 && idpel.length !== 12) {
+        return bot.sendMessage(chatId, `[!] Gagal!\nID Pelanggan / No Meter wajib terdiri dari 11 atau 12 digit angka. Anda memasukkan ${idpel.length} digit.`);
+    }
+
     if (isLoggingIn) return bot.sendMessage(chatId, `[i] Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
+
+    bot.sendMessage(chatId, `[*] Perintah CT diterima. Sedang memproses...`);
+    console.log("[DEBUG] CT RECEIVED");
 
     commandQueue.push(async () => {
         try {
@@ -1936,10 +2014,13 @@ async function setFieldValue(page, labelText, value, isDropdown = false) {
 // ===== FUNGSI UTAMA: PROSES CT =====
 
 async function processCT(idpel, nogan, chatId, pembuat) {
+    console.log("[DEBUG] processCT STARTED for IDPEL:", idpel);
     activeChatId = chatId;
     try {
         if (!isLoggedIn) {
+            console.log('[DEBUG] Calling login...');
             const ok = await login('main', chatId);
+            console.log('[DEBUG] login returned:', ok);
             if (!ok) return;
             isLoggedIn = true;
             currentAccount = 'main';
@@ -2067,6 +2148,9 @@ async function processCT(idpel, nogan, chatId, pembuat) {
             await new Promise(r => setTimeout(r, 500));
 
             // Isi dengan type (simulasi)
+            lastGlobalDialogMsg = "";
+
+            // Isi dengan type (simulasi)
             await targetFrame.type('#final_target_idpel', idpel, { delay: 100 });
             await page.keyboard.press('Enter');
 
@@ -2081,6 +2165,17 @@ async function processCT(idpel, nogan, chatId, pembuat) {
             }, idpel);
 
             bot.sendMessage(chatId, `⏳ Menunggu data muncul...`);
+            await new Promise(r => setTimeout(r, 2000));
+
+            if (lastGlobalDialogMsg.toLowerCase().includes("tidak ditemukan") || lastGlobalDialogMsg.toLowerCase().includes("tidak ada") || lastGlobalDialogMsg.toLowerCase().includes("salah")) {
+                const ss = await page.screenshot().catch(() => null);
+                if (ss) bot.sendPhoto(chatId, ss, { caption: `❌ Data Pelanggan tidak ditemukan untuk IDPEL ${idpel}.` });
+                else bot.sendMessage(chatId, `❌ Data Pelanggan tidak ditemukan untuk IDPEL ${idpel}.`);
+                clearCTState(idpel);
+                isProcessingCT = false;
+                processQueue();
+                return;
+            }
             // CEK POPUP ERROR ULP / VALIDASI IDPEL (Misal beda unit)
             const checkPopup = async () => {
                 return await page.evaluate(() => {
@@ -3972,7 +4067,9 @@ const standardCommands = [
     { command: 'stop_bot', description: '🛑 Matikan bot dari jarak jauh' }
 ];
 
-bot.setMyCommands(standardCommands);
+standardCommands.push({ command: 'reset_mac_address', description: '🔄 Paksa cek email Reset MAC' });
+    standardCommands.push({ command: 'reset_session', description: '🔄 Paksa cek email Reset Session' });
+    bot.setMyCommands(standardCommands);
 
 if (adminChatId) {
     const adminCommands = [
@@ -4096,3 +4193,33 @@ class ProgressTracker {
     }
 }
 global.ProgressTracker = ProgressTracker;
+
+bot.onText(/\/reset_mac_address/, async (msg) => {
+    const chatId = msg.chat.id;
+    if (isLoggingIn) return bot.sendMessage(chatId, "[i] Bot sedang sibuk (sedang login). Mohon tunggu...");
+    isLoggingIn = true;
+    try {
+        await initBrowser(chatId);
+        await handleOwaMacReset(chatId, true);
+        bot.sendMessage(chatId, "✅ Reset MAC manual selesai! Silakan ulangi perintah /ct atau /login_ap2t.");
+    } catch (e) {
+        bot.sendMessage(chatId, "❌ Gagal paksa reset MAC: " + e.message);
+    } finally {
+        isLoggingIn = false;
+    }
+});
+
+bot.onText(/\/reset_session/, async (msg) => {
+    const chatId = msg.chat.id;
+    if (isLoggingIn) return bot.sendMessage(chatId, "[i] Bot sedang sibuk (sedang login). Mohon tunggu...");
+    isLoggingIn = true;
+    try {
+        await initBrowser(chatId);
+        await handleOwaSessionReset(chatId);
+        bot.sendMessage(chatId, "✅ Reset Session manual selesai! Silakan ulangi perintah /ct atau /login_ap2t.");
+    } catch (e) {
+        bot.sendMessage(chatId, "❌ Gagal paksa reset session: " + e.message);
+    } finally {
+        isLoggingIn = false;
+    }
+});
