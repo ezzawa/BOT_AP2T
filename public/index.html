@@ -114,19 +114,26 @@
         <!-- CONTROL PANEL TAB -->
         <section id="users" class="tab-content">
             <div class="card">
-                <h3>🖥️ Status PC Cabang (Fleet Monitor)</h3>
-                <p style="color: #a0a0a0; font-size: 13px; margin-bottom: 15px;"><i>Memantau seluruh komputer yang menjalankan bot ini (via GitHub).</i></p>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div>
+                        <h3 style="margin: 0;">💻 Status PC Cabang (Fleet Monitor)</h3>
+                        <p style="color: #a0a0a0; font-size: 13px; margin: 5px 0 0 0;"><i>Memantau seluruh komputer yang menjalankan bot ini (via GitHub).</i></p>
+                    </div>
+                    <button class="btn btn-outline" onclick="loadFleet()" style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><i class="fas fa-sync-alt"></i> Refresh Data</button>
+                </div>
                 <table id="fleetTable">
                     <thead>
                         <tr>
                             <th>Nama PC</th>
+                            <th>Versi Bot</th>
                             <th>Status Terakhir (Online)</th>
-                            <th>Update Terakhir (Versi)</th>
+                            <th>Update Terakhir (Script)</th>
                             <th>Daftar Staf Aktif</th>
+                            <th style="width: 80px; text-align: center;">Aksi</th>
                         </tr>
                     </thead>
                     <tbody id="fleetTbody">
-                        <tr><td colspan="4" style="text-align: center;">Mengambil data dari GitHub...</td></tr>
+                        <tr><td colspan="6" style="text-align: center;">Mengambil data dari GitHub...</td></tr>
                     </tbody>
                 </table>
             </div>
