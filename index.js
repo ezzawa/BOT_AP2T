@@ -196,9 +196,19 @@ bot.sendMessage = async (chatId, text, options) => {
 // ===== OTORISASI ADMIN, USER, DAN LISENSI HARDWARE =====
 function getHWID() {
     try {
-        const output = require('child_process').execSync('wmic csproduct get uuid').toString();
-        const lines = output.split('\n').map(l => l.trim()).filter(Boolean);
-        return lines[1] || 'UNKNOWN_HWID';
+        try {
+            const output = require('child_process').execSync('wmic csproduct get uuid', {stdio: 'pipe'}).toString();
+            const lines = output.split('\n').map(l => l.trim()).filter(Boolean);
+            if (lines[1] && lines[1].length > 10) return lines[1];
+        } catch(e) {}
+        
+        try {
+            const output = require('child_process').execSync('powershell -NoProfile -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"', {stdio: 'pipe'}).toString();
+            const val = output.trim();
+            if (val && val.length > 10) return val;
+        } catch(e) {}
+
+        return 'UNKNOWN_HWID';
     } catch (e) { return 'UNKNOWN_HWID'; }
 }
 const HWID = getHWID();
@@ -1300,7 +1310,7 @@ async function startSmartLogin(chatId) {
         currentAccount = 'main';
         bot.sendMessage(chatId, `✅ Login berhasil dengan Akun Utama!`);
     } else {
-        bot.sendMessage(chatId, `⚠️ Login gagal. Coba lagi dengan /login_ap2t atau /reset_akun`);
+        bot.sendMessage(chatId, `⚠️ Login gagal. Coba lagi dengan \`/login_ap2t\` atau \`/reset_akun\``);
     }
 }
 
@@ -1517,7 +1527,7 @@ bot.onText(/\/start/, (msg) => {
     let userAp2t = credentials.main.username ? `\`${credentials.main.username}\`` : "Belum diatur";
     let userWeb = credentials.webmail.username ? `\`${credentials.webmail.username}\`` : "Belum diatur";
     
-    let welcomeText = `⚡ *Selamat Datang di BOT AP2T PLN (V3)* ⚡\n\n` +
+    let welcomeText = `⚡ *Selamat Datang di BOT AP2T PLN (V1.0.0)* ⚡\n\n` +
         `🤖 Bot sudah siap membantu Anda.\n\n` +
         `👤 *Akun AP2T Aktif*${profileDisp}: ` + userAp2t + `\n` +
         `📧 *Akun Webmail Aktif*: ` + userWeb + `\n\n` +
@@ -4069,6 +4079,7 @@ const standardCommands = [
 
 standardCommands.push({ command: 'reset_mac_address', description: '🔄 Paksa cek email Reset MAC' });
     standardCommands.push({ command: 'reset_session', description: '🔄 Paksa cek email Reset Session' });
+    standardCommands.push({ command: 'aktivasi_no_meter', description: '📝 Aktivasi No Meter Manual' });
     bot.setMyCommands(standardCommands);
 
 if (adminChatId) {
@@ -4212,14 +4223,202 @@ bot.onText(/\/reset_mac_address/, async (msg) => {
 bot.onText(/\/reset_session/, async (msg) => {
     const chatId = msg.chat.id;
     if (isLoggingIn) return bot.sendMessage(chatId, "[i] Bot sedang sibuk (sedang login). Mohon tunggu...");
-    isLoggingIn = true;
-    try {
-        await initBrowser(chatId);
-        await handleOwaSessionReset(chatId);
-        bot.sendMessage(chatId, "✅ Reset Session manual selesai! Silakan ulangi perintah /ct atau /login_ap2t.");
-    } catch (e) {
-        bot.sendMessage(chatId, "❌ Gagal paksa reset session: " + e.message);
-    } finally {
-        isLoggingIn = false;
+    bot.sendMessage(chatId, "🔄 Menjalankan login AP2T untuk memeriksa dan memaksa Reset Session...");
+    await loginAP2T(chatId);
+});
+
+
+// ==========================================
+// AKTIVASI NO METER MANUAL (Fallback)
+// ==========================================
+bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const noAgenda = match[1] ? match[1].trim() : null;
+
+    if (!noAgenda || noAgenda.length < 5) {
+        return bot.sendMessage(chatId, `[!] Format salah. Gunakan: /aktivasi_no_meter <No_Agenda>`);
+    }
+
+    if (isLoggingIn) return bot.sendMessage(chatId, `[i] Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
+
+    bot.sendMessage(chatId, `[*] Perintah Aktivasi No Meter manual diterima.\nNo Agenda: ${noAgenda}\nSedang memproses...`);
+
+    commandQueue.push(async () => {
+        try {
+            await processAktivasiOnly(noAgenda, chatId, msg.from.first_name);
+        } catch (err) {
+            bot.sendMessage(chatId, `❌ Terjadi kesalahan Aktivasi: ${err.message}`);
+        }
+    });
+    
+    if (!isProcessingCT) {
+        processQueue();
+    } else {
+        bot.sendMessage(chatId, `[i] Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
     }
 });
+
+async function processAktivasiOnly(noAgenda, chatId, pembuat) {
+    if (!page || page.isClosed()) {
+        bot.sendMessage(chatId, `[i] Browser belum siap, membuka ulang browser...`);
+        await initBrowser(chatId);
+    }
+    
+    try {
+        bot.sendMessage(chatId, `🚚 Navigasi ke Menu Aktivasi No Meter...`);
+        await clickMenu(page, ['PELAYANAN PELANGGAN', 'Perintah Kerja', 'Aktivasi No Meter']);
+        bot.sendMessage(chatId, `⏳ Menunggu halaman Aktivasi No Meter terbuka...`);
+        await new Promise(r => setTimeout(r, 2000));
+
+        for (let i = 0; i < 3; i++) {
+            await closePopups(page);
+            await new Promise(r => setTimeout(r, 500));
+        }
+
+        let aktivasiFrame = null;
+        for (const frame of page.frames()) {
+            const isAktivasi = await frame.evaluate(() => {
+                return document.body.innerText.includes('Pencarian') ||
+                    document.body.innerText.includes('No Agenda') ||
+                    document.querySelector('input[id*="ext-comp"]') !== null;
+            });
+            if (isAktivasi) {
+                const hasInput = await frame.evaluate(() => {
+                    return Array.from(document.querySelectorAll('input')).some(i => i.offsetParent !== null);
+                });
+                if (hasInput) {
+                    aktivasiFrame = frame;
+                    break;
+                }
+            }
+        }
+        if (!aktivasiFrame) aktivasiFrame = page;
+
+        bot.sendMessage(chatId, `📝 Memasukkan No Agenda di Aktivasi...`);
+        const inputIdentified = await aktivasiFrame.evaluate((val) => {
+            const labels = Array.from(document.querySelectorAll('label, span'));
+            const label = labels.find(l => l.textContent.includes('No Agenda') && l.offsetParent !== null);
+            let target = null;
+            if (label) {
+                target = label.closest('.x-form-item')?.querySelector('input') || label.parentElement.querySelector('input');
+            }
+            if (!target) {
+                const allInputs = Array.from(document.querySelectorAll('input'));
+                target = allInputs.find(i => i.offsetParent !== null && i.type === 'text' && i.id.includes('ext-comp'));
+            }
+            if (target) {
+                target.style.border = "5px solid red";
+                target.focus();
+                target.id = 'target_input_aktivasi_manual';
+                return true;
+            }
+            return false;
+        }, noAgenda);
+
+        if (inputIdentified) {
+            await aktivasiFrame.click('#target_input_aktivasi_manual', { clickCount: 3 }).catch(() => null);
+            await new Promise(r => setTimeout(r, 500));
+            await page.keyboard.press('Backspace');
+            await new Promise(r => setTimeout(r, 500));
+
+            bot.sendMessage(chatId, `⌨️ Mengetik No Agenda: ${noAgenda}...`);
+            await aktivasiFrame.type('#target_input_aktivasi_manual', noAgenda, { delay: 50 });
+            await page.keyboard.press('Enter');
+            await new Promise(r => setTimeout(r, 500));
+
+            bot.sendMessage(chatId, `🔍 Mengeklik tombol Cari...`);
+            await aktivasiFrame.evaluate(() => {
+                const btns = Array.from(document.querySelectorAll('button, .x-btn-text, .x-form-trigger'));
+                const findBtn = btns.find(b => (b.textContent.includes('Cari') || b.className.includes('search')) && b.offsetParent !== null);
+                if (findBtn) findBtn.click();
+            });
+            
+            bot.sendMessage(chatId, `⏳ Menunggu loading pencarian selesai...`);
+            await new Promise(r => setTimeout(r, 1000)); // Biarkan mask muncul dulu
+            
+            // Tunggu cerdas sampai indikator loading hilang (maksimal 60 detik)
+            try {
+                await aktivasiFrame.waitForFunction(() => {
+                    const masks = Array.from(document.querySelectorAll('.ext-el-mask-msg, .x-mask-msg'));
+                    const isMaskVisible = masks.some(m => m.style.display !== 'none' && m.style.visibility !== 'hidden' && m.offsetParent !== null);
+                    const hasText = document.body.innerText.includes('Mencari Data...');
+                    return !isMaskVisible && !hasText;
+                }, { timeout: 60000 });
+            } catch(e) {
+                console.log('Timeout waiting for loading mask to disappear');
+            }
+            
+            await new Promise(r => setTimeout(r, 1500)); // Ekstra buffer untuk stabilitas DOM
+            
+            // CEK APAKAH ADA POPUP ERROR "Data Tidak Ditemukan"
+            const errorText = await aktivasiFrame.evaluate(() => {
+                const wins = Array.from(document.querySelectorAll('.x-window'));
+                const errWin = wins.find(w => w.style.display !== 'none' && w.offsetParent !== null);
+                if (errWin) return errWin.textContent;
+                return null;
+            });
+            
+            if (errorText && errorText.toLowerCase().includes('data tidak ditemukan')) {
+                bot.sendMessage(chatId, `❌ Data tidak ditemukan untuk No Agenda ${noAgenda}.`);
+                try {
+                    const ssBuffer = await page.screenshot({ encoding: 'buffer' });
+                    await bot.sendPhoto(chatId, ssBuffer, { caption: "Screenshot Kegagalan" }, { filename: "error.png", contentType: 'image/png' });
+                } catch(ex) {}
+                await closePopups(page);
+                throw new Error("Data tidak ditemukan");
+            }
+
+            bot.sendMessage(chatId, `💾 Menyimpan Aktivasi...`);
+            const saveSuccess = await aktivasiFrame.evaluate(() => {
+                const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.offsetParent !== null);
+                if (saveBtn) {
+                    saveBtn.click();
+                    return true;
+                }
+                return false;
+            });
+
+            if (saveSuccess) {
+                bot.sendMessage(chatId, `⏳ Menunggu popup konfirmasi...`);
+                await new Promise(r => setTimeout(r, 1500));
+
+                const yaClicked = await aktivasiFrame.evaluate(() => {
+                    const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                    const yaBtn = btns.find(b => b.textContent.trim() === 'Ya' && b.offsetParent !== null);
+                    if (yaBtn) { yaBtn.click(); return true; }
+                    return false;
+                });
+                if (yaClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'Ya' diklik.`);
+
+                await new Promise(r => setTimeout(r, 1500));
+
+                const okClicked = await aktivasiFrame.evaluate(() => {
+                    const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                    const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
+                    if (okBtn) { okBtn.click(); return true; }
+                    return false;
+                });
+                if (okClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'OK' diklik.`);
+
+                bot.sendMessage(chatId, `🎉 **Aktivasi Manual Berhasil Disimpan!**`);
+                try {
+                    const ssBuffer = await page.screenshot({ encoding: 'buffer' });
+                    await bot.sendPhoto(chatId, ssBuffer, { caption: "Screenshot Keberhasilan" }, { filename: "success.png", contentType: 'image/png' });
+                } catch(ex) {}
+            } else {
+                bot.sendMessage(chatId, `⚠️ Tombol SIMPAN tidak merespon/tidak ditemukan.`);
+            }
+        } else {
+            throw new Error("Gagal menemukan kolom input No Agenda di halaman Aktivasi.");
+        }
+    } catch (e) {
+        bot.sendMessage(chatId, `❌ Gagal dalam proses Aktivasi Manual: ${e.message}`);
+        try {
+            const ssBuffer = await page.screenshot({ encoding: 'buffer' });
+            await bot.sendPhoto(chatId, ssBuffer, { caption: "Error Aktivasi Manual" }, { filename: "error.png", contentType: 'image/png' });
+        } catch(ex) {}
+    } finally {
+        await backToHome();
+    }
+}
