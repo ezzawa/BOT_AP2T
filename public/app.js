@@ -303,10 +303,14 @@ async function loadUsers() {
     usersData.forEach(u => {
         let id = typeof u === 'object' ? u.id : u;
         let nama = typeof u === 'object' ? u.nama : 'Tanpa Nama';
+        let full_name = (typeof u === 'object' && u.full_name) ? u.full_name : nama;
+        let username = (typeof u === 'object' && u.username) ? u.username : '-';
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${nama}</td>
-            <td>${id}</td>
+            <td><strong>${full_name}</strong></td>
+            <td><span style="color: #60a5fa;">${username}</span></td>
+            <td><code>${id}</code></td>
         `;
         tbody.appendChild(tr);
     });
@@ -331,7 +335,12 @@ async function loadFleet() {
             const tr = document.createElement('tr');
             
             // Format users list
-            const userStr = (pc.registered_users || []).map(u => typeof u === 'object' ? u.nama : u).join(', ');
+            const userStr = (pc.registered_users || []).map(u => {
+                  if (typeof u === 'object') {
+                      return (u.full_name && u.full_name !== u.nama && u.full_name !== 'Tanpa Nama') ? `${u.full_name} (${u.nama})` : u.nama;
+                  }
+                  return u;
+              }).join(', ');
             
             tr.innerHTML = `
                 <td><strong>${pc.pc_name || 'Unknown PC'}</strong></td>
