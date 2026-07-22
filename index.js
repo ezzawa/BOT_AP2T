@@ -421,7 +421,7 @@ async function getEncryptionCodeFromApp(chatId) {
 }
 
 // ===== FUNGSI: Inisialisasi Browser =====
-async function initBrowser(chatId) {
+async function initBrowser(chatId, startUrl = null) {
     let retryCount = 0;
     const maxRetries = 3;
 
@@ -502,9 +502,11 @@ async function initBrowser(chatId) {
                     '--start-maximized',
                     '--disable-features=PasswordManager,AutofillServerCommunication',
                     '--disable-save-password-bubble',
-                    '--no-sandbox', // Tambahkan sandbox untuk stabilitas di server/windows tertentu
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
                     '--remote-debugging-port=9222',
-                    '--ignore-certificate-errors'
+                    '--ignore-certificate-errors',
+                    ...(startUrl ? [startUrl] : [])
                 ],
                 headless: false,
                 defaultViewport: null,
@@ -966,10 +968,9 @@ async function handleOwaMacReset(chatId, isManual = false) {
 
 async function login(accountType, chatId) {
     try {
-        await initBrowser(chatId);
-
         bot.sendMessage(chatId, `⏳ Membuka halaman login AP2T...`);
-        await page.goto('https://ap2t.pln.co.id/ap2t/Login.aspx', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await initBrowser(chatId, 'https://ap2t.pln.co.id/ap2t/Login.aspx');
+        if (!page.url().toLowerCase().includes('ap2t')) await page.goto('https://ap2t.pln.co.id/ap2t/Login.aspx', { waitUntil: 'domcontentloaded', timeout: 30000 });
 
         // Cek apakah langsung dialihkan ke dashboard (karena session cookie masih aktif)
         await new Promise(r => setTimeout(r, 3000));
@@ -1592,8 +1593,8 @@ bot.onText(/\/start/, (msg) => {
     let isAdmin = (chatId.toString() === adminChatId);
       
     let keyboard = [
-        [{text: '⬇️ MENU LAYANAN ⬇️', callback_data: 'nav_layanan'}],
         [{text: '⬇️ MENU SISTEM ⬇️', callback_data: 'nav_sistem'}],
+          [{text: '⬇️ MENU LAYANAN ⬇️', callback_data: 'nav_layanan'}],
         [{text: '⬇️ MENU PEMULIHAN ⬇️', callback_data: 'nav_pemulihan'}]
     ];
 
@@ -1619,8 +1620,8 @@ bot.on('callback_query', async (query) => {
         
         if (data === 'nav_main') {
             keyboard = [
-                [{ text: '⬇️ MENU LAYANAN ⬇️', callback_data: 'nav_layanan' }],
-                [{ text: '⬇️ MENU SISTEM ⬇️', callback_data: 'nav_sistem' }],
+                [{text: '⬇️ MENU SISTEM ⬇️', callback_data: 'nav_sistem'}],
+          [{text: '⬇️ MENU LAYANAN ⬇️', callback_data: 'nav_layanan'}],
                 [{ text: '⬇️ MENU PEMULIHAN ⬇️', callback_data: 'nav_pemulihan' }]
             ];
             if (isAdmin) keyboard.push([{ text: '👑 KHUSUS ADMIN 👑', callback_data: 'nav_admin' }]);
@@ -4248,20 +4249,20 @@ bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
 
 // Setup Menu Bawah Kiri di Telegram
 const standardCommands = [
-    { command: 'start', description: '🏠 Menu Utama' },
+    { command: 'start', description: '📌 Menu Utama' },
     { command: 'ct', description: '⚡ Buat CT Otomatis' },
+    { command: 'login_ap2t', description: '🔓 Login AP2T' },
+    { command: 'login_webmail', description: '📧 Tes Login Webmail' },
     { command: 'cek_pelanggan', description: '🔍 Cek Data Pelanggan' },
     { command: 'cetak_token', description: '🖨️ Cetak Token PDF' },
-    { command: 'ambil_token', description: '🔑 Ambil Token 20 Digit' },
+    { command: 'ambil_token', description: '🎟️ Ambil Token 20 Digit' },
     { command: 'cek_token', description: '📊 Monitoring Token Excel' },
-    { command: 'aktivasi_no_meter', description: '💡 Aktivasi No Meter' },
+    { command: 'aktivasi_no_meter', description: '📡 Aktivasi No Meter' },
     { command: 'status', description: '🖥️ Cek Status Layar' },
     { command: 'cek_akun_aktif', description: '✅ Cek Akun Aktif' },
-    { command: 'login_ap2t', description: '🌐 Login AP2T' },
-    { command: 'login_webmail', description: '📧 Tes Login Webmail' },
     { command: 'reset_akun', description: '🔄 Restart Akun/Browser' },
     { command: 'logout', description: '🚪 Logout' },
-    { command: 'reset_ct', description: '🧹 Reset Memori CT' },
+    { command: 'reset_ct', description: '🗑️ Reset Memori CT' },
     { command: 'pause_bot', description: '⏸️ Bekukan Bot' },
     { command: 'resume_bot', description: '▶️ Lanjutkan Bot' },
     { command: 'reset_mac_address', description: '🔄 Paksa cek email Reset MAC' },
