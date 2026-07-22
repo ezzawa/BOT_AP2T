@@ -110,17 +110,22 @@ const statusMessages = {};
 // Reset grup pesan setiap kali user memberikan perintah baru
 bot.on('message', (msg) => {
     if (msg && msg.chat) delete statusMessages[msg.chat.id];
+    if (msg && msg.text && !msg.text.startsWith('/')) {
+        const chatId = msg.chat.id;
+        if (pendingInputState[chatId]) {
+            const state = pendingInputState[chatId];
+            const input = msg.text.trim();
+            delete pendingInputState[chatId];
+            bot.emit('message', { ...msg, text: `/${state} ${input}` });
+            return;
+        }
+    }
     
     // Feedback format salah
     if (msg && msg.text && msg.text.startsWith('/')) {
         const cmds = {
             '/tambah_user': 'Gunakan: `/tambah_user <ID_Telegram> <Nama>`',
-            '/ct': 'Gunakan: `/ct <No_Meter/IDPEL>`',
             '/reset_ct': 'Gunakan: `/reset_ct <No_Meter/IDPEL>`',
-            '/cetak_token': 'Gunakan: `/cetak_token <No_Meter/IDPEL>`',
-            '/cek_token': 'Gunakan: `/cek_token <No_Meter/IDPEL>`',
-            '/ambil_token': 'Gunakan: `/ambil_token <No_Meter/IDPEL>`',
-            '/cek_pelanggan': 'Gunakan: `/cek_pelanggan <No_Meter/IDPEL>`',
             '/set_ap2t': 'Gunakan: `/set_ap2t <Username> <Password>`',
             '/set_webmail': 'Gunakan: `/set_webmail <pusat\\uid> <Password>`',
             '/simpan_akun': 'Gunakan: `/simpan_akun <Nama_Profil> <User_AP2T> <Pass_AP2T> <User_Webmail> <Pass_Webmail>`',
@@ -329,6 +334,7 @@ let commandQueue = [];
 let isProcessingCT = false;
 let isPaused = false; // Flag untuk pause
 let lastGlobalDialogMsg = "";
+let pendingInputState = {};
 
 // Helper untuk menahan eksekusi
 async function checkPause(chatId) {
@@ -588,14 +594,26 @@ async function handleOwaSessionReset(chatId) {
                    document.body.innerHTML.includes('incorrect');
         });
         if (isError || mailPage.url().includes('logon.aspx')) {
-            throw new Error("Gagal login Webmail. Cek kembali password /set_webmail Anda.");
-        }
+              const webUser = credentials.webmail.username;
+              pendingInputState[chatId] = 'update_webmail_pass';
+              bot.sendMessage(chatId, `❌ *LOGIN WEBMAIL GAGAL*\nUsername atau Password Webmail OWA salah/kadaluarsa.\n\nUsername: \`${webUser}\`\nPassword Lama: \`${credentials.webmail.password}\`\n\n💡 Silakan balas pesan ini dengan **Password Baru** Webmail Anda:`, {parse_mode: 'Markdown'});
+              throw new Error("Gagal login Webmail. Silakan balas dengan password baru.");
+          }
 
         bot.sendMessage(chatId, `⏳ Menunggu email 'Reset Session' dari pusat...`);
         
-        let elemHandle = null;
-        let retries = 0;
-        while (retries < 24) { // 2 menit
+        // Menutup popup batas penyimpanan jika ada
+          await mailPage.evaluate(() => {
+              try {
+                  const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                  const okBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'OK');
+                  if (okBtn) okBtn.click();
+              } catch(e) {}
+          }).catch(()=>{});
+
+          let elemHandle = null;
+          let retries = 0;
+          while (retries < 24) { // 2 menit
             const found = await mailPage.evaluate(() => {
                 const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
@@ -771,14 +789,26 @@ async function handleOwaMacReset(chatId, isManual = false) {
                    document.body.innerHTML.includes('incorrect');
         });
         if (isError || mailPage.url().includes('logon.aspx')) {
-            throw new Error("Gagal login Webmail. Cek kembali password /set_webmail Anda.");
-        }
+              const webUser = credentials.webmail.username;
+              pendingInputState[chatId] = 'update_webmail_pass';
+              bot.sendMessage(chatId, `❌ *LOGIN WEBMAIL GAGAL*\nUsername atau Password Webmail OWA salah/kadaluarsa.\n\nUsername: \`${webUser}\`\nPassword Lama: \`${credentials.webmail.password}\`\n\n💡 Silakan balas pesan ini dengan **Password Baru** Webmail Anda:`, {parse_mode: 'Markdown'});
+              throw new Error("Gagal login Webmail. Silakan balas dengan password baru.");
+          }
 
         bot.sendMessage(chatId, `⏳ Menunggu email 'Pemberitahuan Login' (Reset MAC)...`);
         
-        let elemHandle = null;
-        let retries = 0;
-        while (retries < 24) { // 2 menit
+        // Menutup popup batas penyimpanan jika ada
+          await mailPage.evaluate(() => {
+              try {
+                  const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                  const okBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'OK');
+                  if (okBtn) okBtn.click();
+              } catch(e) {}
+          }).catch(()=>{});
+
+          let elemHandle = null;
+          let retries = 0;
+          while (retries < 24) { // 2 menit
             const found = await mailPage.evaluate(() => {
                 const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
@@ -1274,12 +1304,22 @@ async function testWebmailLogin(chatId) {
         });
 
         if (isError || pageUrl.includes('logon.aspx')) {
-            bot.sendMessage(chatId, `⛔ *LOGIN WEBMAIL GAGAL*\nUsername atau Password Webmail OWA salah/kadaluarsa.\n\nUsername: \`${webUser}\`\nPassword Lama: \`${credentials.webmail.password}\`\n\nSilakan perbaiki menggunakan perintah:\n\`/set_webmail <username> <password>\``, {parse_mode: 'Markdown'});
+            pendingInputState[chatId] = 'update_webmail_pass';
+            bot.sendMessage(chatId, `❌ *LOGIN WEBMAIL GAGAL*\nUsername atau Password Webmail OWA salah/kadaluarsa.\n\nUsername: \`${webUser}\`\nPassword Lama: \`${credentials.webmail.password}\`\n\n💡 Silakan balas pesan ini dengan **Password Baru** Webmail Anda:`, {parse_mode: 'Markdown'});
         } else {
             bot.sendMessage(chatId, `✅ *LOGIN WEBMAIL BERHASIL!*\nMengambil screenshot kotak masuk...`, {parse_mode: 'Markdown'});
             
             // Tunggu sebentar untuk loading inbox
-            await new Promise(r => setTimeout(r, 5000));
+              await new Promise(r => setTimeout(r, 5000));
+              
+              // Menutup popup batas penyimpanan jika ada
+              await mailPage.evaluate(() => {
+                  try {
+                      const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                      const okBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'OK');
+                      if (okBtn) okBtn.click();
+                  } catch(e) {}
+              }).catch(()=>{});
             
             // Mencoba menghilangkan popup DOM jika ada
             await mailPage.keyboard.press('Escape').catch(()=>{});
@@ -1324,8 +1364,26 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
     const branch = process.env.GITHUB_BRANCH || 'main';
     if (!token || !repo) return bot.sendMessage(msg.chat.id, "❌ Konfigurasi GITHUB_TOKEN atau GITHUB_REPO belum diatur di .env");
     
+    // BUMP VERSION DI PACKAGE.JSON
+    try {
+        const path = require('path');
+        const pkgPath = path.join(__dirname, 'package.json');
+        if (fs.existsSync(pkgPath)) {
+            let pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            if (pkg.version) {
+                let vParts = pkg.version.split('.');
+                if (vParts.length === 3) {
+                    vParts[2] = parseInt(vParts[2]) + 1;
+                    pkg.version = vParts.join('.');
+                    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+                    bot.sendMessage(msg.chat.id, `🆙 Versi bot dinaikkan menjadi: v${pkg.version}`);
+                }
+            }
+        }
+    } catch(e) { console.error("Gagal bump version", e); }
+
     const statusMsg = await bot.sendMessage(msg.chat.id, "⏳ Sedang memeriksa dan mengunggah perbaikan ke GitHub...\nMohon tunggu sebentar...");
-    const filesToSync = ['index.js', 'server.js', 'public/index.html', 'public/style.css', 'public/app.js'];
+    const filesToSync = ['index.js', 'server.js', 'public/index.html', 'public/style.css', 'public/app.js', 'package.json'];
     const axios = require('axios');
     let successCount = 0;
     let sameCount = 0;
@@ -1505,7 +1563,6 @@ bot.onText(/\/daftar_user/, (msg) => {
 
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
-    
     let activeProfileName = null;
     try {
         const path = require('path');
@@ -1515,10 +1572,7 @@ bot.onText(/\/start/, (msg) => {
             const profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
             for (const n in profiles) {
                 const u = profiles[n].ap2t ? profiles[n].ap2t.username : profiles[n].ap2t_user;
-                if (u === credentials.main.username) {
-                    activeProfileName = n;
-                    break;
-                }
+                if (u === credentials.main.username) { activeProfileName = n; break; }
             }
         }
     } catch(e) {}
@@ -1527,16 +1581,96 @@ bot.onText(/\/start/, (msg) => {
     let userAp2t = credentials.main.username ? `\`${credentials.main.username}\`` : "Belum diatur";
     let userWeb = credentials.webmail.username ? `\`${credentials.webmail.username}\`` : "Belum diatur";
     
-    let welcomeText = `⚡ *Selamat Datang di BOT AP2T PLN (V1.0.0)* ⚡\n\n` +
-        `🤖 Bot sudah siap membantu Anda.\n\n` +
-        `👤 *Akun AP2T Aktif*${profileDisp}: ` + userAp2t + `\n` +
-        `📧 *Akun Webmail Aktif*: ` + userWeb + `\n\n` +
-        `👉 *PANDUAN PENGGUNAAN:*\n` +
-        `Seluruh daftar perintah kini sudah terintegrasi. Silakan tekan tombol *Menu [ / ]* di pojok kiri bawah (sebelah kolom ketik) untuk melihat dan memilih semua fitur bot.\n\n` +
-        `*Tips:* Jika browser macet atau error, tekan perintah \`/reset_akun\`.`;
+    let welcomeText = `🤖 *Selamat Datang di BOT AP2T PLN*\n\n👤 *Akun AP2T Aktif*${profileDisp}: ${userAp2t}\n📧 *Akun Webmail Aktif*: ${userWeb}\n\nPilih menu di bawah ini:`;
+    
+    let isAdmin = (chatId.toString() === adminChatId);
+      
+    let keyboard = [
+        [{text: '⬇️ MENU LAYANAN ⬇️', callback_data: 'nav_layanan'}],
+        [{text: '⬇️ MENU SISTEM ⬇️', callback_data: 'nav_sistem'}],
+        [{text: '⬇️ MENU PEMULIHAN ⬇️', callback_data: 'nav_pemulihan'}]
+    ];
 
-    bot.sendMessage(chatId, welcomeText, { parse_mode: 'Markdown' });
+    if (isAdmin) {
+        keyboard.push([{text: '👑 KHUSUS ADMIN 👑', callback_data: 'nav_admin'}]);
+    }
+
+    const inlineKeyboard = {
+        reply_markup: { inline_keyboard: keyboard },
+        parse_mode: 'Markdown'
+    };
+    bot.sendMessage(chatId, welcomeText, inlineKeyboard);
 });
+
+bot.on('callback_query', async (query) => {
+    const chatId = query.message.chat.id;
+    const data = query.data;
+    bot.answerCallbackQuery(query.id).catch(()=>{});
+    
+    if (data.startsWith('nav_')) {
+        let keyboard = [];
+        let isAdmin = (chatId.toString() === adminChatId);
+        
+        if (data === 'nav_main') {
+            keyboard = [
+                [{ text: '⬇️ MENU LAYANAN ⬇️', callback_data: 'nav_layanan' }],
+                [{ text: '⬇️ MENU SISTEM ⬇️', callback_data: 'nav_sistem' }],
+                [{ text: '⬇️ MENU PEMULIHAN ⬇️', callback_data: 'nav_pemulihan' }]
+            ];
+            if (isAdmin) keyboard.push([{ text: '👑 KHUSUS ADMIN 👑', callback_data: 'nav_admin' }]);
+        } else if (data === 'nav_layanan') {
+            keyboard = [
+                [{text: '⚡ Buat CT Otomatis', callback_data: 'cmd_ct'}],
+                [{text: '🔍 Cek Pelanggan', callback_data: 'cmd_cek_pelanggan'}, {text: '💡 Aktivasi Meter', callback_data: 'cmd_aktivasi_no_meter'}],
+                [{text: '📊 Monitor Token', callback_data: 'cmd_cek_token'}, {text: '🖨️ Cetak Token', callback_data: 'cmd_cetak_token'}],
+                [{text: '🔑 Ambil Token 20 Digit', callback_data: 'cmd_ambil_token'}],
+                [{text: '🔙 Kembali', callback_data: 'nav_main'}]
+            ];
+        } else if (data === 'nav_sistem') {
+            keyboard = [
+                [{text: '🖥️ Cek Status Layar', callback_data: 'cmd_status'}, {text: '✅ Cek Akun', callback_data: 'cmd_cek_akun_aktif'}],
+                [{text: '🌐 Login AP2T', callback_data: 'cmd_login_ap2t'}, {text: '📧 Login Webmail', callback_data: 'cmd_login_webmail'}],
+                [{text: '🔄 Restart Browser', callback_data: 'cmd_reset_akun'}],
+                [{text: '🚪 Logout', callback_data: 'cmd_logout'}],
+                [{text: '🔙 Kembali', callback_data: 'nav_main'}]
+            ];
+        } else if (data === 'nav_pemulihan') {
+            keyboard = [
+                [{text: '🧹 Reset Memori CT', callback_data: 'cmd_reset_ct'}],
+                [{text: '⏸️ Bekukan Bot', callback_data: 'cmd_pause_bot'}, {text: '▶️ Lanjut Bot', callback_data: 'cmd_resume_bot'}],
+                [{text: '🔙 Kembali', callback_data: 'nav_main'}]
+            ];
+        } else if (data === 'nav_admin') {
+            keyboard = [
+                [{text: '➕ Tambah Staf', callback_data: 'cmd_tambah_user'}, {text: '➖ Hapus Staf', callback_data: 'cmd_hapus_user'}],
+                [{text: '🚀 Upload Update GitHub', callback_data: 'cmd_upload_perbaikan'}],
+                [{text: '⬇️ Download Update', callback_data: 'cmd_update_bot'}],
+                [{text: '🔙 Kembali', callback_data: 'nav_main'}]
+            ];
+        }
+
+        bot.editMessageReplyMarkup({ inline_keyboard: keyboard }, {
+            chat_id: chatId,
+            message_id: query.message.message_id
+        }).catch(()=>{});
+        return;
+    }
+    
+    if (data.startsWith('cmd_')) {
+        const cmd = data.replace('cmd_', '');
+        // Build a fake message object that looks like it came from the user
+        const fakeMsg = {
+            message_id: query.message.message_id + 1,
+            from: query.from,
+            chat: query.message.chat,
+            date: Math.floor(Date.now() / 1000),
+            text: `/${cmd}`
+        };
+        // Emit exactly as a message so the onText regexes catch it!
+        bot.processUpdate({ update_id: Math.floor(Math.random()*1000000), message: fakeMsg });
+    }
+});
+
 
 bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
@@ -1617,14 +1751,15 @@ bot.onText(/\/reset_akun/, async (msg) => {
     bot.sendMessage(chatId, `[+] Selesai. Silakan /login_ap2t kembali.`);
 });
 
-bot.onText(/\/ct (.+)/, async (msg, match) => {
+bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
-    const parts = match[1].trim().split(/\s+/);
-    
-    if (parts.length < 2) {
-        return bot.sendMessage(chatId, `[!] Format salah. Gunakan: /ct <idpel> <no_gangguan>`);
+    if (!match[1] || match[1].trim() === '') {
+        pendingInputState[chatId] = 'ct';
+        return bot.sendMessage(chatId, '⚡ Silakan masukkan **ID Pelanggan / No Meter**:\n_(Tambahkan No Gangguan / Uraian di sebelahnya dengan dipisah spasi jika ada)_', {parse_mode: 'Markdown'});
     }
-    const [idpel, nogan] = parts;
+    const parts = match[1].trim().split(/\s+/);
+    const idpel = parts[0];
+    const nogan = parts.slice(1).join(' ') || '-';
 
     if (idpel.length !== 11 && idpel.length !== 12) {
         return bot.sendMessage(chatId, `[!] Gagal!\nID Pelanggan / No Meter wajib terdiri dari 11 atau 12 digit angka. Anda memasukkan ${idpel.length} digit.`);
@@ -1730,6 +1865,29 @@ bot.onText(/\/set_ap2t (.+)/, async (msg, match) => {
     updateProfileCredential('ap2t', ap2tUser, ap2tPass);
 
     bot.sendMessage(chatId, `[+] Akun AP2T berhasil diubah menjadi: **${ap2tUser}**`, { parse_mode: 'Markdown' });
+});
+
+bot.onText(/\/update_webmail_pass(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const newPass = match[1] ? match[1].trim() : null;
+    if (!newPass) return;
+    const webUser = credentials.webmail.username;
+    credentials.webmail.password = newPass;
+    updateEnv('WEBMAIL_PASSWORD', newPass);
+    updateProfileCredential('webmail', webUser, newPass);
+    bot.sendMessage(chatId, `✅ Password Webmail berhasil diperbarui! Silakan ulangi perintah Anda (misal klik ulang /ct).`, { parse_mode: 'Markdown' });
+});
+
+bot.onText(/\/update_ap2t_pass(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const newPass = match[1] ? match[1].trim() : null;
+    if (!newPass) return;
+    const accountType = (credentials.main.username === msg.text) ? 'main' : 'main'; // simplified
+    const ap2User = credentials.main.username;
+    credentials.main.password = newPass;
+    updateEnv('MAIN_PASSWORD', newPass);
+    updateProfileCredential('ap2t', ap2User, newPass);
+    bot.sendMessage(chatId, `✅ Password AP2T berhasil diperbarui! Silakan coba /login_ap2t lagi.`, { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/set_webmail (.+)/, async (msg, match) => {
@@ -2461,7 +2619,7 @@ async function processCT(idpel, nogan, chatId, pembuat) {
             if (ss) await bot.sendPhoto(chatId, ss, { caption: "No Agenda tidak ditemukan di layar." });
             throw new Error("Gagal memindai No Agenda dari layar. Berhenti.");
         }
-        bot.sendMessage(chatId, `📝 No Agenda ditemukan: <code>${noAgenda}</code>.`);
+        bot.sendMessage(chatId, `📝 No Agenda ditemukan: \`${noAgenda}\`.`, { parse_mode: 'Markdown' });
 
         // SIMPAN STATE
         updateCTState(idpel, { step: 'AKTIVASI_NO_METER', noAgenda: noAgenda, nogan: nogan, chatId: chatId, pembuat: pembuat });
@@ -3571,9 +3729,13 @@ async function capturePdfAsImage(pdfUrl, browser, outputPath) {
     }
 }
 
-bot.onText(/\/ambil_token (.+)/, async (msg, match) => {
+bot.onText(/\/ambil_token(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
-    const target = match[1].trim();
+    if (!match[1] || match[1].trim() === '') {
+        pendingInputState[chatId] = 'ambil_token';
+        return bot.sendMessage(chatId, '🔑 Silakan masukkan **ID Pelanggan / No Meter**:', {parse_mode: 'Markdown'});
+    }
+    const query = match[1].trim();
 
     commandQueue.push(async () => {
         activeChatId = chatId;
@@ -3887,8 +4049,12 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
     }
 });
 
-bot.onText(/\/cek_token (.+)/, async (msg, match) => {
+bot.onText(/\/cek_token(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
+    if (!match[1] || match[1].trim() === '') {
+        pendingInputState[chatId] = 'cek_token';
+        return bot.sendMessage(chatId, '📊 Silakan masukkan **ID Pelanggan / No Meter**:', {parse_mode: 'Markdown'});
+    }
     const target = match[1].trim();
     
     commandQueue.push(async () => {
@@ -3923,7 +4089,18 @@ bot.onText(/\/cek_token (.+)/, async (msg, match) => {
                                     for (let i = 0; i < cm.getColumnCount(); i++) {
                                         if (!cm.isHidden(i)) {
                                             let header = cm.getColumnHeader(i).replace(/<[^>]*>?/gm, '').trim();
-                                            if (header && header !== '&#160;') {
+                                            const upH = header.toUpperCase();
+                                            const skip = upH.includes('KEY CHANGE') || 
+                                                         upH.includes('MAX POWER') || 
+                                                         upH.includes('CLEAR CREDIT') || 
+                                                         upH.includes('CLEAR TAMPER') || 
+                                                         upH.includes('UNBALANCE LIMIT') || 
+                                                         upH.includes('ELECTRICITY CREDIT') || 
+                                                         upH.includes('METER NUM') ||
+                                                         upH === 'RPTOKEN' ||
+                                                         upH === 'KWH' ||
+                                                         upH === 'KETSTATUSAGENDA';
+                                            if (header && header !== '&#160;' && !skip) {
                                                 result.headers.push({ index: i, text: header });
                                             }
                                         }
@@ -4038,9 +4215,13 @@ bot.onText(/\/cek_token (.+)/, async (msg, match) => {
 
 console.log('🤖 Bot AP2T berjalan. Kirim /start di Telegram.');
 
-bot.onText(/\/cek_pelanggan (.+)/, async (msg, match) => {
+bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
-    const target = match[1].trim();
+    if (!match[1] || match[1].trim() === '') {
+        pendingInputState[chatId] = 'cek_pelanggan';
+        return bot.sendMessage(chatId, '🔍 Silakan masukkan **ID Pelanggan / No Meter**:', {parse_mode: 'Markdown'});
+    }
+    const query = match[1].trim();
     if (target.length < 5) {
         return bot.sendMessage(chatId, `[!] Format salah. Gunakan: \n\`/cek_pelanggan <idpel_atau_nometer>\``, { parse_mode: 'Markdown' });
     }
@@ -4059,46 +4240,39 @@ bot.onText(/\/cek_pelanggan (.+)/, async (msg, match) => {
 
 // Setup Menu Bawah Kiri di Telegram
 const standardCommands = [
-    { command: 'start', description: '⚡ Menu Utama' },
-    { command: 'login_ap2t', description: '🔑 Masuk ke sistem AP2T' },
-    { command: 'login_webmail', description: '📧 Tes Login khusus Webmail' },
-    { command: 'ct', description: '🛠️ Buat Clear Tamper otomatis' },
-    { command: 'reset_ct', description: '🔄 Reset memori proses CT' },
-    { command: 'cetak_token', description: '🖨️ Cetak tiket Token PDF' },
-    { command: 'cek_token', description: '🔍 Monitoring Token Excel' },
-    { command: 'ambil_token', description: '🎟️ Cari & Ambil Token 20 Digit' },
-    { command: 'cek_pelanggan', description: '👤 Cek Data Pelanggan' },
-    { command: 'status', description: '📸 Cek status layar bot' },
-    { command: 'reset_akun', description: '⚠️ Restart browser jika macet' },
-    { command: 'cek_akun_aktif', description: '🔍 Cek akun AP2T & Webmail aktif' },
-    { command: 'pause_bot', description: '⏸️ Hentikan paksa / Bekukan bot' },
-    { command: 'resume_bot', description: '▶️ Lanjutkan bot kembali' },
-    { command: 'logout', description: '🚪 Keluar dari akun AP2T' },
-    { command: 'stop_bot', description: '🛑 Matikan bot dari jarak jauh' }
+    { command: 'start', description: '🏠 Menu Utama' },
+    { command: 'ct', description: '⚡ Buat CT Otomatis' },
+    { command: 'cek_pelanggan', description: '🔍 Cek Data Pelanggan' },
+    { command: 'cetak_token', description: '🖨️ Cetak Token PDF' },
+    { command: 'ambil_token', description: '🔑 Ambil Token 20 Digit' },
+    { command: 'cek_token', description: '📊 Monitoring Token Excel' },
+    { command: 'aktivasi_no_meter', description: '💡 Aktivasi No Meter' },
+    { command: 'status', description: '🖥️ Cek Status Layar' },
+    { command: 'cek_akun_aktif', description: '✅ Cek Akun Aktif' },
+    { command: 'login_ap2t', description: '🌐 Login AP2T' },
+    { command: 'login_webmail', description: '📧 Tes Login Webmail' },
+    { command: 'reset_akun', description: '🔄 Restart Akun/Browser' },
+    { command: 'logout', description: '🚪 Logout' },
+    { command: 'reset_ct', description: '🧹 Reset Memori CT' },
+    { command: 'pause_bot', description: '⏸️ Bekukan Bot' },
+    { command: 'resume_bot', description: '▶️ Lanjutkan Bot' }
 ];
 
-standardCommands.push({ command: 'reset_mac_address', description: '🔄 Paksa cek email Reset MAC' });
-    standardCommands.push({ command: 'reset_session', description: '🔄 Paksa cek email Reset Session' });
-    standardCommands.push({ command: 'aktivasi_no_meter', description: '📝 Aktivasi No Meter Manual' });
-    bot.setMyCommands(standardCommands);
+bot.setMyCommands(standardCommands);
 
 if (adminChatId) {
     const adminCommands = [
         ...standardCommands,
         { command: 'tambah_user', description: '👑 Tambah Staf' },
         { command: 'hapus_user', description: '👑 Hapus Staf' },
-        { command: 'keygen', description: '👑 Buat Lisensi HWID' },
-        { command: 'upload_perbaikan', description: '⬆️ Upload Update GitHub' },
-        { command: 'update_bot', description: '⬇️ Download Update GitHub' },
-        { command: 'lapor_status', description: '📡 Kirim Laporan Telemetri PC' }
+        { command: 'upload_perbaikan', description: '👑 Upload Update GitHub' },
+        { command: 'update_bot', description: '👑 Download Update' }
     ];
-    bot.setMyCommands(adminCommands, { scope: { type: 'chat', chat_id: adminChatId } }).catch(e => console.log("Failed to set admin commands", e.message));
+    bot.setMyCommands(adminCommands, { scope: { type: 'chat', chat_id: adminChatId } }).catch(e => console.log('Failed to set admin commands', e.message));
 }
 
-// ============================================
-// GITHUB TELEMETRY SYSTEM
-// ============================================
 async function updateGitHubStatus() {
+
     const token = process.env.GITHUB_TOKEN;
     const repo = process.env.GITHUB_REPO;
     const branch = process.env.GITHUB_BRANCH || 'main';
@@ -4123,8 +4297,10 @@ async function updateGitHubStatus() {
         lastUpdated = new Date(stats.mtime).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
     } catch(e){}
     
+    const botVersion = require('./package.json').version || '1.0.0';
     const payloadData = {
         pc_name: pcName,
+        bot_version: botVersion,
         last_online: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
         last_updated: lastUpdated,
         registered_users: normalizedUsers
