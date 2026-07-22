@@ -1376,6 +1376,7 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
                     vParts[2] = parseInt(vParts[2]) + 1;
                     pkg.version = vParts.join('.');
                     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+                    updateGitHubStatus();
                     await bot.sendMessage(msg.chat.id, `🆙 Versi bot dinaikkan menjadi: v${pkg.version}`, { parse_mode: 'HTML' });
                 }
             }
@@ -1522,7 +1523,7 @@ bot.onText(/\/tambah_user (.+)/, (msg, match) => {
     if (!exists) {
         usersData.users.push({ id: newId, nama: newName });
         fs.writeFileSync(usersPath, JSON.stringify(usersData, null, 2));
-        bot.sendMessage(msg.chat.id, `✅ Staf *${newName}* (\`${newId}\`) berhasil didaftarkan di PC ini!`, {parse_mode: 'Markdown'});
+        bot.sendMessage(msg.chat.id, `✅ User *${newName}* (\`${newId}\`) berhasil didaftarkan di PC ini!`, {parse_mode: 'Markdown'});
         updateGitHubStatus(); // Lapor status
     } else {
         bot.sendMessage(msg.chat.id, `⚠️ User dengan ID \`${newId}\` sudah terdaftar.`);
@@ -1546,7 +1547,7 @@ bot.onText(/\/hapus_user/, (msg) => {
         return [{ text: `❌ Hapus: ${nama} (${id})`, callback_data: `deluser_${id}` }];
     });
     
-    bot.sendMessage(msg.chat.id, "Pilih staf yang ingin dihapus aksesnya dari PC ini:", {
+    bot.sendMessage(msg.chat.id, "Pilih user yang ingin dihapus aksesnya dari PC ini:", {
         reply_markup: { inline_keyboard: inlineKeyboard }
     });
 });
@@ -1649,7 +1650,7 @@ bot.on('callback_query', async (query) => {
             ];
         } else if (data === 'nav_admin') {
             keyboard = [
-                [{text: '➕ Tambah Staf', callback_data: 'cmd_tambah_user'}, {text: '➖ Hapus Staf', callback_data: 'cmd_hapus_user'}],
+                [{text: '➕ Tambah User', callback_data: 'cmd_tambah_user'}, {text: '➖ Hapus User', callback_data: 'cmd_hapus_user'}],
                 [{text: '🚀 Upload Update GitHub', callback_data: 'cmd_upload_perbaikan'}],
                 [{text: '⬇️ Download Update', callback_data: 'cmd_update_bot'}],
                 [{text: '🔙 Kembali', callback_data: 'nav_main'}]
@@ -1710,7 +1711,7 @@ bot.on('callback_query', async (query) => {
         usersData.users = usersData.users.filter(u => (typeof u === 'object' ? u.id : u) !== delId);
         if (usersData.users.length < initialLen) {
             fs.writeFileSync(usersPath, JSON.stringify(usersData, null, 2));
-            bot.editMessageText(`✅ Staf dengan ID \`${delId}\` berhasil dihapus aksesnya dari PC ini.`, {
+            bot.editMessageText(`✅ User dengan ID \`${delId}\` berhasil dihapus aksesnya dari PC ini.`, {
                 chat_id: chatId,
                 message_id: query.message.message_id,
                 parse_mode: 'Markdown'
@@ -4273,8 +4274,8 @@ bot.setMyCommands(standardCommands);
 if (adminChatId) {
     const adminCommands = [
         ...standardCommands,
-        { command: 'tambah_user', description: '👑 Tambah Staf' },
-        { command: 'hapus_user', description: '👑 Hapus Staf' },
+        { command: 'tambah_user', description: '👑 Tambah User' },
+        { command: 'hapus_user', description: '👑 Hapus User' },
         { command: 'keygen', description: '👑 Buat Lisensi HWID' },
         { command: 'upload_perbaikan', description: '👑 Upload Update GitHub' },
         { command: 'update_bot', description: '👑 Download Update GitHub' },
@@ -4299,9 +4300,24 @@ async function updateGitHubStatus() {
         try { usersData = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch(e){}
     }
     
-    const normalizedUsers = usersData.users.map(u => {
-        return typeof u === 'object' ? u : { id: u, nama: 'Tanpa Nama' };
-    });
+    const normalizedUsers = [];
+    for (const u of usersData.users) {
+        let id = typeof u === 'object' ? u.id : u;
+        let nama_panggilan = typeof u === 'object' ? u.nama : 'Tanpa Nama';
+        let full_name = nama_panggilan;
+        let username = '-';
+        
+        try {
+            const chatInfo = await bot.getChat(id);
+            if (chatInfo) {
+                full_name = [chatInfo.first_name, chatInfo.last_name].filter(Boolean).join(' ') || nama_panggilan;
+                username = chatInfo.username ? '@' + chatInfo.username : '-';
+            }
+        } catch (e) {}
+        
+        normalizedUsers.push({ id, nama: nama_panggilan, full_name, username });
+    }
+    try { fs.writeFileSync(usersPath, JSON.stringify({ users: normalizedUsers }, null, 2)); } catch(e){}
     
     let lastUpdated = 'Unknown';
     try {
@@ -4353,6 +4369,7 @@ async function updateGitHubStatus() {
 }
 
 setTimeout(updateGitHubStatus, 5000);
+setInterval(updateGitHubStatus, 5 * 60 * 1000);
 
 bot.onText(/\/lapor_status/, async (msg) => {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
