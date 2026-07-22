@@ -1450,7 +1450,7 @@ bot.onText(/\/update_bot/, async (msg) => {
     if (!token || !repo) return bot.sendMessage(msg.chat.id, "❌ Konfigurasi GITHUB_TOKEN atau GITHUB_REPO belum diatur.");
     
     bot.sendMessage(msg.chat.id, "⏳ Sedang mengunduh update dari GitHub...");
-    const filesToSync = ['index.js', 'server.js', 'public/index.html', 'public/style.css', 'public/app.js'];
+    const filesToSync = ['index.js', 'server.js', 'public/index.html', 'public/style.css', 'public/app.js', 'package.json'];
     const axios = require('axios');
     let successCount = 0;
     
@@ -1636,8 +1636,10 @@ bot.on('callback_query', async (query) => {
             ];
         } else if (data === 'nav_pemulihan') {
             keyboard = [
-                [{text: '🧹 Reset Memori CT', callback_data: 'cmd_reset_ct'}],
+                [{text: '🔄 Reset MAC Address', callback_data: 'cmd_reset_mac_address'}, {text: '🔄 Reset Session', callback_data: 'cmd_reset_session'}],
+                [{text: '🗑️ Reset Memori CT', callback_data: 'cmd_reset_ct'}],
                 [{text: '⏸️ Bekukan Bot', callback_data: 'cmd_pause_bot'}, {text: '▶️ Lanjut Bot', callback_data: 'cmd_resume_bot'}],
+                [{text: '🛑 Matikan Bot', callback_data: 'cmd_stop_bot'}],
                 [{text: '🔙 Kembali', callback_data: 'nav_main'}]
             ];
         } else if (data === 'nav_admin') {
@@ -4255,7 +4257,10 @@ const standardCommands = [
     { command: 'logout', description: '🚪 Logout' },
     { command: 'reset_ct', description: '🧹 Reset Memori CT' },
     { command: 'pause_bot', description: '⏸️ Bekukan Bot' },
-    { command: 'resume_bot', description: '▶️ Lanjutkan Bot' }
+    { command: 'resume_bot', description: '▶️ Lanjutkan Bot' },
+    { command: 'reset_mac_address', description: '🔄 Paksa cek email Reset MAC' },
+    { command: 'reset_session', description: '🔄 Paksa cek email Reset Session' },
+    { command: 'stop_bot', description: '🛑 Matikan bot dari jarak jauh' }
 ];
 
 bot.setMyCommands(standardCommands);
@@ -4265,8 +4270,10 @@ if (adminChatId) {
         ...standardCommands,
         { command: 'tambah_user', description: '👑 Tambah Staf' },
         { command: 'hapus_user', description: '👑 Hapus Staf' },
+        { command: 'keygen', description: '👑 Buat Lisensi HWID' },
         { command: 'upload_perbaikan', description: '👑 Upload Update GitHub' },
-        { command: 'update_bot', description: '👑 Download Update' }
+        { command: 'update_bot', description: '👑 Download Update GitHub' },
+        { command: 'lapor_status', description: '👑 Kirim Laporan Telemetri PC' }
     ];
     bot.setMyCommands(adminCommands, { scope: { type: 'chat', chat_id: adminChatId } }).catch(e => console.log('Failed to set admin commands', e.message));
 }
