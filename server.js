@@ -140,6 +140,37 @@ app.get('/api/fleet', async (req, res) => {
 });
 
 const PORT = 3000;
+app.delete('/api/fleet/:pc', async (req, res) => {
+    const env = getEnv();
+    if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return res.status(400).json({ error: 'GitHub belum dikonfigurasi' });
+    
+    try {
+        const axios = require('axios');
+        const pcName = req.params.pc;
+        const branch = env.GITHUB_BRANCH || 'main';
+        const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/fleet/${pcName}.json?ref=${branch}`;
+        const headers = { Authorization: `token ${env.GITHUB_TOKEN}` };
+        
+        let sha = null;
+        try {
+            const getRes = await axios.get(url, { headers });
+            sha = getRes.data.sha;
+        } catch (e) {
+            return res.status(404).json({ error: 'Data PC tidak ditemukan di GitHub' });
+        }
+        
+        const deleteUrl = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/fleet/${pcName}.json`;
+        await axios.delete(deleteUrl, {
+            headers,
+            data: { message: `Hapus PC: ${pcName} dari Fleet Monitor`, sha, branch }
+        });
+        
+        res.json({ success: true, message: 'Berhasil dihapus' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`✅ GUI Dashboard is running on http://localhost:${PORT}`);
 });
