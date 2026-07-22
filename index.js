@@ -1449,7 +1449,7 @@ bot.onText(/\/update_bot/, async (msg) => {
     const branch = process.env.GITHUB_BRANCH || 'main';
     if (!token || !repo) return bot.sendMessage(msg.chat.id, "❌ Konfigurasi GITHUB_TOKEN atau GITHUB_REPO belum diatur.");
     
-    bot.sendMessage(msg.chat.id, "⏳ Sedang mengunduh update dari GitHub...");
+    await bot.sendMessage(msg.chat.id, "⏳ Sedang mengunduh update dari GitHub...", { parse_mode: 'HTML' });
     const filesToSync = ['index.js', 'server.js', 'public/index.html', 'public/style.css', 'public/app.js', 'package.json'];
     const axios = require('axios');
     let successCount = 0;
@@ -1461,14 +1461,16 @@ bot.onText(/\/update_bot/, async (msg) => {
             const res = await axios.get(url, { headers });
             
             const filePath = path.join(__dirname, ...file.split('/'));
-            fs.writeFileSync(filePath, res.data);
+              let fileData = res.data;
+              if (typeof fileData === 'object') fileData = JSON.stringify(fileData, null, 2);
+              fs.writeFileSync(filePath, fileData);
             successCount++;
         } catch (e) {
             console.error(`Gagal download ${file}:`, e.message);
         }
     }
     
-    bot.sendMessage(msg.chat.id, `✅ Update selesai! Berhasil memperbarui ${successCount} file.\nBot akan me-restart sekarang...`);
+    await bot.sendMessage(msg.chat.id, `✅ Update selesai! Berhasil memperbarui ${successCount} file.\nBot akan me-restart sekarang...`, { parse_mode: 'HTML' });
     setTimeout(() => {
         try { require('child_process').execSync('pm2 restart AP2T_Bot'); } catch(e){ process.exit(0); }
     }, 2000);
@@ -1581,7 +1583,10 @@ bot.onText(/\/start/, (msg) => {
     let userAp2t = credentials.main.username ? `\`${credentials.main.username}\`` : "Belum diatur";
     let userWeb = credentials.webmail.username ? `\`${credentials.webmail.username}\`` : "Belum diatur";
     
-    let welcomeText = `🤖 *Selamat Datang di BOT AP2T PLN*\n\n👤 *Akun AP2T Aktif*${profileDisp}: ${userAp2t}\n📧 *Akun Webmail Aktif*: ${userWeb}\n\nPilih menu di bawah ini:`;
+    let botVersion = '1.0.0';
+      try { botVersion = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'package.json'), 'utf8')).version || '1.0.0'; } catch(e) {}
+      
+      let welcomeText = `🌟 *Selamat Datang di BOT AP2T PLN* (v${botVersion})\n\n👤 *Akun AP2T Aktif*${profileDisp}: ${userAp2t}\n📧 *Akun Webmail Aktif*: ${userWeb}\n\nPilih menu di bawah ini:`;
     
     let isAdmin = (chatId.toString() === adminChatId);
       
