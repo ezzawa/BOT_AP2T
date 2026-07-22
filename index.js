@@ -1426,20 +1426,20 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
         }
     }
     
-    let resultMsg = `*Hasil Sinkronisasi GitHub:*\n`;
-    if (successCount > 0) resultMsg += `✅ *${successCount} File Diunggah*\n`;
-    if (sameCount > 0) resultMsg += `ℹ️ *${sameCount} File Sudah Versi Terbaru* (Tidak ada perubahan)\n`;
-    if (failCount > 0) resultMsg += `❌ *${failCount} File Gagal*\n`;
+    let resultMsg = `<b>Hasil Sinkronisasi GitHub:</b>\n`;
+    if (successCount > 0) resultMsg += `✅ <b>${successCount} File Diunggah</b>\n`;
+    if (sameCount > 0) resultMsg += `ℹ️ <b>${sameCount} File Sudah Versi Terbaru</b> (Tidak ada perubahan)\n`;
+    if (failCount > 0) resultMsg += `❌ <b>${failCount} File Gagal</b>\n`;
     
     if (successCount > 0) {
-        resultMsg += `\nSekarang Anda bisa menjalankan \`/update_bot\` di PC lain.`;
+        resultMsg += `\nSekarang Anda bisa menjalankan <code>/update_bot</code> di PC lain.`;
     }
     
     bot.editMessageText(resultMsg, {
         chat_id: msg.chat.id,
         message_id: statusMsg.message_id,
-        parse_mode: 'Markdown'
-    }).catch(() => {});
+        parse_mode: 'HTML'
+    }).catch((e) => { console.error("Edit error:", e); });
 });
 
 bot.onText(/\/update_bot/, async (msg) => {
