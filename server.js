@@ -40,9 +40,8 @@ function saveEnv(env) {
 
 function getHWID() {
     try {
-        const output = execSync('wmic csproduct get uuid').toString();
-        const lines = output.split('\n').map(l => l.trim()).filter(Boolean);
-        return lines[1] || 'UNKNOWN_HWID';
+        const output = execSync('powershell -NoProfile -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"').toString();
+        return output.trim() || 'UNKNOWN_HWID';
     } catch (e) {
         return 'UNKNOWN_HWID';
     }
