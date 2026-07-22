@@ -92,7 +92,7 @@ async function loadEnv() {
     const fieldDescriptions = {
         'MAIN_USERNAME': 'Username akun AP2T yang saat ini aktif digunakan.',
         'MAIN_PASSWORD': 'Password akun AP2T.',
-        'WEBMAIL_USERNAME': 'Email PLN (contoh: uid\\nama.staf) untuk buka tiket OWA.',
+        'WEBMAIL_USERNAME': 'Email PLN (contoh: uidnama.staf) untuk buka tiket OWA.',
         'WEBMAIL_PASSWORD': 'Password Webmail PLN.',
         'TELEGRAM_BOT_TOKEN': 'Token dari BotFather (Wajib sama di semua PC jika pakai 1 bot).',
         'ADMIN_CHAT_ID': 'ID Telegram Anda (Admin Pusat). Ketik /id di bot Rose.',
@@ -314,7 +314,7 @@ async function loadUsers() {
 
 async function loadFleet() {
     const tbody = document.querySelector('#fleetTbody');
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Mengambil data dari GitHub...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Mengambil data dari GitHub...</td></tr>';
     
     try {
         const res = await fetch('/api/fleet');
@@ -323,7 +323,7 @@ async function loadFleet() {
         
         tbody.innerHTML = '';
         if (fleetData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Belum ada PC Cabang yang melapor ke GitHub.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Belum ada PC Cabang yang melapor ke GitHub.</td></tr>';
             return;
         }
         
@@ -333,18 +333,34 @@ async function loadFleet() {
             // Format users list
             const userStr = (pc.registered_users || []).map(u => typeof u === 'object' ? u.nama : u).join(', ');
             
-            // Check if online recently (e.g. within 2 hours) -> this is just UI coloring
-            // For now just output raw string
             tr.innerHTML = `
                 <td><strong>${pc.pc_name || 'Unknown PC'}</strong></td>
+                <td><span style="color: #60a5fa; background: rgba(96, 165, 250, 0.1); padding: 2px 6px; border-radius: 4px; font-size: 12px; border: 1px solid rgba(96, 165, 250, 0.3);">v${pc.bot_version || '1.0.0'}</span></td>
                 <td><span style="color: #4ade80;">${pc.last_online || '-'}</span></td>
                 <td>${pc.last_updated || '-'}</td>
                 <td>${userStr || 'Kosong'}</td>
+                <td style="text-align: center;"><button class="btn btn-outline" style="padding: 4px 8px; font-size: 12px; color: #f87171; border-color: rgba(248, 113, 113, 0.3); background: rgba(248, 113, 113, 0.05); cursor: pointer;" onclick="deleteFleet('${pc.pc_name}')"><i class="fas fa-trash"></i></button></td>
             `;
             tbody.appendChild(tr);
         });
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Error: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: red;">Error: ${e.message}</td></tr>`;
+    }
+}
+
+async function deleteFleet(pcName) {
+    if(!confirm(`Yakin ingin menghapus PC '${pcName}' dari Fleet Monitor?nnData ini akan otomatis muncul lagi jika bot di PC tersebut masih menyala.`)) return;
+    try {
+        const res = await fetch(`/api/fleet/${encodeURIComponent(pcName)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if(data.success) {
+            alert('PC berhasil dihapus dari monitor!');
+            loadFleet();
+        } else {
+            alert('Gagal menghapus: ' + data.error);
+        }
+    } catch(e) {
+        alert('Error: ' + e.message);
     }
 }
 
