@@ -3737,7 +3737,7 @@ bot.onText(/\/ambil_token(?:\s+(.+))?/, async (msg, match) => {
         pendingInputState[chatId] = 'ambil_token';
         return bot.sendMessage(chatId, '🔑 Silakan masukkan **ID Pelanggan / No Meter**:', {parse_mode: 'Markdown'});
     }
-    const query = match[1].trim();
+    const target = match[1].trim();
 
     commandQueue.push(async () => {
         activeChatId = chatId;
