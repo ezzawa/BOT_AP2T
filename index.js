@@ -1456,7 +1456,7 @@ bot.onText(/\/update_bot/, async (msg) => {
     
     for (const file of filesToSync) {
         try {
-            const url = `https://raw.githubusercontent.com/${repo}/${branch}/${file}`;
+            const url = `https://raw.githubusercontent.com/${repo}/${branch}/${file}?t=${Date.now()}`;
             const headers = { Authorization: `token ${token}` };
             const res = await axios.get(url, { headers });
             
