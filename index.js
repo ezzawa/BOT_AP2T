@@ -4304,7 +4304,10 @@ async function updateGitHubStatus() {
         lastUpdated = new Date(stats.mtime).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
     } catch(e){}
     
-    const botVersion = require('./package.json').version || '1.0.0';
+    let botVersion = '1.0.0';
+    try {
+        botVersion = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'package.json'), 'utf8')).version || '1.0.0';
+    } catch(e) {}
     const payloadData = {
         pc_name: pcName,
         bot_version: botVersion,
