@@ -1376,7 +1376,7 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
                     vParts[2] = parseInt(vParts[2]) + 1;
                     pkg.version = vParts.join('.');
                     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
-                    bot.sendMessage(msg.chat.id, `🆙 Versi bot dinaikkan menjadi: v${pkg.version}`);
+                    await bot.sendMessage(msg.chat.id, `🆙 Versi bot dinaikkan menjadi: v${pkg.version}`, { parse_mode: 'HTML' });
                 }
             }
         }
