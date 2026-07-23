@@ -1908,7 +1908,47 @@ bot.on('callback_query', async (query) => {
         return;
     }
     
-    if (data === 'cmd_password_localhost') {
+    if (data === 'cmd_upload_perbaikan') {
+        if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, "⛔ Akses ditolak.");
+        const opts = {
+            parse_mode: 'HTML',
+            reply_markup: {
+                inline_keyboard: [
+                    [{text: '✅ Ya, Upload Perbaikan', callback_data: 'confirm_upload_perbaikan'}],
+                    [{text: '❌ Batal', callback_data: 'cmd_batal_action'}]
+                ]
+            }
+        };
+        bot.sendMessage(chatId, `⚠️ <b>KONFIRMASI UPLOAD PERBAIKAN</b>\n\nApakah Anda yakin ingin mengunggah file bot dari PC ini ke GitHub?\n<i>Pastikan Anda hanya menekan ini di PC Cabang yang source code-nya sudah final/diperbaiki.</i>`, opts);
+        return;
+    } else if (data === 'cmd_update_bot') {
+        if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, "⛔ Akses ditolak.");
+        const opts = {
+            parse_mode: 'HTML',
+            reply_markup: {
+                inline_keyboard: [
+                    [{text: '✅ Ya, Download & Restart', callback_data: 'confirm_update_bot'}],
+                    [{text: '❌ Batal', callback_data: 'cmd_batal_action'}]
+                ]
+            }
+        };
+        bot.sendMessage(chatId, `⚠️ <b>KONFIRMASI DOWNLOAD UPDATE</b>\n\nApakah Anda yakin ingin mengunduh pembaruan terbaru dari GitHub?\n<i>Sistem bot akan mati sejenak dan otomatis melakukan restart jika update berhasil.</i>`, opts);
+        return;
+    } else if (data === 'confirm_upload_perbaikan') {
+        if (chatId.toString() !== adminChatId) return;
+        bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+        bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/upload_perbaikan', message_id: Date.now() });
+        return;
+    } else if (data === 'confirm_update_bot') {
+        if (chatId.toString() !== adminChatId) return;
+        bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+        bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/update_bot', message_id: Date.now() });
+        return;
+    } else if (data === 'cmd_batal_action') {
+        bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+        bot.sendMessage(chatId, `❌ Aksi dibatalkan.`);
+        return;
+    } else if (data === 'cmd_password_localhost') {
         const currentPass = process.env.ADMIN_PASSWORD || 'admin123';
         const opts = {
             parse_mode: 'Markdown',
