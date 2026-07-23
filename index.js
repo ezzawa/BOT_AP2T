@@ -1664,7 +1664,7 @@ bot.onText(/\/update_bot(?:\s+(force))?/, async (msg, match) => {
         }
     };
     bot.sendMessage(msg.chat.id, `⚠️ <b>KONFIRMASI DOWNLOAD UPDATE</b>\n\nApakah Anda yakin ingin mengunduh pembaruan terbaru dari GitHub?\n<i>Sistem bot akan mati sejenak dan otomatis melakukan restart jika update berhasil.</i>`, opts);
-});
+}
 
 async function executeUpdateBot(msg, match) {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
@@ -1731,7 +1731,7 @@ async function executeUpdateBot(msg, match) {
     setTimeout(() => {
         try { require('child_process').execSync('pm2 restart AP2T_Bot'); } catch(e){ process.exit(0); }
     }, 2000);
-});
+}
 bot.onText(/\/keygen (.+)/, (msg, match) => {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak. Anda bukan Admin.");
     const reqHwid = match[1].trim();
