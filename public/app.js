@@ -370,6 +370,9 @@ async function toggleRemotePC(pcName, currentState) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ target: pcName, maintenance: newState })
     });
+    
+    // Tunggu 2 detik agar GitHub API selesai memproses commit sebelum me-refresh tabel
+    await new Promise(r => setTimeout(r, 2000));
     loadFleet();
 }
 
@@ -429,10 +432,12 @@ async function loadFleet() {
                 <td>${pc.last_updated || '-'}</td>
                 <td>${userStr || 'Kosong'}</td>
                 <td style="text-align: center; display:flex; gap:5px; justify-content:center;">
-                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 12px; ${isMaintenance ? 'color: #10b981; border-color: rgba(16,185,129,0.5);' : 'color: #f59e0b; border-color: rgba(245,158,11,0.5);'}" onclick="toggleRemotePC('${pc.pc_name}', ${isMaintenance})">
-                        ${isMaintenance ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>'}
+                    <button class="btn" style="padding: 4px 8px; font-size: 12px; color: #fff; background-color: ${isMaintenance ? '#10b981' : '#f59e0b'}; border: none; cursor: pointer; border-radius: 4px;" onclick="toggleRemotePC('${pc.pc_name}', ${isMaintenance})">
+                        ${isMaintenance ? 'Enable' : 'Disable'}
                     </button>
-                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 12px; color: #f87171; border-color: rgba(248, 113, 113, 0.3); background: rgba(248, 113, 113, 0.05); cursor: pointer;" onclick="deleteFleet('${pc.pc_name}')"><i class="fas fa-trash"></i></button>
+                    <button class="btn" style="padding: 4px 8px; font-size: 12px; color: #fff; background-color: #ef4444; border: none; cursor: pointer; border-radius: 4px;" onclick="deleteFleet('${pc.pc_name}')">
+                        Hapus PC
+                    </button>
                 </td>
             `;
             tbody.appendChild(tr);
