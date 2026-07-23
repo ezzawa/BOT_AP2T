@@ -150,8 +150,8 @@ bot.on('message', (msg) => {
                 bot.sendMessage(chatId, `✅ Username AP2T berhasil diperbarui menjadi \`${newUser}\`!`, { parse_mode: 'Markdown' });
             } else if (state === 'update_pass_localhost') {
                 const newPass = input;
-                updateEnv('DASHBOARD_PASS', newPass);
-                process.env.DASHBOARD_PASS = newPass;
+                updateEnv('ADMIN_PASSWORD', newPass);
+                process.env.ADMIN_PASSWORD = newPass;
                 bot.sendMessage(chatId, `✅ Password Localhost Dashboard berhasil diperbarui menjadi \`${newPass}\`!\nPassword ini langsung aktif.`, { parse_mode: 'Markdown' });
             } else if (state === 'tambah_profil_nama') {
                 pendingInputData[chatId] = { nama: input };
@@ -1909,7 +1909,7 @@ bot.on('callback_query', async (query) => {
     }
     
     if (data === 'cmd_password_localhost') {
-        const currentPass = process.env.DASHBOARD_PASS || '123456';
+        const currentPass = process.env.ADMIN_PASSWORD || 'admin123';
         const opts = {
             parse_mode: 'Markdown',
             reply_markup: {
