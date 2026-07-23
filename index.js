@@ -4688,6 +4688,7 @@ if (adminChatId) {
 
 let globalMaintenanceActive = false;
 let pcMaintenanceActive = false;
+global.forceUpdateMaintenance = (state) => { pcMaintenanceActive = state; };
 
 async function fetchMaintenanceConfig() {
     const token = process.env.GITHUB_TOKEN;
