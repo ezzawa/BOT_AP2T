@@ -1,20 +1,22 @@
 {
   "pc_name": "wayhalim",
-  "bot_version": "1.0.29",
-  "last_online": "23/7/2026, 18.36.56",
-  "last_updated": "23/7/2026, 16.46.46",
+  "bot_version": "1.0.30",
+  "last_online": "23/7/2026, 18.44.07",
+  "last_updated": "23/7/2026, 18.43.55",
   "registered_users": [
     {
       "id": "8919606377",
       "nama": "sandi",
       "full_name": "Sandy Azzam",
-      "username": "-"
+      "username": "-",
+      "disabled": false
     },
     {
       "id": "5590322784",
       "nama": "ezza",
       "full_name": "Horatius",
-      "username": "@Horaitus"
+      "username": "@Horaitus",
+      "disabled": false
     }
   ]
 }
