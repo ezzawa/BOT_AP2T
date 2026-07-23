@@ -692,7 +692,31 @@ async function handleOwaSessionReset(chatId) {
             const found = await mailPage.evaluate(() => {
                 const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
-                    return (txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session')) && el.children.length === 0;
+                    if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
+                    if (el.children.length > 0) return false;
+                    
+                    let row = el;
+                    while(row && row.getAttribute('role') !== 'row' && (!row.className || (typeof row.className === 'string' && !row.className.includes('ListItem')))) {
+                        row = row.parentElement;
+                    }
+                    if (!row) return true;
+
+                    const rowText = row.textContent.toLowerCase();
+                    const hari = ['kemarin', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu', '/'];
+                    if (hari.some(h => rowText.includes(h))) return false;
+
+                    const match = rowText.match(/(\d{1,2})[\.:](\d{2})/);
+                    if (match) {
+                        const hh = parseInt(match[1]);
+                        const mm = parseInt(match[2]);
+                        const now = new Date();
+                        const emailTime = new Date();
+                        emailTime.setHours(hh, mm, 0, 0);
+                        let diff = (now - emailTime) / 60000;
+                        if (diff < 0) diff += 1440;
+                        if (diff > 15) return false;
+                    }
+                    return true;
                 });
                 return elements.length > 0;
             });
@@ -700,9 +724,33 @@ async function handleOwaSessionReset(chatId) {
             if (found) {
                 elemHandle = await mailPage.evaluateHandle(() => {
                     const elements = Array.from(document.querySelectorAll('*')).filter(el => {
-                        const txt = el.textContent.toLowerCase();
-                        return (txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session')) && el.children.length === 0;
-                    });
+                    const txt = el.textContent.toLowerCase();
+                    if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
+                    if (el.children.length > 0) return false;
+                    
+                    let row = el;
+                    while(row && row.getAttribute('role') !== 'row' && (!row.className || (typeof row.className === 'string' && !row.className.includes('ListItem')))) {
+                        row = row.parentElement;
+                    }
+                    if (!row) return true;
+
+                    const rowText = row.textContent.toLowerCase();
+                    const hari = ['kemarin', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu', '/'];
+                    if (hari.some(h => rowText.includes(h))) return false;
+
+                    const match = rowText.match(/(\d{1,2})[\.:](\d{2})/);
+                    if (match) {
+                        const hh = parseInt(match[1]);
+                        const mm = parseInt(match[2]);
+                        const now = new Date();
+                        const emailTime = new Date();
+                        emailTime.setHours(hh, mm, 0, 0);
+                        let diff = (now - emailTime) / 60000;
+                        if (diff < 0) diff += 1440;
+                        if (diff > 15) return false;
+                    }
+                    return true;
+                });
                     return elements[0];
                 });
                 break;
@@ -887,7 +935,31 @@ async function handleOwaMacReset(chatId, isManual = false) {
             const found = await mailPage.evaluate(() => {
                 const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
-                    return (txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session')) && el.children.length === 0;
+                    if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
+                    if (el.children.length > 0) return false;
+                    
+                    let row = el;
+                    while(row && row.getAttribute('role') !== 'row' && (!row.className || (typeof row.className === 'string' && !row.className.includes('ListItem')))) {
+                        row = row.parentElement;
+                    }
+                    if (!row) return true;
+
+                    const rowText = row.textContent.toLowerCase();
+                    const hari = ['kemarin', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu', '/'];
+                    if (hari.some(h => rowText.includes(h))) return false;
+
+                    const match = rowText.match(/(\d{1,2})[\.:](\d{2})/);
+                    if (match) {
+                        const hh = parseInt(match[1]);
+                        const mm = parseInt(match[2]);
+                        const now = new Date();
+                        const emailTime = new Date();
+                        emailTime.setHours(hh, mm, 0, 0);
+                        let diff = (now - emailTime) / 60000;
+                        if (diff < 0) diff += 1440;
+                        if (diff > 15) return false;
+                    }
+                    return true;
                 });
                 return elements.length > 0;
             });
@@ -895,9 +967,33 @@ async function handleOwaMacReset(chatId, isManual = false) {
             if (found) {
                 elemHandle = await mailPage.evaluateHandle(() => {
                     const elements = Array.from(document.querySelectorAll('*')).filter(el => {
-                        const txt = el.textContent.toLowerCase();
-                        return (txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session')) && el.children.length === 0;
-                    });
+                    const txt = el.textContent.toLowerCase();
+                    if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
+                    if (el.children.length > 0) return false;
+                    
+                    let row = el;
+                    while(row && row.getAttribute('role') !== 'row' && (!row.className || (typeof row.className === 'string' && !row.className.includes('ListItem')))) {
+                        row = row.parentElement;
+                    }
+                    if (!row) return true;
+
+                    const rowText = row.textContent.toLowerCase();
+                    const hari = ['kemarin', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu', '/'];
+                    if (hari.some(h => rowText.includes(h))) return false;
+
+                    const match = rowText.match(/(\d{1,2})[\.:](\d{2})/);
+                    if (match) {
+                        const hh = parseInt(match[1]);
+                        const mm = parseInt(match[2]);
+                        const now = new Date();
+                        const emailTime = new Date();
+                        emailTime.setHours(hh, mm, 0, 0);
+                        let diff = (now - emailTime) / 60000;
+                        if (diff < 0) diff += 1440;
+                        if (diff > 15) return false;
+                    }
+                    return true;
+                });
                     return elements[0];
                 });
                 break;
@@ -1261,23 +1357,19 @@ async function login(accountType, chatId) {
             emailUser = emailUser.replace(/^.*[\\\/]/, ''); // Hapus domain seperti pusat\ atau uid\
             if (!emailUser.includes('@')) emailUser += '@pln.co.id';
 
-            await page.evaluate((userId, email) => {
+            const inputIds = await page.evaluate(() => {
                 const win = document.querySelector('.x-window');
                 const inputs = Array.from((win || document).querySelectorAll('input[type="text"], input[type="email"], input.x-form-text'));
-                let visibleInputs = inputs.filter(i => i.offsetParent !== null && !i.disabled);
+                let visibleInputs = inputs.filter(i => i.offsetParent !== null && !i.disabled && i.id);
+                return visibleInputs.slice(0, 2).map(i => i.id);
+            });
 
-                if (visibleInputs.length >= 2) {
-                    visibleInputs[0].focus();
-                    visibleInputs[0].value = userId;
-                    visibleInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
-                    visibleInputs[0].dispatchEvent(new Event('blur', { bubbles: true }));
-                    
-                    visibleInputs[1].focus();
-                    visibleInputs[1].value = email;
-                    visibleInputs[1].dispatchEvent(new Event('change', { bubbles: true }));
-                    visibleInputs[1].dispatchEvent(new Event('blur', { bubbles: true }));
-                }
-            }, credentials[accountType].username, emailUser);
+            if (inputIds.length >= 2) {
+                await page.evaluate((id) => { const el = document.getElementById(id); if(el) el.value = ''; }, inputIds[0]);
+                await page.type('#' + inputIds[0], credentials[accountType].username);
+                await page.evaluate((id) => { const el = document.getElementById(id); if(el) el.value = ''; }, inputIds[1]);
+                await page.type('#' + inputIds[1], emailUser);
+            }
             
             await new Promise(r => setTimeout(r, 1500));
 
