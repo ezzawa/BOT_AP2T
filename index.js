@@ -328,25 +328,6 @@ bot.processUpdate = async (update) => {
                 bot.sendMessage(msg.chat.id, `\u2705 Anda berhasil terdaftar sebagai **ADMIN UTAMA** bot ini (Chat ID: ${adminChatId}).\nGunakan web GUI di http://localhost:3000 untuk memantau.`, {parse_mode: 'Markdown'});
                 return originalProcessUpdate(update);
             } else {
-                bot.sendMessage(msg.chat.id, `⚠️ Bot belum memiliki Admin.\n\nSilakan ketik /start untuk mengklaim bot ini.`);
-                return; // Stop
-            }
-        }
-
-        const isAdmin = (chatIdStr === adminChatId);
-        
-        // 2. Cek apakah ini user terdaftar
-        let users = [];
-        try { users = JSON.parse(fs.readFileSync(path.join(__dirname, 'users.json'))).users || []; } catch(e){}
-        const isUser = users.some(u => (typeof u === 'object' ? u.id : u) === chatIdStr);
-        
-        if (!isAdmin && !isUser) {
-            bot.sendMessage(msg.chat.id, `⛔ *AKSES DITOLAK*\nAnda belum terdaftar untuk menggunakan bot di komputer ini.\n\nSilakan sentuh/salin ID Anda di bawah ini dan berikan kepada Admin agar didaftarkan:\n\n\`${chatIdStr}\``, {parse_mode: 'Markdown'});
-
-
-
-            return;
-            return;
         }
 
         // 3. Validasi Lisensi Hardware
