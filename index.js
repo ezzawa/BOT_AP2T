@@ -4699,8 +4699,8 @@ async function fetchMaintenanceConfig() {
     
     try {
         const axios = require('axios');
-        const url = `https://api.github.com/repos/${repo}/contents/fleet/config?ref=${branch}`;
-        const headers = { Authorization: `token ${token}` };
+        const url = `https://api.github.com/repos/${repo}/contents/fleet/config?ref=${branch}&t=${Date.now()}`;
+        const headers = { Authorization: `token ${token}`, "Cache-Control": "no-cache", "Pragma": "no-cache" };
         
         const dirRes = await axios.get(url, { headers });
         if (!Array.isArray(dirRes.data)) return;
@@ -4708,12 +4708,12 @@ async function fetchMaintenanceConfig() {
         for (const file of dirRes.data) {
             if (file.name === 'global.json') {
                 try {
-                    const fRes = await axios.get(file.download_url, { headers });
+                    const fRes = await axios.get(file.download_url + "?t=" + Date.now(), { headers });
                     globalMaintenanceActive = fRes.data.maintenance || false;
                 } catch(e){}
             } else if (file.name === `${pcName}.json`) {
                 try {
-                    const fRes = await axios.get(file.download_url, { headers });
+                    const fRes = await axios.get(file.download_url + "?t=" + Date.now(), { headers });
                     pcMaintenanceActive = fRes.data.maintenance || false;
                 } catch(e){}
             }
