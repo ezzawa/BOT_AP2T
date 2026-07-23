@@ -1,6 +1,6 @@
 {
   "name": "pln-ap2t-bot",
-  "version": "1.0.29",
+  "version": "1.0.30",
   "description": "Telegram bot for smart login web automation AP2T",
   "main": "index.js",
   "scripts": {
