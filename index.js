@@ -33,7 +33,7 @@ function waitForUserInteraction(messageId, timeoutMs = 300000) {
 const crypto = require('crypto');
 
 // Jalankan Web GUI Server lokal
-require('./server.js');
+// require('./server.js'); dipindah ke bawah
 
 // ===== AUTO-RESUME STATE MANAGEMENT =====
 const STATE_FILE = path.join(__dirname, 'ct_state.json');
@@ -97,7 +97,7 @@ const BOT_PROFILE_DIR = path.join(__dirname, 'bot-chrome-profile');
 // ===== TELEGRAM BOT =====
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) { console.error("TELEGRAM_BOT_TOKEN belum diset"); process.exit(1); }
-const bot = new TelegramBot(token, { polling: true });
+const bot = new TelegramBot(token, { polling: true });\n\n// Inject bot to server.js for notifications\nrequire('./server.js').setBot(bot);
 
 // (Logic moved to the existing processUpdate interceptor)
 
