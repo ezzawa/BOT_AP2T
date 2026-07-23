@@ -1891,8 +1891,6 @@ bot.on('callback_query', async (query) => {
             [{text: '🛑 Matikan Bot', callback_data: 'cmd_stop_bot'}],
             [{text: '🔙 Kembali', callback_data: 'nav_main'}]
         ];
-    } else if (data === 'nav_admin') {
-            keyboard = [
                 [{text: '➕  Tambah User', callback_data: 'cmd_tambah_user'}, {text: '➖ Hapus User', callback_data: 'cmd_hapus_user'}],
                 [{text: '🚀 Upload Update GitHub', callback_data: 'cmd_upload_perbaikan'}],
                 [{text: '⬇️ Download Update', callback_data: 'cmd_update_bot'}],
