@@ -1832,9 +1832,9 @@ bot.onText(/\/start/, (msg) => {
     let isAdmin = (chatId.toString() === adminChatId);
       
     let keyboard = [
-        [{text: '⬇️ MENU SISTEM ⬇️', callback_data: 'nav_sistem'}],
-          [{text: '⬇️ MENU LAYANAN ⬇️', callback_data: 'nav_layanan'}],
-        [{text: '⬇️ MENU PEMULIHAN ⬇️', callback_data: 'nav_pemulihan'}]
+        [{text: '⚙️ MENU SISTEM ⚙️', callback_data: 'nav_sistem'}],
+        [{text: '🚀 MENU LAYANAN 🚀', callback_data: 'nav_layanan'}],
+        [{text: '🛠️ MENU PEMULIHAN 🛠️', callback_data: 'nav_pemulihan'}]
     ];
 
     if (isAdmin) {
