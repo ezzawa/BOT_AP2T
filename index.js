@@ -1502,9 +1502,9 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
     }
     
     let resultMsg = `<b>Hasil Sinkronisasi GitHub:</b>\n`;
-    if (successCount > 0) resultMsg += `o. <b>${successCount} File Diunggah</b>\n`;
-    if (sameCount > 0) resultMsg += `ℹ️ <b>${sameCount} File Sudah Versi Terbaru</b> (Tidak ada perubahan)\n`;
-    if (failCount > 0) resultMsg += `❌ <b>${failCount} File Gagal</b>\n`;
+    if (successCount > 0) resultMsg += `\u2705 <b>${successCount} File Diunggah</b>\n`;
+    if (sameCount > 0) resultMsg += `\u2139\uFE0F <b>${sameCount} File Sudah Versi Terbaru</b> (Tidak ada perubahan)\n`;
+    if (failCount > 0) resultMsg += `\u274C <b>${failCount} File Gagal</b>\n`;
     
     if (successCount > 0) {
         resultMsg += `\nSekarang Anda bisa menjalankan <code>/update_bot</code> di PC lain.`;
