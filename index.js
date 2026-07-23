@@ -4991,7 +4991,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                     const isMaskVisible = masks.some(m => m.style.display !== 'none' && m.style.visibility !== 'hidden' && m.offsetParent !== null);
                     const hasText = document.body.innerText.includes('Mencari Data...');
                     return !isMaskVisible && !hasText;
-                }, { timeout: 60000 });
+                }, { timeout: 20000 });
             } catch(e) {
                 console.log('Timeout waiting for loading mask to disappear');
             }
@@ -5029,6 +5029,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
             if (saveSuccess) {
                 bot.sendMessage(chatId, `⏳ Menunggu popup konfirmasi 'Ya'...`);
                 
+                await new Promise(r => setTimeout(r, 2000));
                 let yaClicked = false;
                 for (let i = 0; i < 20; i++) { // wait up to 10 seconds
                     await new Promise(r => setTimeout(r, 500));
@@ -5053,6 +5054,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                 else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'Ya', mencoba lanjut mencari 'OK'...`);
 
                 bot.sendMessage(chatId, `⏳ Menunggu penyimpanan ke server selesai (popup OK)...`);
+                await new Promise(r => setTimeout(r, 2000));
                 let okClicked = false;
                 for (let i = 0; i < 40; i++) {
                     await new Promise(r => setTimeout(r, 500));
@@ -5074,6 +5076,25 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                 }
                 
                 if (okClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'OK' berhasil diklik (Data Tersimpan).`);
+
+                // Verifikasi apakah tombol SIMPAN sudah menjadi ter-disable
+                await new Promise(r => setTimeout(r, 2000));
+                const simpanDisabled = await aktivasiFrame.evaluate(() => {
+                    const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                    const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.offsetParent !== null);
+                    if (saveBtn) {
+                        // Coba cek class disabled atau property disabled
+                        return saveBtn.disabled || saveBtn.parentElement.className.includes('disabled');
+                    }
+                    return true; // Jika tombol hilang, anggap sukses tersimpan
+                });
+                
+                if (simpanDisabled) {
+                    bot.sendMessage(chatId, `✅ Terverifikasi: Tombol SIMPAN sudah tidak bisa diklik (Data Fix Tersimpan).`);
+                } else {
+                    bot.sendMessage(chatId, `⚠️ Peringatan: Tombol SIMPAN masih bisa diklik! Mungkin penyimpanan tidak sempurna.`);
+                }
+
                 else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses akan tetap dilanjutkan.`);
 
                 bot.sendMessage(chatId, `✅ **Aktivasi Manual Berhasil Disimpan!**`);
