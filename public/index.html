@@ -119,6 +119,7 @@
                         <h3 style="margin: 0;">💻 Status PC Cabang (Fleet Monitor)</h3>
                         <p style="color: #a0a0a0; font-size: 13px; margin: 5px 0 0 0;"><i>Memantau seluruh komputer yang menjalankan bot ini (via GitHub).</i></p>
                     </div>
+                    <button id="btnGlobalMaintenance" class="btn btn-outline" onclick="toggleGlobalMaintenance()" style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: #ff4757; border-color: #ff4757;"><i class="fas fa-power-off"></i> Global Maintenance (OFF)</button>
                     <button class="btn btn-outline" onclick="loadFleet()" style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><i class="fas fa-sync-alt"></i> Refresh Data</button>
                 </div>
                 <table id="fleetTable">
@@ -148,6 +149,7 @@
                             <th>Nama Lengkap (Telegram)</th>
                             <th>Username (@)</th>
                             <th>Telegram Chat ID</th>
+                            <th style="width: 100px; text-align: center;">Aksi</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
