@@ -305,15 +305,72 @@ async function loadUsers() {
         let nama = typeof u === 'object' ? u.nama : 'Tanpa Nama';
         let full_name = (typeof u === 'object' && u.full_name) ? u.full_name : nama;
         let username = (typeof u === 'object' && u.username) ? u.username : '-';
+        let disabled = (typeof u === 'object' && u.disabled) ? true : false;
+        
         const tr = document.createElement('tr');
+        if (disabled) tr.style.opacity = '0.5';
+        
         tr.innerHTML = `
             <td>${nama}</td>
             <td><strong>${full_name}</strong></td>
             <td><span style="color: #60a5fa;">${username}</span></td>
             <td><code>${id}</code></td>
+            <td style="text-align: center;">
+                <button class="btn btn-outline" style="padding: 4px 8px; font-size: 12px; ${disabled ? 'color: #10b981; border-color: rgba(16,185,129,0.5);' : 'color: #f59e0b; border-color: rgba(245,158,11,0.5);'}" onclick="toggleLocalUser('${id}')">
+                    ${disabled ? '<i class="fas fa-play"></i> Enable' : '<i class="fas fa-pause"></i> Disable'}
+                </button>
+            </td>
         `;
         tbody.appendChild(tr);
     });
+}
+
+async function toggleLocalUser(id) {
+    const res = await fetch('/api/users');
+    const data = await res.json();
+    const usersData = data.users || [];
+    
+    const userIndex = usersData.findIndex(u => (typeof u === 'object' ? u.id : u) === id);
+    if (userIndex > -1) {
+        if (typeof usersData[userIndex] !== 'object') {
+            usersData[userIndex] = { id: usersData[userIndex], disabled: false };
+        }
+        usersData[userIndex].disabled = !usersData[userIndex].disabled;
+        
+        await fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ users: usersData })
+        });
+        loadUsers();
+    }
+}
+
+let globalMaintenance = false;
+
+async function toggleGlobalMaintenance() {
+    const newState = !globalMaintenance;
+    if(!confirm(`Yakin ingin ${newState ? 'MENONAKTIFKAN' : 'MENGAKTIFKAN'} SELURUH PC secara bersamaan?`)) return;
+    
+    document.getElementById('btnGlobalMaintenance').innerHTML = `<i class="fas fa-spinner fa-spin"></i> Processing...`;
+    await fetch('/api/fleet/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: 'global', maintenance: newState })
+    });
+    loadFleet();
+}
+
+async function toggleRemotePC(pcName, currentState) {
+    const newState = !currentState;
+    if(!confirm(`Yakin ingin ${newState ? 'MENONAKTIFKAN' : 'MENGAKTIFKAN'} akses bot di PC: ${pcName}?`)) return;
+    
+    await fetch('/api/fleet/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: pcName, maintenance: newState })
+    });
+    loadFleet();
 }
 
 async function loadFleet() {
@@ -321,8 +378,29 @@ async function loadFleet() {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Mengambil data dari GitHub...</td></tr>';
     
     try {
-        const res = await fetch('/api/fleet');
-        const data = await res.json();
+        const [fleetRes, configRes] = await Promise.all([
+            fetch('/api/fleet'),
+            fetch('/api/fleet/config')
+        ]);
+        
+        const data = await fleetRes.json();
+        const configData = await configRes.json();
+        const configs = configData.configs || {};
+        
+        globalMaintenance = configs['global'] || false;
+        const btnGlobal = document.getElementById('btnGlobalMaintenance');
+        if (btnGlobal) {
+            if (globalMaintenance) {
+                btnGlobal.innerHTML = `<i class="fas fa-power-off"></i> Global Maintenance (ON)`;
+                btnGlobal.style.color = '#fff';
+                btnGlobal.style.background = '#ff4757';
+            } else {
+                btnGlobal.innerHTML = `<i class="fas fa-power-off"></i> Global Maintenance (OFF)`;
+                btnGlobal.style.color = '#ff4757';
+                btnGlobal.style.background = 'transparent';
+            }
+        }
+        
         const fleetData = data.fleet || [];
         
         tbody.innerHTML = '';
@@ -334,21 +412,28 @@ async function loadFleet() {
         fleetData.forEach(pc => {
             const tr = document.createElement('tr');
             
-            // Format users list
             const userStr = (pc.registered_users || []).map(u => {
                   if (typeof u === 'object') {
                       return (u.full_name && u.full_name !== u.nama && u.full_name !== 'Tanpa Nama') ? `${u.full_name} (${u.nama})` : u.nama;
                   }
                   return u;
               }).join(', ');
+              
+            const isMaintenance = configs[pc.pc_name] || false;
+            if (isMaintenance) tr.style.opacity = '0.6';
             
             tr.innerHTML = `
-                <td><strong>${pc.pc_name || 'Unknown PC'}</strong></td>
+                <td><strong>${pc.pc_name || 'Unknown PC'}</strong> ${isMaintenance ? '<span style="color:#ef4444;font-size:11px;">(Disabled)</span>' : ''}</td>
                 <td><span style="color: #60a5fa; background: rgba(96, 165, 250, 0.1); padding: 2px 6px; border-radius: 4px; font-size: 12px; border: 1px solid rgba(96, 165, 250, 0.3);">v${pc.bot_version || '1.0.0'}</span></td>
                 <td><span style="color: #4ade80;">${pc.last_online || '-'}</span></td>
                 <td>${pc.last_updated || '-'}</td>
                 <td>${userStr || 'Kosong'}</td>
-                <td style="text-align: center;"><button class="btn btn-outline" style="padding: 4px 8px; font-size: 12px; color: #f87171; border-color: rgba(248, 113, 113, 0.3); background: rgba(248, 113, 113, 0.05); cursor: pointer;" onclick="deleteFleet('${pc.pc_name}')"><i class="fas fa-trash"></i></button></td>
+                <td style="text-align: center; display:flex; gap:5px; justify-content:center;">
+                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 12px; ${isMaintenance ? 'color: #10b981; border-color: rgba(16,185,129,0.5);' : 'color: #f59e0b; border-color: rgba(245,158,11,0.5);'}" onclick="toggleRemotePC('${pc.pc_name}', ${isMaintenance})">
+                        ${isMaintenance ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>'}
+                    </button>
+                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 12px; color: #f87171; border-color: rgba(248, 113, 113, 0.3); background: rgba(248, 113, 113, 0.05); cursor: pointer;" onclick="deleteFleet('${pc.pc_name}')"><i class="fas fa-trash"></i></button>
+                </td>
             `;
             tbody.appendChild(tr);
         });
