@@ -1650,7 +1650,23 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
     }).catch((e) => { console.error("Edit error:", e); });
 });
 
+
 bot.onText(/\/update_bot(?:\s+(force))?/, async (msg, match) => {
+    if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
+    if (match && match[1] === 'force') return executeUpdateBot(msg, match); // if force is typed, just execute
+    const opts = {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{text: '✅ Ya, Download & Restart', callback_data: 'confirm_update_bot'}],
+                [{text: '❌ Batal', callback_data: 'cmd_batal_action'}]
+            ]
+        }
+    };
+    bot.sendMessage(msg.chat.id, `⚠️ <b>KONFIRMASI DOWNLOAD UPDATE</b>\n\nApakah Anda yakin ingin mengunduh pembaruan terbaru dari GitHub?\n<i>Sistem bot akan mati sejenak dan otomatis melakukan restart jika update berhasil.</i>`, opts);
+});
+
+async function executeUpdateBot(msg, match) {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
     const isForce = match && match[1] === 'force';
     
@@ -1937,12 +1953,12 @@ bot.on('callback_query', async (query) => {
     } else if (data === 'confirm_upload_perbaikan') {
         if (chatId.toString() !== adminChatId) return;
         bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
-        bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/upload_perbaikan', message_id: Date.now() });
+        executeUploadPerbaikan({ chat: { id: chatId } });
         return;
     } else if (data === 'confirm_update_bot') {
         if (chatId.toString() !== adminChatId) return;
         bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
-        bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/update_bot', message_id: Date.now() });
+        executeUpdateBot({ chat: { id: chatId } });
         return;
     } else if (data === 'cmd_batal_action') {
         bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
