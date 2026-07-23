@@ -5045,7 +5045,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
 
                 bot.sendMessage(chatId, `⏳ Menunggu penyimpanan ke server selesai (popup OK)...`);
                 let okClicked = false;
-                for (let i = 0; i < 40; i++) { // wait up to 20 seconds for the save process
+                for (let i = 0; i < 40; i++) {
                     await new Promise(r => setTimeout(r, 500));
                     okClicked = await page.evaluate(() => {
                         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
