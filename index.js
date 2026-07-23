@@ -148,6 +148,11 @@ bot.on('message', (msg) => {
                 updateEnv('MAIN_USERNAME', newUser);
                 updateProfileCredential('ap2t', newUser, ap2Pass);
                 bot.sendMessage(chatId, `✅ Username AP2T berhasil diperbarui menjadi \`${newUser}\`!`, { parse_mode: 'Markdown' });
+            } else if (state === 'update_pass_localhost') {
+                const newPass = input;
+                updateEnv('DASHBOARD_PASS', newPass);
+                process.env.DASHBOARD_PASS = newPass;
+                bot.sendMessage(chatId, `✅ Password Localhost Dashboard berhasil diperbarui menjadi \`${newPass}\`!\nPassword ini langsung aktif.`, { parse_mode: 'Markdown' });
             } else if (state === 'tambah_profil_nama') {
                 pendingInputData[chatId] = { nama: input };
                 pendingInputState[chatId] = 'tambah_profil_user_ap2t';
@@ -1902,7 +1907,22 @@ bot.on('callback_query', async (query) => {
         return;
     }
     
-    if (data === 'cmd_pakai_profil_batal') {
+    if (data === 'cmd_password_localhost') {
+        const currentPass = process.env.DASHBOARD_PASS || '123456';
+        const opts = {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [[{text: 'Ubah Password', callback_data: 'cmd_ubah_pass_localhost'}]]
+            }
+        };
+        bot.sendMessage(chatId, `🔑 **Password Localhost Dashboard** saat ini adalah:\n\n\`${currentPass}\``, opts);
+        return;
+    } else if (data === 'cmd_ubah_pass_localhost') {
+        if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, "⛔ Akses ditolak.");
+        pendingInputState[chatId] = 'update_pass_localhost';
+        bot.sendMessage(chatId, `Masukkan password Localhost Dashboard yang baru:`);
+        return;
+    } else if (data === 'cmd_pakai_profil_batal') {
         bot.deleteMessage(chatId, query.message.message_id).catch(() => {});
         bot.sendMessage(chatId, '❌ Pemilihan akun dibatalkan.');
         return;
