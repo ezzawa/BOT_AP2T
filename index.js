@@ -328,7 +328,6 @@ bot.processUpdate = async (update) => {
                 bot.sendMessage(msg.chat.id, `\u2705 Anda berhasil terdaftar sebagai **ADMIN UTAMA** bot ini (Chat ID: ${adminChatId}).\nGunakan web GUI di http://localhost:3000 untuk memantau.`, {parse_mode: 'Markdown'});
                 return originalProcessUpdate(update);
             } else {
-        }
                 bot.sendMessage(msg.chat.id, `⚠️ Bot belum memiliki Admin.\n\nSilakan ketik /start untuk mengklaim bot ini.`);
                 return; // Stop
             }
