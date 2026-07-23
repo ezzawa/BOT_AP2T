@@ -2175,14 +2175,14 @@ bot.onText(/\/reset_ct (.+)/, (msg, match) => {
 bot.onText(/\/pause_bot/, (msg) => {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
     isPaused = true;
-    bot.sendMessage(msg.chat.id, `[*] **Bot Di-Pause Secara Paksa!**\nBot langsung dihentikan sementara (dibekukan). Layar Chrome aman untuk dikontrol manual.\n\nKetik /resume_bot untuk melanjutkan.`, { parse_mode: 'Markdown' });
+    bot.sendMessage(msg.chat.id, `[*] *Bot Di-Pause Secara Paksa!*\nBot langsung dihentikan sementara (dibekukan). Layar Chrome aman untuk dikontrol manual.\n\nKetik \`/resume_bot\` untuk melanjutkan.`, { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/resume_bot/, (msg) => {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
     if (isPaused) {
         isPaused = false;
-        bot.sendMessage(msg.chat.id, `[*] **Bot Dilanjutkan!**\nMelanjutkan proses yang tertunda...`);
+        bot.sendMessage(msg.chat.id, `[*] *Bot Dilanjutkan!*\nMelanjutkan proses yang tertunda...`);
     } else {
         bot.sendMessage(msg.chat.id, `Bot saat ini sedang tidak di-pause.`);
     }
@@ -4985,7 +4985,7 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
     const noAgenda = match[1] ? match[1].trim() : null;
 
     if (!noAgenda || noAgenda.length < 5) {
-        return bot.sendMessage(chatId, `[!] Format salah. Gunakan: /aktivasi_no_meter <No_Agenda>`);
+        return bot.sendMessage(chatId, `[!] Format salah. Gunakan: \`/aktivasi_no_meter <No_Agenda>\``);
     }
 
     if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
