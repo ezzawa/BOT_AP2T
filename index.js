@@ -3179,7 +3179,43 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 const findBtn = btns.find(b => (b.textContent.includes('Cari') || b.className.includes('search')) && b.offsetParent !== null);
                 if (findBtn) findBtn.click();
             });
-            await new Promise(r => setTimeout(r, 2000));
+            
+            bot.sendMessage(chatId, `⏳ Menunggu loading data pelanggan (maks 30dtk)...`);
+            let dataFound = false;
+            let errorText = null;
+            for (let i = 0; i < 30; i++) {
+                await new Promise(r => setTimeout(r, 1000));
+                
+                errorText = await aktivasiFrame.evaluate(() => {
+                    const wins = Array.from(document.querySelectorAll('.x-window'));
+                    const errWin = wins.find(w => w.style.display !== 'none' && w.offsetParent !== null);
+                    if (errWin) return errWin.textContent;
+                    return null;
+                });
+                if (errorText && errorText.toLowerCase().includes('tidak ditemukan')) break;
+                
+                const isLoaded = await aktivasiFrame.evaluate(() => {
+                    const labels = Array.from(document.querySelectorAll('label'));
+                    const idpelLabel = labels.find(l => l.textContent.includes('Idpel'));
+                    if (idpelLabel) {
+                        const inp = idpelLabel.closest('.x-form-item')?.querySelector('input');
+                        if (inp && inp.value && inp.value.length > 5) return true;
+                    }
+                    return false;
+                });
+                if (isLoaded) { dataFound = true; break; }
+            }
+
+            if (errorText && errorText.toLowerCase().includes('tidak ditemukan')) {
+                bot.sendMessage(chatId, `❌ Data tidak ditemukan untuk No Agenda ${noAgenda}.`);
+                throw new Error("Data tidak ditemukan");
+            }
+            if (!dataFound) {
+                bot.sendMessage(chatId, `⚠️ Peringatan: Data pelanggan lambat dimuat. Tetap melanjutkan...`);
+            } else {
+                bot.sendMessage(chatId, `✅ Data pelanggan berhasil dimuat!`);
+                await new Promise(r => setTimeout(r, 1500)); // Ekstra jeda agar UI stabil
+            }
 
             // 10. Klik Tombol SIMPAN
             bot.sendMessage(chatId, `💾 Menyimpan Aktivasi...`);
@@ -3194,46 +3230,78 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             });
 
             if (saveSuccess) {
-                bot.sendMessage(chatId, `⏳ Menunggu popup konfirmasi...`);
-                await new Promise(r => setTimeout(r, 1500));
-
-                // Popup 1: Ya
-                let yaClicked = await aktivasiFrame.evaluate(() => {
-                    const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                    const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
-                    if (yaBtn) { yaBtn.click(); return true; }
-                    return false;
-                });
-                if (!yaClicked) {
+                bot.sendMessage(chatId, `⏳ Menunggu 5 detik sampai popup konfirmasi 'Ya' muncul...`);
+                await new Promise(r => setTimeout(r, 5000));
+                
+                let yaClicked = false;
+                for (let i = 0; i < 15; i++) {
+                    await new Promise(r => setTimeout(r, 500));
                     yaClicked = await page.evaluate(() => {
                         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
                         const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
                         if (yaBtn) { yaBtn.click(); return true; }
                         return false;
                     });
+                    if (!yaClicked) {
+                        yaClicked = await aktivasiFrame.evaluate(() => {
+                            const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                            const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
+                            if (yaBtn) { yaBtn.click(); return true; }
+                            return false;
+                        });
+                    }
+                    if (yaClicked) break;
                 }
                 if (yaClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'Ya' diklik.`);
+                else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'Ya', mencoba lanjut mencari 'OK'...`);
 
-                await new Promise(r => setTimeout(r, 1500));
-
-                // Popup 2: OK
-                let okClicked = await aktivasiFrame.evaluate(() => {
-                    const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                    const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
-                    if (okBtn) { okBtn.click(); return true; }
-                    return false;
-                });
-                if (!okClicked) {
+                bot.sendMessage(chatId, `⏳ Menunggu popup OK muncul...`);
+                await new Promise(r => setTimeout(r, 2000));
+                
+                let okClicked = false;
+                for (let i = 0; i < 30; i++) {
+                    await new Promise(r => setTimeout(r, 500));
                     okClicked = await page.evaluate(() => {
                         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
                         const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
                         if (okBtn) { okBtn.click(); return true; }
                         return false;
                     });
+                    if (!okClicked) {
+                        okClicked = await aktivasiFrame.evaluate(() => {
+                            const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                            const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
+                            if (okBtn) { okBtn.click(); return true; }
+                            return false;
+                        });
+                    }
+                    if (okClicked) break;
                 }
                 if (okClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'OK' diklik.`);
 
-                bot.sendMessage(chatId, `🎉 **Aktivasi Berhasil Disimpan!**`);
+                // Verifikasi akhir: Beri jeda lalu coba klik SIMPAN lagi
+                await new Promise(r => setTimeout(r, 3000));
+                bot.sendMessage(chatId, `🔍 Mencoba klik tombol SIMPAN kembali untuk verifikasi...`);
+                
+                const simpanDisabled = await aktivasiFrame.evaluate(() => {
+                    const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                    const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.offsetParent !== null);
+                    
+                    if (saveBtn) {
+                        if (saveBtn.disabled || saveBtn.parentElement.className.includes('disabled') || saveBtn.className.includes('disabled')) {
+                            return true;
+                        }
+                        saveBtn.click();
+                        return false; 
+                    }
+                    return true;
+                });
+                
+                if (simpanDisabled) {
+                    bot.sendMessage(chatId, `🎉 **Aktivasi Berhasil Disimpan!**`);
+                } else {
+                    bot.sendMessage(chatId, `⚠️ Peringatan: Tombol SIMPAN ternyata MASIH BISA DIKLIK!`);
+                }
             } else {
                 bot.sendMessage(chatId, `⚠️ Tombol SIMPAN tidak merespon/tidak ditemukan.`);
             }
