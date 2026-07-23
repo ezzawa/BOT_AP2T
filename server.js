@@ -1,3 +1,5 @@
+let tgBot = null;
+exports.setBot = function(b) { tgBot = b; };
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -181,8 +183,14 @@ app.post('/api/fleet/config', async (req, res) => {
         const axios = require('axios');
         const branch = env.GITHUB_BRANCH || 'main';
         const file = `fleet/config/${target}.json`;
-        const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/${file}?ref=${branch}`;
-        const headers = { Authorization: `token ${env.GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' };
+        // FIX: Add cache-buster to the GET request to avoid 409 Conflict when toggling quickly
+        const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/${file}?ref=${branch}&t=${Date.now()}`;
+        const headers = { 
+            Authorization: `token ${env.GITHUB_TOKEN}`, 
+            Accept: 'application/vnd.github.v3+json',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+        };
         
         let sha = null;
         try {
@@ -199,6 +207,38 @@ app.post('/api/fleet/config', async (req, res) => {
         if (sha) payload.sha = sha;
         
         await axios.put(`https://api.github.com/repos/${env.GITHUB_REPO}/contents/${file}`, payload, { headers });
+        
+        // --- BROADCAST TELEGRAM NOTIFICATION ---
+        if (tgBot) {
+            try {
+                const fs = require('fs');
+                let users = [];
+                try {
+                    const uData = JSON.parse(fs.readFileSync('users.json', 'utf8'));
+                    if (uData.users) users = uData.users;
+                } catch(e) {}
+                
+                const msg = maintenance 
+                    ? `⚠️ **PEMBERITAHUAN SISTEM**\nAkses bot di PC **${target}** saat ini sedang **DIMATIKAN / MAINTENANCE** oleh Admin. Harap bersabar hingga diaktifkan kembali.`
+                    : `✅ **PEMBERITAHUAN SISTEM**\nAkses bot di PC **${target}** sudah **AKTIF** dan siap digunakan kembali.`;
+                
+                // Notify users
+                for (const u of users) {
+                    const id = typeof u === 'object' ? u.id : u;
+                    if (!u.disabled) {
+                        tgBot.sendMessage(id, msg, { parse_mode: 'Markdown' }).catch(()=>{});
+                    }
+                }
+                
+                // Notify admin
+                if (process.env.ADMIN_CHAT_ID) {
+                    tgBot.sendMessage(process.env.ADMIN_CHAT_ID, msg, { parse_mode: 'Markdown' }).catch(()=>{});
+                }
+            } catch(ex) {
+                console.error("Failed to broadcast telegram notification:", ex);
+            }
+        }
+        
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
