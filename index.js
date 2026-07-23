@@ -325,7 +325,7 @@ bot.processUpdate = async (update) => {
                 }
                 fs.writeFileSync(envPath, envContent.trim() + '\n');
                 
-                bot.sendMessage(msg.chat.id, `o. Anda berhasil terdaftar sebagai **ADMIN UTAMA** bot ini (Chat ID: ${adminChatId}).\nGunakan web GUI di http://localhost:3000 untuk memantau.`, {parse_mode: 'Markdown'});
+                bot.sendMessage(msg.chat.id, `\u2705 Anda berhasil terdaftar sebagai **ADMIN UTAMA** bot ini (Chat ID: ${adminChatId}).\nGunakan web GUI di http://localhost:3000 untuk memantau.`, {parse_mode: 'Markdown'});
                 return originalProcessUpdate(update);
             } else {
                 bot.sendMessage(msg.chat.id, `⚠️ Bot belum memiliki Admin.\n\nSilakan ketik /start untuk mengklaim bot ini.`);
@@ -763,7 +763,7 @@ async function handleOwaSessionReset(chatId) {
                 caption: `📸 Screenshot isi Email Session. Silakan konfirmasi untuk mereset:`,
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: `o. Ya, Reset Session`, callback_data: `sess_yes` }],
+                        [{ text: `\u2705 Ya, Reset Session`, callback_data: `sess_yes` }],
                         [{ text: `❌ Batalkan`, callback_data: `sess_cancel` }]
                     ]
                 }
@@ -791,7 +791,7 @@ async function handleOwaSessionReset(chatId) {
                         }).catch(() => {});
                         await new Promise(r => setTimeout(r, 1000));
                         const ssDel = await delPage.screenshot();
-                        await bot.sendPhoto(chatId, ssDel, { caption: `o. Hasil klik Reset Session` });
+                        await bot.sendPhoto(chatId, ssDel, { caption: `\u2705 Hasil klik Reset Session` });
                     } catch(e) {} finally {
                         await delPage.close().catch(()=>{});
                     }
@@ -974,7 +974,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
                         }).catch(() => {});
                         await new Promise(r => setTimeout(r, 1000));
                         const ssDel = await delPage.screenshot();
-                        await bot.sendPhoto(chatId, ssDel, { caption: `o. Hasil klik Hapus MAC ke-${i + 1}` });
+                        await bot.sendPhoto(chatId, ssDel, { caption: `\u2705 Hasil klik Hapus MAC ke-${i + 1}` });
                     } catch(e) {} finally {
                         await delPage.close().catch(()=>{});
                     }
@@ -1013,7 +1013,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
                             }).catch(() => {});
                             await new Promise(r => setTimeout(r, 1000));
                             const ssDel = await delPage.screenshot();
-                            await bot.sendPhoto(chatId, ssDel, { caption: `o. Hasil klik Hapus MAC ke-${idx + 1}` });
+                            await bot.sendPhoto(chatId, ssDel, { caption: `\u2705 Hasil klik Hapus MAC ke-${idx + 1}` });
                         } catch(e) {} finally {
                             await delPage.close().catch(()=>{});
                         }
@@ -1545,7 +1545,7 @@ bot.onText(/\/update_bot/, async (msg) => {
         }
     }
     
-    await bot.sendMessage(msg.chat.id, `o. Update selesai! Berhasil memperbarui ${successCount} file.\nBot akan me-restart sekarang...`, { parse_mode: 'HTML' });
+    await bot.sendMessage(msg.chat.id, `\u2705 Update selesai! Berhasil memperbarui ${successCount} file.\nBot akan me-restart sekarang...`, { parse_mode: 'HTML' });
     setTimeout(() => {
         try { require('child_process').execSync('pm2 restart AP2T_Bot'); } catch(e){ process.exit(0); }
     }, 2000);
@@ -1573,7 +1573,7 @@ bot.onText(/\/set_license (.+)/, (msg, match) => {
             envContent += `\nLICENSE_KEY=${key}`;
         }
         fs.writeFileSync(envPath, envContent.trim() + '\n');
-        bot.sendMessage(msg.chat.id, `o. **LISENSI DITERIMA**\nBot berhasil diaktifkan untuk komputer ini!`, {parse_mode: 'Markdown'});
+        bot.sendMessage(msg.chat.id, `\u2705 **LISENSI DITERIMA**\nBot berhasil diaktifkan untuk komputer ini!`, {parse_mode: 'Markdown'});
     } else {
         bot.sendMessage(msg.chat.id, `❌ **LISENSI TIDAK VALID**\nKunci lisensi tidak sesuai dengan Hardware ID komputer ini (\`${HWID}\`).`, {parse_mode: 'Markdown'});
     }
@@ -1597,7 +1597,7 @@ bot.onText(/\/tambah_user (.+)/, (msg, match) => {
     if (!exists) {
         usersData.users.push({ id: newId, nama: newName });
         fs.writeFileSync(usersPath, JSON.stringify(usersData, null, 2));
-        bot.sendMessage(msg.chat.id, `o. User *${newName}* (\`${newId}\`) berhasil didaftarkan di PC ini!`, {parse_mode: 'Markdown'});
+        bot.sendMessage(msg.chat.id, `\u2705 User *${newName}* (\`${newId}\`) berhasil didaftarkan di PC ini!`, {parse_mode: 'Markdown'});
         updateGitHubStatus(); // Lapor status
     } else {
         bot.sendMessage(msg.chat.id, `⚠️ User dengan ID \`${newId}\` sudah terdaftar.`);
@@ -1912,7 +1912,7 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
 bot.onText(/\/reset_ct (.+)/, (msg, match) => {
     const idpel = match[1].trim();
     clearCTState(idpel);
-    bot.sendMessage(msg.chat.id, `o. Memori kerja (Resume State) untuk IDPEL ${idpel} telah dihapus. Anda bisa memulai pembuatan /ct dari awal lagi.`);
+    bot.sendMessage(msg.chat.id, `\u2705 Memori kerja (Resume State) untuk IDPEL ${idpel} telah dihapus. Anda bisa memulai pembuatan /ct dari awal lagi.`);
 });
 bot.onText(/\/pause_bot/, (msg) => {
     isPaused = true;
@@ -2109,7 +2109,7 @@ bot.onText(/\/pakai_profil(?:\s+(.+))?/, async (msg, match) => {
     let keyboard = [];
     names.forEach(n => {
         const isActive = (n === activeProfileName);
-        const textBtn = isActive ? `o. ${n} (Aktif)` : `▶️ ${n}`;
+        const textBtn = isActive ? `\u2705 ${n} (Aktif)` : `\u274C ${n}`;
         keyboard.push([{ text: textBtn, callback_data: `cmd_pakai_profil_${n}` }]);
     });
     keyboard.push([{ text: '❌ Batal', callback_data: 'cmd_pakai_profil_batal' }]);
@@ -3669,7 +3669,7 @@ async function processCariPelanggan(target, chatId) {
             const tarif = result['TARIF'] || '-';
             const daya = result['DAYA'] || '-';
 
-            let msg = `o. *Data Pelanggan Ditemukan:*\n\n` +
+            let msg = `\u2705 *Data Pelanggan Ditemukan:*\n\n` +
                 `ID PELANGGAN: \`${idpel}\`\n` +
                 `NAMA: ${nama}\n` +
                 `TARIF/DAYA: ${tarif} / ${daya}`;
@@ -4274,7 +4274,7 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
                 await new Promise(r => setTimeout(r, 2000));
                 const infoData = `\n👤 NAMA: ${extractionResult.nama}\n💳 IDPEL: ${extractionResult.idpel}`;
                 const popupBuffer = await page.screenshot();
-                await bot.sendPhoto(chatId, popupBuffer, { caption: `o. Hasil Cetak Token\nTarget: ${target}${infoData}\n(Gagal buka PDF, mengirim Screenshot)` }, { filename: `cetak_${target}_popup.png`, contentType: 'image/png' });
+                await bot.sendPhoto(chatId, popupBuffer, { caption: `\u2705 Hasil Cetak Token\nTarget: ${target}${infoData}\n(Gagal buka PDF, mengirim Screenshot)` }, { filename: `cetak_${target}_popup.png`, contentType: 'image/png' });
                 await bot.editMessageText(`✅ Selesai mengeksekusi cetak_token.`, { chat_id: chatId, message_id: statusMsg.message_id });
             }
 
@@ -4616,7 +4616,7 @@ bot.onText(/\/lapor_status/, async (msg) => {
     const loadMsg = await bot.sendMessage(msg.chat.id, "📡 Mengirim sinyal telemetri PC ini ke GitHub...");
     const success = await updateGitHubStatus();
     if (success) {
-        bot.editMessageText("o. Laporan telemetri berhasil dikirim ke GitHub!", { chat_id: msg.chat.id, message_id: loadMsg.message_id });
+        bot.editMessageText("\u2705 Laporan telemetri berhasil dikirim ke GitHub!", { chat_id: msg.chat.id, message_id: loadMsg.message_id });
     } else {
         bot.editMessageText("❌ Gagal mengirim laporan telemetri. Cek konfigurasi GitHub Token/Repo di web.", { chat_id: msg.chat.id, message_id: loadMsg.message_id });
     }
