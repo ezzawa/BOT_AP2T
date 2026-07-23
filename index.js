@@ -2061,7 +2061,7 @@ bot.on('callback_query', async (query) => {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/ct <idpel_atau_nometer> <no_gangguan>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_resume') {
         bot.sendMessage(chatId, "Ketik /resume untuk melanjutkan proses CT yang tertunda.");
-    } else if (data === 'cmd_cetak') {
+    } else if (data === 'cmd_cetak_token') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cetak_token <no_agenda>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_cektoken') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_token <no_agenda>`", { parse_mode: 'Markdown' });
