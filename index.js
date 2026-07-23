@@ -1648,7 +1648,7 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
         message_id: statusMsg.message_id,
         parse_mode: 'HTML'
     }).catch((e) => { console.error("Edit error:", e); });
-});
+}
 
 
 bot.onText(/\/update_bot(?:\s+(force))?/, async (msg, match) => {
@@ -1664,7 +1664,7 @@ bot.onText(/\/update_bot(?:\s+(force))?/, async (msg, match) => {
         }
     };
     bot.sendMessage(msg.chat.id, `⚠️ <b>KONFIRMASI DOWNLOAD UPDATE</b>\n\nApakah Anda yakin ingin mengunduh pembaruan terbaru dari GitHub?\n<i>Sistem bot akan mati sejenak dan otomatis melakukan restart jika update berhasil.</i>`, opts);
-}
+});
 
 async function executeUpdateBot(msg, match) {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
