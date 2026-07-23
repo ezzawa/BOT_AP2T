@@ -171,6 +171,67 @@ app.delete('/api/fleet/:pc', async (req, res) => {
     }
 });
 
+
+app.post('/api/fleet/config', async (req, res) => {
+    const env = getEnv();
+    if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return res.status(400).json({ error: 'GitHub belum dikonfigurasi' });
+    
+    try {
+        const { target, maintenance } = req.body; 
+        const axios = require('axios');
+        const branch = env.GITHUB_BRANCH || 'main';
+        const file = `fleet/config/${target}.json`;
+        const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/${file}?ref=${branch}`;
+        const headers = { Authorization: `token ${env.GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' };
+        
+        let sha = null;
+        try {
+            const getRes = await axios.get(url, { headers });
+            sha = getRes.data.sha;
+        } catch (e) {}
+        
+        const content = Buffer.from(JSON.stringify({ maintenance, updated_at: new Date().toISOString() })).toString('base64');
+        const payload = {
+            message: `Update maintenance status for ${target} to ${maintenance}`,
+            content,
+            branch
+        };
+        if (sha) payload.sha = sha;
+        
+        await axios.put(`https://api.github.com/repos/${env.GITHUB_REPO}/contents/${file}`, payload, { headers });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/fleet/config', async (req, res) => {
+    const env = getEnv();
+    if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return res.json({ configs: {} });
+    
+    try {
+        const axios = require('axios');
+        const branch = env.GITHUB_BRANCH || 'main';
+        const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/fleet/config?ref=${branch}`;
+        const headers = { Authorization: `token ${env.GITHUB_TOKEN}` };
+        
+        const dirRes = await axios.get(url, { headers });
+        if (!Array.isArray(dirRes.data)) return res.json({ configs: {} });
+        
+        const configs = {};
+        for (const file of dirRes.data) {
+            if (file.name.endsWith('.json')) {
+                const target = file.name.replace('.json', '');
+                const fileRes = await axios.get(file.download_url, { headers });
+                configs[target] = fileRes.data.maintenance || false;
+            }
+        }
+        res.json({ configs });
+    } catch (e) {
+        res.json({ configs: {} });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`✅ GUI Dashboard is running on http://localhost:${PORT}`);
 });
