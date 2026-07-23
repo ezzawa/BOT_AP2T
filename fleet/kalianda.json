@@ -1,7 +1,7 @@
 {
   "pc_name": "kalianda",
   "bot_version": "1.0.29",
-  "last_online": "23/7/2026, 16.59.11",
+  "last_online": "23/7/2026, 17.04.11",
   "last_updated": "23/7/2026, 16.53.55",
   "registered_users": [
     {
@@ -9,7 +9,7 @@
       "nama": "ezza",
       "full_name": "Horatius🍅",
       "username": "@Horaitus",
-      "disabled": false
+      "disabled": true
     },
     {
       "id": "268531159",
