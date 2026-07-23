@@ -1,6 +1,7 @@
 let tgBot = null;
 exports.setBot = function(b) { tgBot = b; };
 const express = require('express');
+const localMaintenanceState = {};
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
@@ -208,6 +209,14 @@ app.post('/api/fleet/config', async (req, res) => {
         
         await axios.put(`https://api.github.com/repos/${env.GITHUB_REPO}/contents/${file}`, payload, { headers });
         
+        // Update local UI cache
+        localMaintenanceState[target] = maintenance;
+        
+        // Update index.js immediately so bot blocks users instantly
+        if (typeof global.forceUpdateMaintenance === 'function') {
+            global.forceUpdateMaintenance(maintenance);
+        }
+        
         // --- BROADCAST TELEGRAM NOTIFICATION ---
         if (tgBot) {
             try {
@@ -267,7 +276,8 @@ app.get('/api/fleet/config', async (req, res) => {
             if (file.name.endsWith('.json')) {
                 const target = file.name.replace('.json', '');
                 const fileRes = await axios.get(file.download_url + '?t=' + Date.now(), { headers });
-                configs[target] = fileRes.data.maintenance || false;
+                // Prioritize local state if it exists, to instantly update Dashboard UI
+                configs[target] = localMaintenanceState[target] !== undefined ? localMaintenanceState[target] : (fileRes.data.maintenance || false);
             }
         }
         res.json({ configs });
