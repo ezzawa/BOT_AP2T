@@ -4674,6 +4674,45 @@ if (adminChatId) {
     bot.setMyCommands(adminCommands, { scope: { type: 'chat', chat_id: adminChatId } }).catch(e => console.log('Failed to set admin commands', e.message));
 }
 
+
+let globalMaintenanceActive = false;
+let pcMaintenanceActive = false;
+
+async function fetchMaintenanceConfig() {
+    const token = process.env.GITHUB_TOKEN;
+    const repo = process.env.GITHUB_REPO;
+    const branch = process.env.GITHUB_BRANCH || 'main';
+    const pcName = process.env.PC_NAME || require('os').hostname();
+    if (!token || !repo) return;
+    
+    try {
+        const axios = require('axios');
+        const url = `https://api.github.com/repos/${repo}/contents/fleet/config?ref=${branch}`;
+        const headers = { Authorization: `token ${token}` };
+        
+        const dirRes = await axios.get(url, { headers });
+        if (!Array.isArray(dirRes.data)) return;
+        
+        for (const file of dirRes.data) {
+            if (file.name === 'global.json') {
+                try {
+                    const fRes = await axios.get(file.download_url, { headers });
+                    globalMaintenanceActive = fRes.data.maintenance || false;
+                } catch(e){}
+            } else if (file.name === `${pcName}.json`) {
+                try {
+                    const fRes = await axios.get(file.download_url, { headers });
+                    pcMaintenanceActive = fRes.data.maintenance || false;
+                } catch(e){}
+            }
+        }
+    } catch (e) { }
+}
+
+setInterval(fetchMaintenanceConfig, 60000); // Check every 60 seconds
+fetchMaintenanceConfig(); // Initial check
+
+
 async function updateGitHubStatus() {
 
     const token = process.env.GITHUB_TOKEN;
@@ -4979,42 +5018,54 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
             });
 
             if (saveSuccess) {
-                bot.sendMessage(chatId, `⏳ Menunggu popup konfirmasi...`);
-                await new Promise(r => setTimeout(r, 1500));
-
-                let yaClicked = await aktivasiFrame.evaluate(() => {
-                    const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                    const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
-                    if (yaBtn) { yaBtn.click(); return true; }
-                    return false;
-                });
-                if (!yaClicked) {
+                bot.sendMessage(chatId, `⏳ Menunggu popup konfirmasi 'Ya'...`);
+                
+                let yaClicked = false;
+                for (let i = 0; i < 20; i++) { // wait up to 10 seconds
+                    await new Promise(r => setTimeout(r, 500));
                     yaClicked = await page.evaluate(() => {
                         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
                         const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
                         if (yaBtn) { yaBtn.click(); return true; }
                         return false;
                     });
+                    if (!yaClicked) {
+                        yaClicked = await aktivasiFrame.evaluate(() => {
+                            const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                            const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
+                            if (yaBtn) { yaBtn.click(); return true; }
+                            return false;
+                        });
+                    }
+                    if (yaClicked) break;
                 }
-                if (yaClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'Ya' diklik.`);
+                
+                if (yaClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'Ya' berhasil diklik.`);
+                else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'Ya', mencoba lanjut mencari 'OK'...`);
 
-                await new Promise(r => setTimeout(r, 1500));
-
-                let okClicked = await aktivasiFrame.evaluate(() => {
-                    const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                    const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
-                    if (okBtn) { okBtn.click(); return true; }
-                    return false;
-                });
-                if (!okClicked) {
+                bot.sendMessage(chatId, `⏳ Menunggu penyimpanan ke server selesai (popup OK)...`);
+                let okClicked = false;
+                for (let i = 0; i < 40; i++) { // wait up to 20 seconds for the save process
+                    await new Promise(r => setTimeout(r, 500));
                     okClicked = await page.evaluate(() => {
                         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                        const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
+                        const okBtn = btns.find(b => (b.textContent.trim() === 'OK') && b.offsetParent !== null);
                         if (okBtn) { okBtn.click(); return true; }
                         return false;
                     });
+                    if (!okClicked) {
+                        okClicked = await aktivasiFrame.evaluate(() => {
+                            const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                            const okBtn = btns.find(b => (b.textContent.trim() === 'OK') && b.offsetParent !== null);
+                            if (okBtn) { okBtn.click(); return true; }
+                            return false;
+                        });
+                    }
+                    if (okClicked) break;
                 }
-                if (okClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'OK' diklik.`);
+                
+                if (okClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'OK' berhasil diklik (Data Tersimpan).`);
+                else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses akan tetap dilanjutkan.`);
 
                 bot.sendMessage(chatId, `✅ **Aktivasi Manual Berhasil Disimpan!**`);
                 try {
