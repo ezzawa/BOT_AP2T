@@ -5085,30 +5085,33 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                 if (findBtn) findBtn.click();
             });
             
-            bot.sendMessage(chatId, `⏳ Menunggu loading pencarian selesai...`);
-            await new Promise(r => setTimeout(r, 1000)); 
-            
-            try {
-                await aktivasiFrame.waitForFunction(() => {
-                    const masks = Array.from(document.querySelectorAll('.ext-el-mask-msg, .x-mask-msg'));
-                    const isMaskVisible = masks.some(m => m.style.display !== 'none' && m.style.visibility !== 'hidden' && m.offsetParent !== null);
-                    const hasText = document.body.innerText.includes('Mencari Data...');
-                    return !isMaskVisible && !hasText;
-                }, { timeout: 60000 });
-            } catch(e) {
-                console.log('Timeout waiting for loading mask to disappear');
+            bot.sendMessage(chatId, `⏳ Menunggu loading data pelanggan (maks 30dtk)...`);
+            let dataFound = false;
+            let errorText = null;
+            for (let i = 0; i < 30; i++) {
+                await new Promise(r => setTimeout(r, 1000));
+                
+                errorText = await aktivasiFrame.evaluate(() => {
+                    const wins = Array.from(document.querySelectorAll('.x-window'));
+                    const errWin = wins.find(w => w.style.display !== 'none' && w.offsetParent !== null);
+                    if (errWin) return errWin.textContent;
+                    return null;
+                });
+                if (errorText && errorText.toLowerCase().includes('tidak ditemukan')) break;
+                
+                const isLoaded = await aktivasiFrame.evaluate(() => {
+                    const labels = Array.from(document.querySelectorAll('label'));
+                    const idpelLabel = labels.find(l => l.textContent.includes('Idpel'));
+                    if (idpelLabel) {
+                        const inp = idpelLabel.closest('.x-form-item')?.querySelector('input');
+                        if (inp && inp.value && inp.value.length > 5) return true;
+                    }
+                    return false;
+                });
+                if (isLoaded) { dataFound = true; break; }
             }
-            
-            await new Promise(r => setTimeout(r, 1500)); 
-            
-            const errorText = await aktivasiFrame.evaluate(() => {
-                const wins = Array.from(document.querySelectorAll('.x-window'));
-                const errWin = wins.find(w => w.style.display !== 'none' && w.offsetParent !== null);
-                if (errWin) return errWin.textContent;
-                return null;
-            });
-            
-            if (errorText && errorText.toLowerCase().includes('data tidak ditemukan')) {
+
+            if (errorText && errorText.toLowerCase().includes('tidak ditemukan')) {
                 bot.sendMessage(chatId, `❌ Data tidak ditemukan untuk No Agenda ${noAgenda}.`);
                 try {
                     const ssBuffer = await page.screenshot({ encoding: 'buffer' });
@@ -5116,6 +5119,12 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                 } catch(ex) {}
                 await closePopups(page);
                 throw new Error("Data tidak ditemukan");
+            }
+            if (!dataFound) {
+                bot.sendMessage(chatId, `⚠️ Peringatan: Data pelanggan lambat dimuat. Tetap melanjutkan...`);
+            } else {
+                bot.sendMessage(chatId, `✅ Data pelanggan berhasil dimuat!`);
+                await new Promise(r => setTimeout(r, 1500)); // Ekstra jeda agar UI stabil
             }
 
             bot.sendMessage(chatId, `💾 Menyimpan Aktivasi...`);
