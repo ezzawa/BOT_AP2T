@@ -4735,6 +4735,7 @@ async function updateGitHubStatus() {
         let nama_panggilan = typeof u === 'object' ? u.nama : 'Tanpa Nama';
         let full_name = nama_panggilan;
         let username = '-';
+        let disabled = typeof u === 'object' && u.disabled ? true : false;
         
         try {
             const chatInfo = await bot.getChat(id);
@@ -4744,7 +4745,7 @@ async function updateGitHubStatus() {
             }
         } catch (e) {}
         
-        normalizedUsers.push({ id, nama: nama_panggilan, full_name, username });
+        normalizedUsers.push({ id, nama: nama_panggilan, full_name, username, disabled });
     }
     try { fs.writeFileSync(usersPath, JSON.stringify({ users: normalizedUsers }, null, 2)); } catch(e){}
     
