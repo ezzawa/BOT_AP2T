@@ -2062,9 +2062,9 @@ bot.on('callback_query', async (query) => {
     } else if (data === 'cmd_resume') {
         bot.sendMessage(chatId, "Ketik /resume untuk melanjutkan proses CT yang tertunda.");
     } else if (data === 'cmd_cetak_token') {
-        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cetak_token <no_agenda>`", { parse_mode: 'Markdown' });
+        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cetak_token <no_meter_atau_idpel>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_cektoken') {
-        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_token <no_agenda>`", { parse_mode: 'Markdown' });
+        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_token <no_meter_atau_idpel>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_logout') {
         bot.sendMessage(chatId, "Kirimkan perintah /logout untuk keluar dari sesi AP2T saat ini.");
     } else if (data.startsWith('deluser_')) {
@@ -2167,11 +2167,13 @@ bot.onText(/\/reset_ct (.+)/, (msg, match) => {
     bot.sendMessage(msg.chat.id, `\u2705 Memori kerja (Resume State) untuk IDPEL ${idpel} telah dihapus. Anda bisa memulai pembuatan /ct dari awal lagi.`);
 });
 bot.onText(/\/pause_bot/, (msg) => {
+    if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
     isPaused = true;
     bot.sendMessage(msg.chat.id, `[*] **Bot Di-Pause Secara Paksa!**\nBot langsung dihentikan sementara (dibekukan). Layar Chrome aman untuk dikontrol manual.\n\nKetik /resume_bot untuk melanjutkan.`, { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/resume_bot/, (msg) => {
+    if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
     if (isPaused) {
         isPaused = false;
         bot.sendMessage(msg.chat.id, `[*] **Bot Dilanjutkan!**\nMelanjutkan proses yang tertunda...`);
