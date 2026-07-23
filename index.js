@@ -97,7 +97,10 @@ const BOT_PROFILE_DIR = path.join(__dirname, 'bot-chrome-profile');
 // ===== TELEGRAM BOT =====
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) { console.error("TELEGRAM_BOT_TOKEN belum diset"); process.exit(1); }
-const bot = new TelegramBot(token, { polling: true });\n\n// Inject bot to server.js for notifications\nrequire('./server.js').setBot(bot);
+const bot = new TelegramBot(token, { polling: true });
+
+// Inject bot to server.js for notifications
+require('./server.js').setBot(bot);
 
 // (Logic moved to the existing processUpdate interceptor)
 
