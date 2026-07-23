@@ -1682,21 +1682,6 @@ bot.onText(/\/update_bot(?:\s+(force))?/, async (msg, match) => {
 
 async function executeUpdateBot(msg, match) {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
-    if (match && match[1] === 'force') return executeUpdateBot(msg, match); // if force is typed, just execute
-    const opts = {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: [
-                [{text: '✅ Ya, Download & Restart', callback_data: 'confirm_update_bot'}],
-                [{text: '❌ Batal', callback_data: 'cmd_batal_action'}]
-            ]
-        }
-    };
-    bot.sendMessage(msg.chat.id, `⚠️ <b>KONFIRMASI DOWNLOAD UPDATE</b>\n\nApakah Anda yakin ingin mengunduh pembaruan terbaru dari GitHub?\n<i>Sistem bot akan mati sejenak dan otomatis melakukan restart jika update berhasil.</i>`, opts);
-});
-
-async function executeUpdateBot(msg, match) {
-    if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
     const isForce = match && match[1] === 'force';
     
     const token = process.env.GITHUB_TOKEN;
