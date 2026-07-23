@@ -1623,16 +1623,51 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
     }).catch((e) => { console.error("Edit error:", e); });
 });
 
-bot.onText(/\/update_bot/, async (msg) => {
+bot.onText(/\/update_bot(?:\s+(force))?/, async (msg, match) => {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
+    const isForce = match && match[1] === 'force';
+    
     const token = process.env.GITHUB_TOKEN;
     const repo = process.env.GITHUB_REPO;
     const branch = process.env.GITHUB_BRANCH || 'main';
     if (!token || !repo) return bot.sendMessage(msg.chat.id, "❌ Konfigurasi GITHUB_TOKEN atau GITHUB_REPO belum diatur.");
     
-    await bot.sendMessage(msg.chat.id, "⏳ Sedang mengunduh update dari GitHub...", { parse_mode: 'HTML' });
-    const filesToSync = ['index.js', 'server.js', 'public/index.html', 'public/style.css', 'public/app.js', 'package.json'];
     const axios = require('axios');
+    const path = require('path');
+    
+    let localVersion = 'Unknown';
+    try {
+        const pkgPath = path.join(__dirname, 'package.json');
+        if (fs.existsSync(pkgPath)) {
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            localVersion = pkg.version || 'Unknown';
+        }
+    } catch(e) {}
+
+    let remoteVersion = 'Unknown';
+    try {
+        const url = `https://raw.githubusercontent.com/${repo}/${branch}/package.json?t=${Date.now()}`;
+        const headers = { Authorization: `token ${token}` };
+        const res = await axios.get(url, { headers });
+        let remotePkgData = res.data;
+        if (typeof remotePkgData === 'string') remotePkgData = JSON.parse(remotePkgData);
+        remoteVersion = remotePkgData.version || 'Unknown';
+    } catch(e) {}
+
+    if (localVersion !== 'Unknown' && remoteVersion !== 'Unknown') {
+        if (localVersion === remoteVersion && !isForce) {
+            await bot.sendMessage(msg.chat.id, `✅ <b>Bot sudah menggunakan versi terbaru (v${localVersion}).</b>\nTidak ada file baru yang perlu diunduh.\n\n<i>Ketik <code>/update_bot force</code> jika Anda ingin memaksa unduh ulang dari GitHub.</i>`, { parse_mode: 'HTML' });
+            return;
+        } else if (localVersion === remoteVersion && isForce) {
+            await bot.sendMessage(msg.chat.id, `⚠️ <b>Paksa Unduh Ulang (v${localVersion})</b>\nSedang menimpa ulang semua file dari GitHub...`, { parse_mode: 'HTML' });
+        } else {
+            await bot.sendMessage(msg.chat.id, `🔄 <b>Ditemukan versi baru!</b>\nUpdate dari <b>v${localVersion}</b> ➡️ <b>v${remoteVersion}</b>\nSedang mengunduh file...`, { parse_mode: 'HTML' });
+        }
+    } else {
+        await bot.sendMessage(msg.chat.id, "⏳ Sedang mengunduh update dari GitHub...", { parse_mode: 'HTML' });
+    }
+
+    const filesToSync = ['index.js', 'server.js', 'public/index.html', 'public/style.css', 'public/app.js', 'package.json'];
     let successCount = 0;
     
     for (const file of filesToSync) {
