@@ -1081,7 +1081,8 @@ async function handleOwaMacReset(chatId, isManual = false) {
                             if (target) target.click();
                         }).catch(() => {});
                         await new Promise(r => setTimeout(r, 1000));
-                        bot.sendMessage(chatId, `\u2705 Hasil klik Hapus MAC ke-${i + 1} diproses.`);
+                        const ssDel = await delPage.screenshot();
+                        await bot.sendPhoto(chatId, ssDel, { caption: `\u2705 Hasil klik Hapus MAC ke-${i + 1}` });
                     } catch(e) {} finally {
                         await delPage.close().catch(()=>{});
                     }
@@ -1121,7 +1122,8 @@ async function handleOwaMacReset(chatId, isManual = false) {
                                 if (target) target.click();
                             }).catch(() => {});
                             await new Promise(r => setTimeout(r, 1000));
-                            bot.sendMessage(chatId, `\u2705 Hasil klik Hapus MAC ke-${idx + 1} diproses.`);
+                            const ssDel = await delPage.screenshot();
+                            await bot.sendPhoto(chatId, ssDel, { caption: `\u2705 Hasil klik Hapus MAC ke-${idx + 1}` });
                         } catch(e) {} finally {
                             await delPage.close().catch(()=>{});
                         }
@@ -1147,7 +1149,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
     }
 }
 
-async function login(accountType, chatId, retryLevel = 0) {
+async function login(accountType, chatId) {
     try {
         bot.sendMessage(chatId, `⏳ Membuka halaman login AP2T...`);
         await initBrowser(chatId, 'https://ap2t.pln.co.id/ap2t/Login.aspx');
@@ -1403,28 +1405,11 @@ async function login(accountType, chatId, retryLevel = 0) {
 
         if (content.includes('Mohon maaf User ID AP2T hanya diijinkan dari 2 MAC Address') || content.includes('dikirimkan ke email')) {
             const ssMac = await page.screenshot();
-            await bot.sendPhoto(chatId, ssMac, { caption: `\uD83D\uDCF8 Gagal login AP2T: Limit MAC Address` });
-            
-            // Tutup popup AP2T agar tidak error saat login ulang
-            await page.evaluate(() => {
-                const win = document.querySelector('.x-window');
-                if (win) {
-                    const btns = Array.from(win.querySelectorAll('button, .x-btn-text, input[type="button"]'));
-                    const okBtn = btns.find(b => (b.textContent || b.value || '').toLowerCase().includes('ok'));
-                    if (okBtn) okBtn.click();
-                }
-            }).catch(() => {});
-            await new Promise(r => setTimeout(r, 1000));
-
-            if (retryLevel > 0) {
-                bot.sendMessage(chatId, `\u274C GAGAL: Masih diminta hapus MAC Address padahal sudah dilakukan. Sesi hapus mungkin kadaluarsa. Silakan ulangi nanti.`);
-                return false;
-            }
-
-            bot.sendMessage(chatId, `\u26A0\uFE0F Limit MAC Address terdeteksi. Otomatis reset via OWA...`);
+            await bot.sendPhoto(chatId, ssMac, { caption: `📸 Gagal login AP2T: Limit MAC Address` });
+            bot.sendMessage(chatId, `⚠️ Limit MAC Address terdeteksi. Otomatis reset via OWA...`);
             await handleOwaMacReset(chatId);
-            bot.sendMessage(chatId, `\uD83D\uDD04 Login ulang setelah reset...`);
-            return await login(accountType, chatId, retryLevel + 1);
+            bot.sendMessage(chatId, `🔄 Login ulang setelah reset...`);
+            return await login(accountType, chatId);
         }
 
         // Cek apakah URL sudah bukan login page
@@ -1661,11 +1646,10 @@ bot.onText(/\/update_bot(?:\s+(force))?/, async (msg, match) => {
 
     let remoteVersion = 'Unknown';
     try {
-        const url = `https://raw.githubusercontent.com/${repo}/${branch}/package.json?t=${Date.now()}`;
-        const headers = { Authorization: `token ${token}` };
+        const url = `https://api.github.com/repos/${repo}/contents/package.json?ref=${branch}`;
+        const headers = { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' };
         const res = await axios.get(url, { headers });
-        let remotePkgData = res.data;
-        if (typeof remotePkgData === 'string') remotePkgData = JSON.parse(remotePkgData);
+        let remotePkgData = JSON.parse(Buffer.from(res.data.content, 'base64').toString('utf8'));
         remoteVersion = remotePkgData.version || 'Unknown';
     } catch(e) {}
 
@@ -1687,14 +1671,13 @@ bot.onText(/\/update_bot(?:\s+(force))?/, async (msg, match) => {
     
     for (const file of filesToSync) {
         try {
-            const url = `https://raw.githubusercontent.com/${repo}/${branch}/${file}?t=${Date.now()}`;
-            const headers = { Authorization: `token ${token}` };
+            const url = `https://api.github.com/repos/${repo}/contents/${file}?ref=${branch}`;
+            const headers = { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' };
             const res = await axios.get(url, { headers });
             
             const filePath = path.join(__dirname, ...file.split('/'));
-              let fileData = res.data;
-              if (typeof fileData === 'object') fileData = JSON.stringify(fileData, null, 2);
-              fs.writeFileSync(filePath, fileData);
+            const fileData = Buffer.from(res.data.content, 'base64').toString('utf8');
+            fs.writeFileSync(filePath, fileData);
             successCount++;
         } catch (e) {
             console.error(`Gagal download ${file}:`, e.message);
