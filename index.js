@@ -4991,7 +4991,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                     const isMaskVisible = masks.some(m => m.style.display !== 'none' && m.style.visibility !== 'hidden' && m.offsetParent !== null);
                     const hasText = document.body.innerText.includes('Mencari Data...');
                     return !isMaskVisible && !hasText;
-                }, { timeout: 20000 });
+                }, { timeout: 60000 });
             } catch(e) {
                 console.log('Timeout waiting for loading mask to disappear');
             }
