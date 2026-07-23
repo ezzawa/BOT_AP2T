@@ -365,15 +365,27 @@ async function toggleRemotePC(pcName, currentState) {
     const newState = !currentState;
     if(!confirm(`Yakin ingin ${newState ? 'MENONAKTIFKAN' : 'MENGAKTIFKAN'} akses bot di PC: ${pcName}?`)) return;
     
-    await fetch('/api/fleet/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target: pcName, maintenance: newState })
-    });
+    // Disable semua tombol sementara menunggu proses
+    document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+    const tbody = document.querySelector('#fleetTbody');
+    const oldHTML = tbody.innerHTML;
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Menyimpan perubahan ke GitHub... Mohon tunggu sebentar...</td></tr>';
     
-    // Tunggu 2 detik agar GitHub API selesai memproses commit sebelum me-refresh tabel
-    await new Promise(r => setTimeout(r, 2000));
-    loadFleet();
+    try {
+        await fetch('/api/fleet/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target: pcName, maintenance: newState })
+        });
+        
+        // Tunggu 3 detik agar GitHub API benar-benar selesai sinkronisasi
+        await new Promise(r => setTimeout(r, 3000));
+        loadFleet();
+    } catch (e) {
+        alert("Gagal menyimpan: " + e.message);
+        tbody.innerHTML = oldHTML;
+        document.querySelectorAll('.btn').forEach(b => b.disabled = false);
+    }
 }
 
 async function loadFleet() {
