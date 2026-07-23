@@ -5130,9 +5130,9 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
             });
 
             if (saveSuccess) {
-                bot.sendMessage(chatId, `⏳ Menunggu popup konfirmasi 'Ya'...`);
+                bot.sendMessage(chatId, `⏳ Menunggu 5 detik sampai popup konfirmasi 'Ya' muncul...`);
                 
-                await new Promise(r => setTimeout(r, 2000));
+                await new Promise(r => setTimeout(r, 5000)); // Jedah 5 detik sesuai instruksi
                 let yaClicked = false;
                 for (let i = 0; i < 20; i++) { // wait up to 10 seconds
                     await new Promise(r => setTimeout(r, 500));
@@ -5181,22 +5181,30 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                 if (okClicked) {
     bot.sendMessage(chatId, `✅ Konfirmasi 'OK' berhasil diklik (Data Tersimpan).`);
 
-                // Verifikasi apakah tombol SIMPAN sudah menjadi ter-disable
-                await new Promise(r => setTimeout(r, 2000));
+                // Verifikasi akhir: Beri jeda lalu coba klik SIMPAN lagi
+                await new Promise(r => setTimeout(r, 3000));
+                bot.sendMessage(chatId, `🔍 Mencoba klik tombol SIMPAN kembali untuk verifikasi...`);
+                
                 const simpanDisabled = await aktivasiFrame.evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
                     const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.offsetParent !== null);
+                    
                     if (saveBtn) {
-                        // Coba cek class disabled atau property disabled
-                        return saveBtn.disabled || saveBtn.parentElement.className.includes('disabled');
+                        // Jika tombol ada, cek apakah class-nya mendandakan disabled
+                        if (saveBtn.disabled || saveBtn.parentElement.className.includes('disabled') || saveBtn.className.includes('disabled')) {
+                            return true;
+                        }
+                        // Coba diklik lagi
+                        saveBtn.click();
+                        return false; 
                     }
-                    return true; // Jika tombol hilang, anggap sukses tersimpan
+                    return true; // Jika tombol hilang sama sekali
                 });
                 
                 if (simpanDisabled) {
-                    bot.sendMessage(chatId, `✅ Terverifikasi: Tombol SIMPAN sudah tidak bisa diklik (Data Fix Tersimpan).`);
+                    bot.sendMessage(chatId, `✅ Tombol SIMPAN tidak bisa diklik lagi. (No Agenda berhasil disimpan).`);
                 } else {
-                    bot.sendMessage(chatId, `⚠️ Peringatan: Tombol SIMPAN masih bisa diklik! Mungkin penyimpanan tidak sempurna.`);
+                    bot.sendMessage(chatId, `⚠️ Peringatan: Tombol SIMPAN ternyata MASIH BISA DIKLIK!`);
                 }
 
                 }
