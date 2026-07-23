@@ -212,8 +212,12 @@ app.get('/api/fleet/config', async (req, res) => {
     try {
         const axios = require('axios');
         const branch = env.GITHUB_BRANCH || 'main';
-        const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/fleet/config?ref=${branch}`;
-        const headers = { Authorization: `token ${env.GITHUB_TOKEN}` };
+        const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/fleet/config?ref=${branch}&t=${Date.now()}`;
+        const headers = { 
+            Authorization: `token ${env.GITHUB_TOKEN}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+        };
         
         const dirRes = await axios.get(url, { headers });
         if (!Array.isArray(dirRes.data)) return res.json({ configs: {} });
@@ -222,7 +226,7 @@ app.get('/api/fleet/config', async (req, res) => {
         for (const file of dirRes.data) {
             if (file.name.endsWith('.json')) {
                 const target = file.name.replace('.json', '');
-                const fileRes = await axios.get(file.download_url, { headers });
+                const fileRes = await axios.get(file.download_url + '?t=' + Date.now(), { headers });
                 configs[target] = fileRes.data.maintenance || false;
             }
         }
