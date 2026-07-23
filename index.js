@@ -116,7 +116,76 @@ bot.on('message', (msg) => {
             const state = pendingInputState[chatId];
             const input = msg.text.trim();
             delete pendingInputState[chatId];
-            bot.emit('message', { ...msg, text: `/${state} ${input}` });
+            
+            if (state === 'update_webmail_pass' || state === 'update_pass_webmail') {
+                const newPass = input;
+                const webUser = credentials.webmail.username;
+                credentials.webmail.password = newPass;
+                updateEnv('WEBMAIL_PASSWORD', newPass);
+                updateProfileCredential('webmail', webUser, newPass);
+                bot.sendMessage(chatId, `✅ Password Webmail berhasil diperbarui! Silakan ulangi perintah Anda.`);
+            } else if (state === 'update_pass_ap2t') {
+                const newPass = input;
+                const ap2User = credentials.main.username;
+                credentials.main.password = newPass;
+                updateEnv('MAIN_PASSWORD', newPass);
+                updateProfileCredential('ap2t', ap2User, newPass);
+                bot.sendMessage(chatId, `✅ Password AP2T berhasil diperbarui! Silakan ulangi perintah Anda.`);
+            } else if (state === 'update_user_webmail') {
+                const newUser = input;
+                const webPass = credentials.webmail.password;
+                credentials.webmail.username = newUser;
+                updateEnv('WEBMAIL_USERNAME', newUser);
+                updateProfileCredential('webmail', newUser, webPass);
+                bot.sendMessage(chatId, `✅ Username Webmail berhasil diperbarui menjadi \`${newUser}\`!`, { parse_mode: 'Markdown' });
+            } else if (state === 'update_user_ap2t') {
+                const newUser = input;
+                const ap2Pass = credentials.main.password;
+                credentials.main.username = newUser;
+                updateEnv('MAIN_USERNAME', newUser);
+                updateProfileCredential('ap2t', newUser, ap2Pass);
+                bot.sendMessage(chatId, `✅ Username AP2T berhasil diperbarui menjadi \`${newUser}\`!`, { parse_mode: 'Markdown' });
+            } else if (state === 'tambah_profil_nama') {
+                pendingInputData[chatId] = { nama: input };
+                pendingInputState[chatId] = 'tambah_profil_user_ap2t';
+                bot.sendMessage(chatId, `Nama profil diset: *${input}*\n\nSekarang masukkan **Username AP2T**:`, {parse_mode: 'Markdown'});
+            } else if (state === 'tambah_profil_user_ap2t') {
+                pendingInputData[chatId].user_ap2t = input;
+                pendingInputState[chatId] = 'tambah_profil_pass_ap2t';
+                bot.sendMessage(chatId, `Username AP2T: *${input}*\n\nSekarang masukkan **Password AP2T**:`, {parse_mode: 'Markdown'});
+            } else if (state === 'tambah_profil_pass_ap2t') {
+                pendingInputData[chatId].pass_ap2t = input;
+                pendingInputState[chatId] = 'tambah_profil_user_webmail';
+                bot.sendMessage(chatId, `Sekarang masukkan **Username Webmail**:`, {parse_mode: 'Markdown'});
+            } else if (state === 'tambah_profil_user_webmail') {
+                pendingInputData[chatId].user_webmail = input;
+                pendingInputState[chatId] = 'tambah_profil_pass_webmail';
+                bot.sendMessage(chatId, `Username Webmail: *${input}*\n\nTerakhir, masukkan **Password Webmail**:`, {parse_mode: 'Markdown'});
+            } else if (state === 'tambah_profil_pass_webmail') {
+                pendingInputData[chatId].pass_webmail = input;
+                const data = pendingInputData[chatId];
+                
+                const path = require('path');
+                const fs2 = require('fs');
+                const profilesPath = path.join(__dirname, 'profiles.json');
+                let profiles = {};
+                if (fs2.existsSync(profilesPath)) {
+                    profiles = JSON.parse(fs2.readFileSync(profilesPath, 'utf8'));
+                }
+                profiles[data.nama] = {
+                    ap2t: { username: data.user_ap2t, password: data.pass_ap2t },
+                    webmail: { username: data.user_webmail, password: data.pass_webmail }
+                };
+                fs2.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
+                
+                delete pendingInputData[chatId];
+                bot.sendMessage(chatId, `✅ Profil **${data.nama}** berhasil ditambahkan dan disimpan!\nGunakan /pakai_profil untuk beralih.`, {parse_mode: 'Markdown'});
+            } else {
+                bot.processUpdate({
+                    update_id: Math.floor(Math.random() * 1000000),
+                    message: { ...msg, text: `/${state} ${input}` }
+                });
+            }
             return;
         }
     }
@@ -129,7 +198,6 @@ bot.on('message', (msg) => {
             '/set_ap2t': 'Gunakan: `/set_ap2t <Username> <Password>`',
             '/set_webmail': 'Gunakan: `/set_webmail <pusat\\uid> <Password>`',
             '/simpan_akun': 'Gunakan: `/simpan_akun <Nama_Profil> <User_AP2T> <Pass_AP2T> <User_Webmail> <Pass_Webmail>`',
-            '/pakai_akun': 'Gunakan: `/pakai_akun <Nama_Profil>`',
             '/keygen': 'Gunakan: `/keygen <Hari>`',
             '/set_license': 'Gunakan: `/set_license <License_Key>`'
         };
@@ -174,7 +242,7 @@ bot.sendMessage = async (chatId, text, options) => {
     // 5. Anggap pesan lainnya sebagai progres (gabungkan ke dalam 1 bubble)
     if (!statusMessages[chatId]) {
         statusMessages[chatId] = { msgId: null, text: text, lastUpdate: now };
-        const m = await originalSendMessage(chatId, `⏳ ${text}`, { parse_mode: 'Markdown' }).catch(()=>null);
+        const m = await originalSendMessage(chatId, `⚡ ${text}`, { parse_mode: 'Markdown' }).catch(()=>null);
         if (m) statusMessages[chatId].msgId = m.message_id;
         return m || { message_id: statusMessages[chatId].msgId || 0, chat: { id: chatId } };
     } else {
@@ -182,7 +250,7 @@ bot.sendMessage = async (chatId, text, options) => {
         state.text = text;
         state.lastUpdate = now;
         
-        const newText = `⏳ ${state.text}`;
+        const newText = `⚡ ${state.text}`;
         if (state.msgId) {
             await bot.editMessageText(newText, { chat_id: chatId, message_id: state.msgId, parse_mode: 'Markdown' }).catch(async (e) => {
                 if(e.message && e.message.includes('not found')) {
@@ -257,7 +325,7 @@ bot.processUpdate = async (update) => {
                 }
                 fs.writeFileSync(envPath, envContent.trim() + '\n');
                 
-                bot.sendMessage(msg.chat.id, `✅ Anda berhasil terdaftar sebagai **ADMIN UTAMA** bot ini (Chat ID: ${adminChatId}).\nGunakan web GUI di http://localhost:3000 untuk memantau.`, {parse_mode: 'Markdown'});
+                bot.sendMessage(msg.chat.id, `o. Anda berhasil terdaftar sebagai **ADMIN UTAMA** bot ini (Chat ID: ${adminChatId}).\nGunakan web GUI di http://localhost:3000 untuk memantau.`, {parse_mode: 'Markdown'});
                 return originalProcessUpdate(update);
             } else {
                 bot.sendMessage(msg.chat.id, `⚠️ Bot belum memiliki Admin.\n\nSilakan ketik /start untuk mengklaim bot ini.`);
@@ -335,6 +403,7 @@ let isProcessingCT = false;
 let isPaused = false; // Flag untuk pause
 let lastGlobalDialogMsg = "";
 let pendingInputState = {};
+let pendingInputData = {};
 
 // Helper untuk menahan eksekusi
 async function checkPause(chatId) {
@@ -450,7 +519,9 @@ async function initBrowser(chatId, startUrl = null) {
                 }
             }
 
-            if (chatId && retryCount === 0) bot.sendMessage(chatId, `⚙️ Mempersiapkan Chrome untuk login AP2T...`);
+            if (chatId && retryCount === 0) {
+              bot.sendMessage(chatId, `⚙️ Mempersiapkan Chrome...`);
+          }
 
             // Coba reconnect ke browser yang ditinggalkan (jika bot baru restart)
             try {
@@ -521,12 +592,14 @@ async function initBrowser(chatId, startUrl = null) {
             // Tunggu sebentar sebelum buka tab
             await new Promise(r => setTimeout(r, 1000));
 
+            page = await browser.newPage();
             const existingPages = await browser.pages();
             for (const p of existingPages) {
-                await p.close().catch(() => { });
+                if (p !== page) {
+                    await p.close().catch(() => { });
+                }
             }
 
-            page = await browser.newPage();
             setupPageHandlers();
             return; // Berhasil, keluar dari loop
 
@@ -550,10 +623,10 @@ function setupPageHandlers() {
 
 // ===== FUNGSI: Reset Session via OWA =====
 async function handleOwaSessionReset(chatId) {
-    bot.sendMessage(chatId, `[i] Buka Webmail OWA untuk klik link Reset Session...`);
+    bot.sendMessage(chatId, `ℹ️ Buka Webmail OWA untuk klik link Reset Session...`);
     let mailPage = await browser.newPage();
     mailPage.on('dialog', async dialog => {
-        if (chatId) bot.sendMessage(chatId, `[i] Menutup popup Webmail: ${dialog.message()}`);
+        if (chatId) bot.sendMessage(chatId, `ℹ️ Menutup popup Webmail: ${dialog.message()}`);
         await dialog.accept().catch(()=>{});
     });
     try {
@@ -690,7 +763,7 @@ async function handleOwaSessionReset(chatId) {
                 caption: `📸 Screenshot isi Email Session. Silakan konfirmasi untuk mereset:`,
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: `✅ Ya, Reset Session`, callback_data: `sess_yes` }],
+                        [{ text: `o. Ya, Reset Session`, callback_data: `sess_yes` }],
                         [{ text: `❌ Batalkan`, callback_data: `sess_cancel` }]
                     ]
                 }
@@ -718,7 +791,7 @@ async function handleOwaSessionReset(chatId) {
                         }).catch(() => {});
                         await new Promise(r => setTimeout(r, 1000));
                         const ssDel = await delPage.screenshot();
-                        await bot.sendPhoto(chatId, ssDel, { caption: `✅ Hasil klik Reset Session` });
+                        await bot.sendPhoto(chatId, ssDel, { caption: `o. Hasil klik Reset Session` });
                     } catch(e) {} finally {
                         await delPage.close().catch(()=>{});
                     }
@@ -735,7 +808,7 @@ async function handleOwaSessionReset(chatId) {
 
         await mailPage.close().catch(() => { });
     } catch (err) {
-        bot.sendMessage(chatId, `[i] Gagal reset session via OWA: ${err.message}`);
+        bot.sendMessage(chatId, `ℹ️ Gagal reset session via OWA: ${err.message}`);
         if (mailPage) await mailPage.close().catch(() => { });
         if (err.message !== 'ABORT_NO_EMAIL' && err.message !== 'ABORT_USER' && err.message !== 'ABORT_TIMEOUT' && err.message !== 'ABORT_NO_LINK') {
             throw err;
@@ -748,7 +821,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
     bot.sendMessage(chatId, `🔄 Reset MAC Address via Webmail OWA...`);
     let mailPage = await browser.newPage();
     mailPage.on('dialog', async dialog => {
-        if (chatId) bot.sendMessage(chatId, `[i] Menutup popup Webmail: ${dialog.message()}`);
+        if (chatId) bot.sendMessage(chatId, `ℹ️ Menutup popup Webmail: ${dialog.message()}`);
         await dialog.accept().catch(()=>{});
     });
     try {
@@ -890,7 +963,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
                     const delPage = await browser.newPage();
                     delPage.on('dialog', async dialog => await dialog.accept());
                     try {
-                        await delPage.goto(hapusLinks[i], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
+                        await delPage.goto([i], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
                         await delPage.evaluate(() => {
                             const btns = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn'));
                             const target = btns.find(b => {
@@ -901,7 +974,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
                         }).catch(() => {});
                         await new Promise(r => setTimeout(r, 1000));
                         const ssDel = await delPage.screenshot();
-                        await bot.sendPhoto(chatId, ssDel, { caption: `✅ Hasil klik Hapus MAC ke-${i + 1}` });
+                        await bot.sendPhoto(chatId, ssDel, { caption: `o. Hasil klik Hapus MAC ke-${i + 1}` });
                     } catch(e) {} finally {
                         await delPage.close().catch(()=>{});
                     }
@@ -940,7 +1013,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
                             }).catch(() => {});
                             await new Promise(r => setTimeout(r, 1000));
                             const ssDel = await delPage.screenshot();
-                            await bot.sendPhoto(chatId, ssDel, { caption: `✅ Hasil klik Hapus MAC ke-${idx + 1}` });
+                            await bot.sendPhoto(chatId, ssDel, { caption: `o. Hasil klik Hapus MAC ke-${idx + 1}` });
                         } catch(e) {} finally {
                             await delPage.close().catch(()=>{});
                         }
@@ -1164,7 +1237,7 @@ async function login(accountType, chatId) {
         if (content.includes('User ID yang sama sedang digunakan di tempat lain')) {
             const ssSess = await page.screenshot();
             await bot.sendPhoto(chatId, ssSess, { caption: `📸 Gagal login AP2T: Sesi Nyangkut` });
-            bot.sendMessage(chatId, `[i] Sesi nyangkut (User ID sedang digunakan). Melakukan Reset Session otomatis...`);
+            bot.sendMessage(chatId, `ℹ️ Sesi nyangkut (User ID sedang digunakan). Melakukan Reset Session otomatis...`);
 
             // Klik OK di popup
             await page.evaluate(() => {
@@ -1174,7 +1247,7 @@ async function login(accountType, chatId) {
             });
             await new Promise(r => setTimeout(r, 1000));
 
-            // Klik "Reset Session [i]"
+            // Klik "Reset Session ℹ️"
             await page.evaluate(() => {
                 const links = Array.from(document.querySelectorAll('a'));
                 const resetLink = links.find(a => a.textContent.includes('Reset Session'));
@@ -1182,7 +1255,7 @@ async function login(accountType, chatId) {
             });
             await new Promise(r => setTimeout(r, 3000));
 
-            bot.sendMessage(chatId, `[i] Mengisi form Reset Session...`);
+            bot.sendMessage(chatId, `ℹ️ Mengisi form Reset Session...`);
             // Format email
             let emailUser = credentials.webmail.username;
             emailUser = emailUser.replace(/^.*[\\\/]/, ''); // Hapus domain seperti pusat\ atau uid\
@@ -1216,10 +1289,10 @@ async function login(accountType, chatId) {
             });
 
             await new Promise(r => setTimeout(r, 3000));
-            bot.sendMessage(chatId, `[i] Permintaan Reset Session dikirim. Memeriksa Webmail...`);
+            bot.sendMessage(chatId, `ℹ️ Permintaan Reset Session dikirim. Memeriksa Webmail...`);
             await handleOwaSessionReset(chatId);
 
-            bot.sendMessage(chatId, `[i] Login ulang setelah reset session...`);
+            bot.sendMessage(chatId, `ℹ️ Login ulang setelah reset session...`);
             return await login(accountType, chatId);
         }
         // << AKHIR LOGIC RESET SESSION
@@ -1429,7 +1502,7 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
     }
     
     let resultMsg = `<b>Hasil Sinkronisasi GitHub:</b>\n`;
-    if (successCount > 0) resultMsg += `✅ <b>${successCount} File Diunggah</b>\n`;
+    if (successCount > 0) resultMsg += `o. <b>${successCount} File Diunggah</b>\n`;
     if (sameCount > 0) resultMsg += `ℹ️ <b>${sameCount} File Sudah Versi Terbaru</b> (Tidak ada perubahan)\n`;
     if (failCount > 0) resultMsg += `❌ <b>${failCount} File Gagal</b>\n`;
     
@@ -1472,7 +1545,7 @@ bot.onText(/\/update_bot/, async (msg) => {
         }
     }
     
-    await bot.sendMessage(msg.chat.id, `✅ Update selesai! Berhasil memperbarui ${successCount} file.\nBot akan me-restart sekarang...`, { parse_mode: 'HTML' });
+    await bot.sendMessage(msg.chat.id, `o. Update selesai! Berhasil memperbarui ${successCount} file.\nBot akan me-restart sekarang...`, { parse_mode: 'HTML' });
     setTimeout(() => {
         try { require('child_process').execSync('pm2 restart AP2T_Bot'); } catch(e){ process.exit(0); }
     }, 2000);
@@ -1500,7 +1573,7 @@ bot.onText(/\/set_license (.+)/, (msg, match) => {
             envContent += `\nLICENSE_KEY=${key}`;
         }
         fs.writeFileSync(envPath, envContent.trim() + '\n');
-        bot.sendMessage(msg.chat.id, `✅ **LISENSI DITERIMA**\nBot berhasil diaktifkan untuk komputer ini!`, {parse_mode: 'Markdown'});
+        bot.sendMessage(msg.chat.id, `o. **LISENSI DITERIMA**\nBot berhasil diaktifkan untuk komputer ini!`, {parse_mode: 'Markdown'});
     } else {
         bot.sendMessage(msg.chat.id, `❌ **LISENSI TIDAK VALID**\nKunci lisensi tidak sesuai dengan Hardware ID komputer ini (\`${HWID}\`).`, {parse_mode: 'Markdown'});
     }
@@ -1524,7 +1597,7 @@ bot.onText(/\/tambah_user (.+)/, (msg, match) => {
     if (!exists) {
         usersData.users.push({ id: newId, nama: newName });
         fs.writeFileSync(usersPath, JSON.stringify(usersData, null, 2));
-        bot.sendMessage(msg.chat.id, `✅ User *${newName}* (\`${newId}\`) berhasil didaftarkan di PC ini!`, {parse_mode: 'Markdown'});
+        bot.sendMessage(msg.chat.id, `o. User *${newName}* (\`${newId}\`) berhasil didaftarkan di PC ini!`, {parse_mode: 'Markdown'});
         updateGitHubStatus(); // Lapor status
     } else {
         bot.sendMessage(msg.chat.id, `⚠️ User dengan ID \`${newId}\` sudah terdaftar.`);
@@ -1619,39 +1692,42 @@ bot.on('callback_query', async (query) => {
         let isAdmin = (chatId.toString() === adminChatId);
         
         if (data === 'nav_main') {
+        keyboard = [
+            [{text: '⚙️ MENU SISTEM ⚙️', callback_data: 'nav_sistem'}],
+            [{text: '🚀 MENU LAYANAN 🚀', callback_data: 'nav_layanan'}],
+            [{text: '🛠️ MENU PEMULIHAN 🛠️', callback_data: 'nav_pemulihan'}]
+        ];
+        if (isAdmin) keyboard.push([{ text: '👑 KHUSUS ADMIN 👑', callback_data: 'nav_admin' }]);
+    } else if (data === 'nav_layanan') {
+        keyboard = [
+            [{text: '🤖 Buat CT Otomatis', callback_data: 'cmd_ct'}],
+            [{text: '🔍 Cek Pelanggan', callback_data: 'cmd_cek_pelanggan'}, {text: '🔌 Aktivasi Meter', callback_data: 'cmd_aktivasi_no_meter'}],
+            [{text: '📊 Monitor Token', callback_data: 'cmd_cek_token'}, {text: '🖨️ Cetak Token', callback_data: 'cmd_cetak_token'}],
+            [{text: '🎟️ Ambil Token 20 Digit', callback_data: 'cmd_ambil_token'}],
+            [{text: '🔙 Kembali', callback_data: 'nav_main'}]
+        ];
+    } else if (data === 'nav_sistem') {
+        keyboard = [
+            [{text: '🖥️ Cek Status Layar', callback_data: 'cmd_status'}, {text: '✅ Cek Akun', callback_data: 'cmd_cek_akun_aktif'}],
+            [{text: '🌐 Login AP2T', callback_data: 'cmd_login_ap2t'}, {text: '📧 Login Webmail', callback_data: 'cmd_login_webmail'}],
+            [{text: '👥 Pilih Profil', callback_data: 'cmd_pakai_profil'}, {text: '➕ Tambah Profil', callback_data: 'cmd_tambah_profil'}],
+            [{text: '🔄 Restart Browser', callback_data: 'cmd_reset_akun'}, {text: '🗑️ Hapus Profil', callback_data: 'cmd_hapus_profil'}],
+            [{text: '🚪 Logout', callback_data: 'cmd_logout'}],
+            [{text: '🔙 Kembali', callback_data: 'nav_main'}]
+        ];
+    } else if (data === 'nav_pemulihan') {
+        keyboard = [
+            [{text: '🔄 Reset MAC Address', callback_data: 'cmd_reset_mac_address'}, {text: '🔄 Reset Session', callback_data: 'cmd_reset_session'}],
+            [{text: '🗑️ Reset Memori CT', callback_data: 'cmd_reset_ct'}],
+            [{text: '👤 Ubah User AP2T', callback_data: 'cmd_update_user_ap2t'}, {text: '👤 Ubah User Webmail', callback_data: 'cmd_update_user_webmail'}],
+            [{text: '🔐 Ubah Pass AP2T', callback_data: 'cmd_update_pass_ap2t'}, {text: '🔐 Ubah Pass Webmail', callback_data: 'cmd_update_pass_webmail'}],
+            [{text: '⏸️ Bekukan Bot', callback_data: 'cmd_pause_bot'}, {text: '▶️ Lanjut Bot', callback_data: 'cmd_resume_bot'}],
+            [{text: '🛑 Matikan Bot', callback_data: 'cmd_stop_bot'}],
+            [{text: '🔙 Kembali', callback_data: 'nav_main'}]
+        ];
+    } else if (data === 'nav_admin') {
             keyboard = [
-                [{text: '⬇️ MENU SISTEM ⬇️', callback_data: 'nav_sistem'}],
-          [{text: '⬇️ MENU LAYANAN ⬇️', callback_data: 'nav_layanan'}],
-                [{ text: '⬇️ MENU PEMULIHAN ⬇️', callback_data: 'nav_pemulihan' }]
-            ];
-            if (isAdmin) keyboard.push([{ text: '👑 KHUSUS ADMIN 👑', callback_data: 'nav_admin' }]);
-        } else if (data === 'nav_layanan') {
-            keyboard = [
-                [{text: '⚡ Buat CT Otomatis', callback_data: 'cmd_ct'}],
-                [{text: '🔍 Cek Pelanggan', callback_data: 'cmd_cek_pelanggan'}, {text: '💡 Aktivasi Meter', callback_data: 'cmd_aktivasi_no_meter'}],
-                [{text: '📊 Monitor Token', callback_data: 'cmd_cek_token'}, {text: '🖨️ Cetak Token', callback_data: 'cmd_cetak_token'}],
-                [{text: '🔑 Ambil Token 20 Digit', callback_data: 'cmd_ambil_token'}],
-                [{text: '🔙 Kembali', callback_data: 'nav_main'}]
-            ];
-        } else if (data === 'nav_sistem') {
-            keyboard = [
-                [{text: '🖥️ Cek Status Layar', callback_data: 'cmd_status'}, {text: '✅ Cek Akun', callback_data: 'cmd_cek_akun_aktif'}],
-                [{text: '🌐 Login AP2T', callback_data: 'cmd_login_ap2t'}, {text: '📧 Login Webmail', callback_data: 'cmd_login_webmail'}],
-                [{text: '🔄 Restart Browser', callback_data: 'cmd_reset_akun'}],
-                [{text: '🚪 Logout', callback_data: 'cmd_logout'}],
-                [{text: '🔙 Kembali', callback_data: 'nav_main'}]
-            ];
-        } else if (data === 'nav_pemulihan') {
-            keyboard = [
-                [{text: '🔄 Reset MAC Address', callback_data: 'cmd_reset_mac_address'}, {text: '🔄 Reset Session', callback_data: 'cmd_reset_session'}],
-                [{text: '🗑️ Reset Memori CT', callback_data: 'cmd_reset_ct'}],
-                [{text: '⏸️ Bekukan Bot', callback_data: 'cmd_pause_bot'}, {text: '▶️ Lanjut Bot', callback_data: 'cmd_resume_bot'}],
-                [{text: '🛑 Matikan Bot', callback_data: 'cmd_stop_bot'}],
-                [{text: '🔙 Kembali', callback_data: 'nav_main'}]
-            ];
-        } else if (data === 'nav_admin') {
-            keyboard = [
-                [{text: '➕ Tambah User', callback_data: 'cmd_tambah_user'}, {text: '➖ Hapus User', callback_data: 'cmd_hapus_user'}],
+                [{text: '➕  Tambah User', callback_data: 'cmd_tambah_user'}, {text: '➖ Hapus User', callback_data: 'cmd_hapus_user'}],
                 [{text: '🚀 Upload Update GitHub', callback_data: 'cmd_upload_perbaikan'}],
                 [{text: '⬇️ Download Update', callback_data: 'cmd_update_bot'}],
                 [{text: '🔙 Kembali', callback_data: 'nav_main'}]
@@ -1665,7 +1741,46 @@ bot.on('callback_query', async (query) => {
         return;
     }
     
-    if (data.startsWith('cmd_')) {
+    if (data === 'cmd_pakai_profil_batal') {
+        bot.deleteMessage(chatId, query.message.message_id).catch(() => {});
+        bot.sendMessage(chatId, '❌ Pemilihan akun dibatalkan.');
+        return;
+    } else if (data.startsWith('cmd_pakai_profil_')) {
+        const nama = data.replace('cmd_pakai_profil_', '');
+        const path = require('path');
+        const fs2 = require('fs');
+        const profilesPath = path.join(__dirname, 'profiles.json');
+        
+        if (fs2.existsSync(profilesPath)) {
+            const profiles = JSON.parse(fs2.readFileSync(profilesPath, 'utf8'));
+            if (profiles[nama]) {
+                const u = profiles[nama].ap2t ? profiles[nama].ap2t.username : profiles[nama].ap2t_user;
+                if (u === credentials.main.username) {
+                    bot.deleteMessage(chatId, query.message.message_id).catch(() => {});
+                    return bot.sendMessage(chatId, `✅ Akun **${nama}** sudah aktif saat ini.`, { parse_mode: 'Markdown' });
+                }
+
+                const p = profiles[nama];
+                const pAp2t = p.ap2t || { username: p.ap2t_user, password: p.ap2t_pass };
+                const pWebmail = p.webmail || { username: p.web_user, password: p.web_pass };
+                
+                credentials.main = pAp2t;
+                credentials.webmail = pWebmail;
+
+                updateEnv('MAIN_USERNAME', pAp2t.username);
+                updateEnv('MAIN_PASSWORD', pAp2t.password);
+                updateEnv('WEBMAIL_USERNAME', pWebmail.username);
+                updateEnv('WEBMAIL_PASSWORD', pWebmail.password);
+
+                bot.deleteMessage(chatId, query.message.message_id).catch(() => {});
+                bot.sendMessage(chatId, `✅ Berhasil berganti ke profil **${nama}**!\nBot akan otomatis mereset sesi.`, { parse_mode: 'Markdown' });
+
+                killChromeAndClean();
+                browser = null; page = null; isLoggedIn = false;
+            }
+        }
+        return;
+    } else if (data.startsWith('cmd_')) {
         const cmd = data.replace('cmd_', '');
         // Build a fake message object that looks like it came from the user
         const fakeMsg = {
@@ -1732,13 +1847,13 @@ bot.onText(/\/status/, async (msg) => {
         const ss = await page.screenshot().catch(() => null);
         if (ss) bot.sendPhoto(chatId, ss, { caption: `Status saat ini. Akun: ${currentAccount}` });
     } else {
-        bot.sendMessage(chatId, `[i] Browser tidak aktif.`);
+        bot.sendMessage(chatId, `ℹ️ Browser tidak aktif.`);
     }
 });
 
 bot.onText(/\/login_ap2t/, async (msg) => {
     const chatId = msg.chat.id;
-    if (isLoggingIn) return bot.sendMessage(chatId, `[i] Sedang proses login...`);
+    if (isLoggingIn) return bot.sendMessage(chatId, `ℹ️ Sedang proses login...`);
     isLoggingIn = true;
     try { await startSmartLogin(chatId); }
     finally { isLoggingIn = false; }
@@ -1746,7 +1861,7 @@ bot.onText(/\/login_ap2t/, async (msg) => {
 
 bot.onText(/\/login_webmail/, async (msg) => {
     const chatId = msg.chat.id;
-    if (isLoggingIn) return bot.sendMessage(chatId, `[i] Bot sedang sibuk (sedang login). Mohon tunggu...`);
+    if (isLoggingIn) return bot.sendMessage(chatId, `ℹ️ Bot sedang sibuk (sedang login). Mohon tunggu...`);
     isLoggingIn = true;
     try { await testWebmailLogin(chatId); }
     finally { isLoggingIn = false; }
@@ -1774,14 +1889,14 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
         return bot.sendMessage(chatId, `[!] Gagal!\nID Pelanggan / No Meter wajib terdiri dari 11 atau 12 digit angka. Anda memasukkan ${idpel.length} digit.`);
     }
 
-    if (isLoggingIn) return bot.sendMessage(chatId, `[i] Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
+    if (isLoggingIn) return bot.sendMessage(chatId, `ℹ️ Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
 
     bot.sendMessage(chatId, `[*] Perintah CT diterima. Sedang memproses...`);
     console.log("[DEBUG] CT RECEIVED");
 
     commandQueue.push(async () => {
         try {
-            await processCT(idpel, nogan, chatId, msg.from.first_name);
+            await processCT(idpel, nogan, chatId, msg.from);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan fatal CT: ${err.message}`);
         }
@@ -1790,14 +1905,14 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `[i] Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
     }
 });
 
 bot.onText(/\/reset_ct (.+)/, (msg, match) => {
     const idpel = match[1].trim();
     clearCTState(idpel);
-    bot.sendMessage(msg.chat.id, `✅ Memori kerja (Resume State) untuk IDPEL ${idpel} telah dihapus. Anda bisa memulai pembuatan /ct dari awal lagi.`);
+    bot.sendMessage(msg.chat.id, `o. Memori kerja (Resume State) untuk IDPEL ${idpel} telah dihapus. Anda bisa memulai pembuatan /ct dari awal lagi.`);
 });
 bot.onText(/\/pause_bot/, (msg) => {
     isPaused = true;
@@ -1876,27 +1991,34 @@ bot.onText(/\/set_ap2t (.+)/, async (msg, match) => {
     bot.sendMessage(chatId, `[+] Akun AP2T berhasil diubah menjadi: **${ap2tUser}**`, { parse_mode: 'Markdown' });
 });
 
-bot.onText(/\/update_webmail_pass(?:\s+(.+))?/, async (msg, match) => {
+bot.onText(/\/update_(?:webmail_pass|pass_webmail)(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const newPass = match[1] ? match[1].trim() : null;
-    if (!newPass) return;
     const webUser = credentials.webmail.username;
+    if (!newPass) {
+        pendingInputState[chatId] = 'update_pass_webmail';
+        bot.sendMessage(chatId, `💡 *Ubah Password Webmail*\n\nUsername: ${webUser}\nPassword Lama: ${credentials.webmail.password}\n\nSilakan balas pesan ini dengan *Password Baru*:`, { parse_mode: 'Markdown' });
+        return;
+    }
     credentials.webmail.password = newPass;
     updateEnv('WEBMAIL_PASSWORD', newPass);
     updateProfileCredential('webmail', webUser, newPass);
-    bot.sendMessage(chatId, `✅ Password Webmail berhasil diperbarui! Silakan ulangi perintah Anda (misal klik ulang /ct).`, { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, `✅ Password Webmail berhasil diperbarui!`);
 });
 
-bot.onText(/\/update_ap2t_pass(?:\s+(.+))?/, async (msg, match) => {
+bot.onText(/\/update_(?:ap2t_pass|pass_ap2t)(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const newPass = match[1] ? match[1].trim() : null;
-    if (!newPass) return;
-    const accountType = (credentials.main.username === msg.text) ? 'main' : 'main'; // simplified
     const ap2User = credentials.main.username;
+    if (!newPass) {
+        pendingInputState[chatId] = 'update_pass_ap2t';
+        bot.sendMessage(chatId, `💡 *Ubah Password AP2T*\n\nUsername: ${ap2User}\nPassword Lama: ${credentials.main.password}\n\nSilakan balas pesan ini dengan *Password Baru*:`, { parse_mode: 'Markdown' });
+        return;
+    }
     credentials.main.password = newPass;
     updateEnv('MAIN_PASSWORD', newPass);
     updateProfileCredential('ap2t', ap2User, newPass);
-    bot.sendMessage(chatId, `✅ Password AP2T berhasil diperbarui! Silakan coba /login_ap2t lagi.`, { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, `✅ Password AP2T berhasil diperbarui!`);
 });
 
 bot.onText(/\/set_webmail (.+)/, async (msg, match) => {
@@ -1943,33 +2065,94 @@ bot.onText(/\/simpan_akun (.+)/, async (msg, match) => {
     bot.sendMessage(chatId, `[+] Profil akun **${nama}** berhasil disimpan!`, { parse_mode: 'Markdown' });
 });
 
-bot.onText(/\/pakai_akun (.+)/, async (msg, match) => {
+bot.onText(/\/pakai_profil(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const path = require('path');
-    const nama = match[1].trim();
+    const fs2 = require('fs');
     const profilesPath = path.join(__dirname, 'profiles.json');
 
-    if (!fs.existsSync(profilesPath)) return bot.sendMessage(chatId, `[i] Belum ada profil yang tersimpan.`);
-
-    const profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
-    if (!profiles[nama]) return bot.sendMessage(chatId, `[i] Profil **${nama}** tidak ditemukan.`, { parse_mode: 'Markdown' });
-
-    const p = profiles[nama];
-    const pAp2t = p.ap2t || { username: p.ap2t_user, password: p.ap2t_pass };
-    const pWebmail = p.webmail || { username: p.web_user, password: p.web_pass };
+    if (!fs2.existsSync(profilesPath)) return bot.sendMessage(chatId, `ℹ️ Belum ada profil yang tersimpan.`);
+    const profiles = JSON.parse(fs2.readFileSync(profilesPath, 'utf8'));
     
-    credentials.main = pAp2t;
-    credentials.webmail = pWebmail;
+    const names = Object.keys(profiles);
+    if (names.length === 0) return bot.sendMessage(chatId, `ℹ️ Belum ada profil yang tersimpan.`);
 
-    updateEnv('MAIN_USERNAME', pAp2t.username);
-    updateEnv('MAIN_PASSWORD', pAp2t.password);
-    updateEnv('WEBMAIL_USERNAME', pWebmail.username);
-    updateEnv('WEBMAIL_PASSWORD', pWebmail.password);
+    let activeProfileName = null;
+    for (const n in profiles) {
+        const u = profiles[n].ap2t ? profiles[n].ap2t.username : profiles[n].ap2t_user;
+        if (u === credentials.main.username) { activeProfileName = n; break; }
+    }
 
-    bot.sendMessage(chatId, `[+] Berhasil berganti ke profil **${nama}**!\nBot akan otomatis mereset sesi. Silakan /login_ap2t kembali.`, { parse_mode: 'Markdown' });
+    const arg = match[1] ? match[1].trim() : null;
 
-    killChromeAndClean();
-    browser = null; page = null; isLoggedIn = false;
+    if (arg) {
+        if (!profiles[arg]) return bot.sendMessage(chatId, `ℹ️ Profil **${arg}** tidak ditemukan.`, { parse_mode: 'Markdown' });
+        if (arg === activeProfileName) return bot.sendMessage(chatId, `✅ Akun **${arg}** sudah aktif saat ini.`, { parse_mode: 'Markdown' });
+
+        const p = profiles[arg];
+        const pAp2t = p.ap2t || { username: p.ap2t_user, password: p.ap2t_pass };
+        const pWebmail = p.webmail || { username: p.web_user, password: p.web_pass };
+        
+        credentials.main = pAp2t;
+        credentials.webmail = pWebmail;
+
+        updateEnv('MAIN_USERNAME', pAp2t.username);
+        updateEnv('MAIN_PASSWORD', pAp2t.password);
+        updateEnv('WEBMAIL_USERNAME', pWebmail.username);
+        updateEnv('WEBMAIL_PASSWORD', pWebmail.password);
+
+        killChromeAndClean();
+        browser = null; page = null; isLoggedIn = false;
+        return bot.sendMessage(chatId, `✅ Berhasil berganti ke profil **${arg}**!\nBot akan otomatis mereset sesi.`, { parse_mode: 'Markdown' });
+    }
+
+    let keyboard = [];
+    names.forEach(n => {
+        const isActive = (n === activeProfileName);
+        const textBtn = isActive ? `o. ${n} (Aktif)` : `▶️ ${n}`;
+        keyboard.push([{ text: textBtn, callback_data: `cmd_pakai_profil_${n}` }]);
+    });
+    keyboard.push([{ text: '❌ Batal', callback_data: 'cmd_pakai_profil_batal' }]);
+
+    bot.sendMessage(chatId, `👥 **Pilih Profil:**`, {
+        reply_markup: { inline_keyboard: keyboard },
+        parse_mode: 'Markdown'
+    });
+});
+
+bot.onText(/\/hapus_profil(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const arg = match[1] ? match[1].trim() : null;
+    
+    const path = require('path');
+    const fs2 = require('fs');
+    const profilesPath = path.join(__dirname, 'profiles.json');
+    if (!fs2.existsSync(profilesPath)) return bot.sendMessage(chatId, `ℹ️ Belum ada profil yang tersimpan.`);
+    
+    const profiles = JSON.parse(fs2.readFileSync(profilesPath, 'utf8'));
+    const names = Object.keys(profiles);
+    
+    if (!arg) {
+        let activeProfileName = null;
+        for (const n in profiles) {
+            const u = profiles[n].ap2t ? profiles[n].ap2t.username : profiles[n].ap2t_user;
+            if (u === credentials.main.username) { activeProfileName = n; break; }
+        }
+        
+        let listStr = '';
+        names.forEach(n => {
+            if (n === activeProfileName) listStr += `- ${n} (Aktif)\n`;
+            else listStr += `- ${n}\n`;
+        });
+        
+        return bot.sendMessage(chatId, "⏳ ⚠️ **Format Perintah Salah / Tidak Lengkap**\n\n**Daftar Profil Tersedia:**\n" + listStr + "\n👉 Gunakan format:\n`/hapus_profil <Nama_Profil>`\n_Contoh:_ `/hapus_profil cadangan`", { parse_mode: 'Markdown' });
+    }
+    
+    if (!profiles[arg]) return bot.sendMessage(chatId, `ℹ️ Profil **${arg}** tidak ditemukan.`, { parse_mode: 'Markdown' });
+    
+    delete profiles[arg];
+    fs2.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
+    bot.sendMessage(chatId, `🗑️ Profil **${arg}** berhasil dihapus dari sistem!`, { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/daftar_akun/, async (msg) => {
@@ -1977,17 +2160,17 @@ bot.onText(/\/daftar_akun/, async (msg) => {
     const path = require('path');
     const profilesPath = path.join(__dirname, 'profiles.json');
 
-    if (!fs.existsSync(profilesPath)) return bot.sendMessage(chatId, `[i] Belum ada profil yang tersimpan.`);
+    if (!fs.existsSync(profilesPath)) return bot.sendMessage(chatId, `ℹ️ Belum ada profil yang tersimpan.`);
     const profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
 
     const names = Object.keys(profiles);
-    if (names.length === 0) return bot.sendMessage(chatId, `[i] Belum ada profil yang tersimpan.`);
+    if (names.length === 0) return bot.sendMessage(chatId, `ℹ️ Belum ada profil yang tersimpan.`);
 
     const list = names.map(n => {
         const ap2tUser = profiles[n].ap2t ? profiles[n].ap2t.username : profiles[n].ap2t_user;
         return `- **${n}** (AP2T: ${ap2tUser})`;
     }).join('\n');
-    bot.sendMessage(chatId, `[+] **Daftar Profil Akun:**\n\n${list}\n\nGunakan \`/pakai_akun <nama_profil>\` untuk menggunakan.`, { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, `[+] **Daftar Profil Akun:**\n\n${list}\n\nGunakan \`/pakai_profil <nama_profil>\` untuk menggunakan.`, { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/cek_akun_aktif/, async (msg) => {
@@ -2045,6 +2228,25 @@ bot.onText(/\/stop_bot/, async (msg) => {
         bot.sendMessage(chatId, `❌ Gagal mematikan bot: ${e.message}`);
     }
 });
+
+bot.onText(/\/update_user_ap2t/, async (msg) => {
+    const chatId = msg.chat.id;
+    pendingInputState[chatId] = 'update_user_ap2t';
+    bot.sendMessage(chatId, `💡 *Ubah Username AP2T*\n\nUsername Lama: ${credentials.main.username}\n\nSilakan balas pesan ini dengan *Username Baru*:`, { parse_mode: 'Markdown' });
+});
+
+bot.onText(/\/update_user_webmail/, async (msg) => {
+    const chatId = msg.chat.id;
+    pendingInputState[chatId] = 'update_user_webmail';
+    bot.sendMessage(chatId, `💡 *Ubah Username Webmail*\n\nUsername Lama: ${credentials.webmail.username}\n\nSilakan balas pesan ini dengan *Username Baru*:`, { parse_mode: 'Markdown' });
+});
+
+bot.onText(/\/tambah_profil/, async (msg) => {
+    const chatId = msg.chat.id;
+    pendingInputState[chatId] = 'tambah_profil_nama';
+    bot.sendMessage(chatId, `💡 *Tambah Profil Baru*\n\nSilakan ketik dan balas pesan ini dengan **Nama Profil** (bebas):`, { parse_mode: 'Markdown' });
+});
+
 // ===== FUNGSI HELPER: Navigasi & UI =====
 
 async function closePopups(page) {
@@ -2190,7 +2392,7 @@ async function setFieldValue(page, labelText, value, isDropdown = false) {
 
 // ===== FUNGSI UTAMA: PROSES CT =====
 
-async function processCT(idpel, nogan, chatId, pembuat) {
+async function processCT(idpel, nogan, chatId, userInfo) {
     console.log("[DEBUG] processCT STARTED for IDPEL:", idpel);
     activeChatId = chatId;
     try {
@@ -2218,11 +2420,11 @@ async function processCT(idpel, nogan, chatId, pembuat) {
         
         if (currentState.step !== 'START') {
             if (currentState.nogan && currentState.nogan !== nogan) {
-                bot.sendMessage(chatId, `[i] Terdeteksi input No Gangguan yang berbeda (*${nogan}*) dari sebelumnya (*${currentState.nogan}*).\nMemulai ulang pembuatan CT dari awal...`, { parse_mode: 'Markdown' });
+                bot.sendMessage(chatId, `ℹ️ Terdeteksi input No Gangguan yang berbeda (*${nogan}*) dari sebelumnya (*${currentState.nogan}*).\nMemulai ulang pembuatan CT dari awal...`, { parse_mode: 'Markdown' });
                 clearCTState(idpel);
                 currentState = { step: 'START', noAgenda: null, nogan: null };
             } else {
-                bot.sendMessage(chatId, `[i] Memori kerja terdeteksi (IDPEL dan NOGAN sama)!\nMelompat langsung ke tahap **Monitoring Token**...`, { parse_mode: 'Markdown' });
+                bot.sendMessage(chatId, `ℹ️ Memori kerja terdeteksi (IDPEL dan NOGAN sama)!\nMelompat langsung ke tahap **Monitoring Token**...`, { parse_mode: 'Markdown' });
                 currentState.step = 'MONITORING';
                 isResuming = true;
             }
@@ -2631,7 +2833,7 @@ async function processCT(idpel, nogan, chatId, pembuat) {
         bot.sendMessage(chatId, `📝 No Agenda ditemukan: \`${noAgenda}\`.`, { parse_mode: 'Markdown' });
 
         // SIMPAN STATE
-        updateCTState(idpel, { step: 'AKTIVASI_NO_METER', noAgenda: noAgenda, nogan: nogan, chatId: chatId, pembuat: pembuat });
+        updateCTState(idpel, { step: 'AKTIVASI_NO_METER', noAgenda: noAgenda, nogan: nogan, chatId: chatId, pembuat: userInfo ? userInfo.first_name : "User" });
         currentState.step = 'AKTIVASI_NO_METER';
         } // End of START block
 
@@ -2639,7 +2841,7 @@ async function processCT(idpel, nogan, chatId, pembuat) {
 
         // 8. Navigasi ke Aktivasi No Meter
         bot.sendMessage(chatId, `🚚 Navigasi ke Menu Aktivasi No Meter...`);
-        await clickMenu(page, ['PELAYANAN PELANGGAN', 'Perintah Kerja', 'Aktivasi No Meter']);
+        await clickMenu(page, ['PELAYANAN PELANGGAN', 'Rekening', 'Perintah Kerja', 'Aktivasi No Meter']);
         bot.sendMessage(chatId, `⏳ Menunggu halaman Aktivasi No Meter terbuka...`);
         await new Promise(r => setTimeout(r, 2000));
 
@@ -2736,23 +2938,39 @@ async function processCT(idpel, nogan, chatId, pembuat) {
                 await new Promise(r => setTimeout(r, 1500));
 
                 // Popup 1: Ya
-                const yaClicked = await aktivasiFrame.evaluate(() => {
+                let yaClicked = await aktivasiFrame.evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                    const yaBtn = btns.find(b => b.textContent.trim() === 'Ya' && b.offsetParent !== null);
+                    const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
                     if (yaBtn) { yaBtn.click(); return true; }
                     return false;
                 });
+                if (!yaClicked) {
+                    yaClicked = await page.evaluate(() => {
+                        const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                        const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
+                        if (yaBtn) { yaBtn.click(); return true; }
+                        return false;
+                    });
+                }
                 if (yaClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'Ya' diklik.`);
 
                 await new Promise(r => setTimeout(r, 1500));
 
                 // Popup 2: OK
-                const okClicked = await aktivasiFrame.evaluate(() => {
+                let okClicked = await aktivasiFrame.evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
                     const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
                     if (okBtn) { okBtn.click(); return true; }
                     return false;
                 });
+                if (!okClicked) {
+                    okClicked = await page.evaluate(() => {
+                        const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                        const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
+                        if (okBtn) { okBtn.click(); return true; }
+                        return false;
+                    });
+                }
                 if (okClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'OK' diklik.`);
 
                 bot.sendMessage(chatId, `🎉 **Aktivasi Berhasil Disimpan!**`);
@@ -2991,6 +3209,18 @@ async function processCT(idpel, nogan, chatId, pembuat) {
                 try {
                     const axios = require('axios');
                     const waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+                    let namaPanggilan = 'Tidak Diketahui';
+                    const usersPath = path.join(__dirname, 'users.json');
+                    if (fs.existsSync(usersPath)) {
+                        try {
+                            const usersData = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+                            const userObj = usersData.users.find(u => String(u.id === undefined ? u : u.id) === String(chatId));
+                            if (userObj) namaPanggilan = typeof userObj === 'object' ? userObj.nama : 'Tanpa Nama';
+                        } catch(e) {}
+                    }
+                    const namaLengkap = typeof userInfo === 'object' ? [userInfo.first_name, userInfo.last_name].filter(Boolean).join(' ') : (userInfo || 'Tidak Diketahui');
+                    const usernameTele = (typeof userInfo === 'object' && userInfo.username) ? '@' + userInfo.username : '-';
+
                     await axios.post(process.env.GOOGLE_SHEETS_URL, {
                         waktu: waktu,
                         idpel: idpel,
@@ -2999,7 +3229,9 @@ async function processCT(idpel, nogan, chatId, pembuat) {
                         daya: dayaCT,
                         nogan: nogan,
                         token: tokenCT,
-                        pembuat: pembuat || 'Tidak Diketahui'
+                        pembuat: namaPanggilan, // Pertahankan field 'pembuat' untuk backward compatibility, tapi isinya Panggilan
+                        nama_lengkap: namaLengkap, // Tambah kolom Nama Lengkap
+                        username: usernameTele     // Tambah kolom Username
                     });
                     console.log(`Berhasil mencatat rekap ke Google Sheets untuk IDPEL: ${idpel}`);
                 } catch (sheetErr) {
@@ -3414,7 +3646,7 @@ async function processCariPelanggan(target, chatId) {
                 const cells = Array.from(row.querySelectorAll('.x-grid3-cell-inner')).map(c => c.textContent.trim());
                 let data = {};
                 for (let i = 0; i < headers.length; i++) {
-                    if (headers[i]) data[headers[i]] = cells[i] || '-';
+                    if ([i]) data[[i]] = [i] || '-';
                 }
 
                 // Fallback jika headers tidak terbaca dengan baik
@@ -3437,7 +3669,7 @@ async function processCariPelanggan(target, chatId) {
             const tarif = result['TARIF'] || '-';
             const daya = result['DAYA'] || '-';
 
-            let msg = `✅ *Data Pelanggan Ditemukan:*\n\n` +
+            let msg = `o. *Data Pelanggan Ditemukan:*\n\n` +
                 `ID PELANGGAN: \`${idpel}\`\n` +
                 `NAMA: ${nama}\n` +
                 `TARIF/DAYA: ${tarif} / ${daya}`;
@@ -3674,7 +3906,7 @@ async function capturePdfAsImage(pdfUrl, browser, outputPath) {
                             for (let x = 0; x < canvas.width; x++) {
                                 const i = (y * canvas.width + x) * 4;
                                 // Ignore white/transparent pixels (detect only dark text)
-                                if (data[i+3] > 0 && (data[i] < 250 || data[i+1] < 250 || data[i+2] < 250)) {
+                                if (data[i+3] > 0 && ([i] < 250 || data[i+1] < 250 || data[i+2] < 250)) {
                                     if (y > maxY) maxY = y;
                                 }
                             }
@@ -3711,7 +3943,7 @@ async function capturePdfAsImage(pdfUrl, browser, outputPath) {
             const bytes = new Uint8Array(arrayBuffer);
             let binary = '';
             for (let i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode(bytes[i]);
+                binary += String.fromCharCode([i]);
             }
             return window.btoa(binary);
         }, pdfUrl);
@@ -3720,7 +3952,7 @@ async function capturePdfAsImage(pdfUrl, browser, outputPath) {
             const pdfData = atob(b64);
             const uint8Array = new Uint8Array(pdfData.length);
             for (let i = 0; i < pdfData.length; i++) {
-                uint8Array[i] = pdfData.charCodeAt(i);
+                [i] = pdfData.charCodeAt(i);
             }
             renderPdf(uint8Array);
         }, base64Pdf);
@@ -3794,7 +4026,7 @@ bot.onText(/\/ambil_token(?:\s+(.+))?/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `[i] Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
     }
 });
 
@@ -3969,7 +4201,7 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
                                         for (let x = 0; x < canvas.width; x++) {
                                             const i = (y * canvas.width + x) * 4;
                                             // Kertas = warna sangat terang (mendekati putih)
-                                            if (data[i] > 200 && data[i+1] > 200 && data[i+2] > 200) {
+                                            if ([i] > 200 && data[i+1] > 200 && data[i+2] > 200) {
                                                 if (x < minPx) minPx = x;
                                                 if (x > maxPx) maxPx = x;
                                                 if (y < minPy) minPy = y;
@@ -3989,7 +4221,7 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
                                             // Kita deteksi pixel yang BUKAN abu-abu background dan BUKAN putih kertas
                                             // Batas abu-abu Chrome Viewer biasanya R=82 G=86 B=89.
                                             // Jadi kalau R, G, B kurang dari 220, kita anggap itu tulisan/logo.
-                                            if (data[i] < 220 || data[i+1] < 220 || data[i+2] < 220) {
+                                            if ([i] < 220 || data[i+1] < 220 || data[i+2] < 220) {
                                                 if (x < minTx) minTx = x;
                                                 if (x > maxTx) maxTx = x;
                                                 if (y < minTy) minTy = y;
@@ -4042,7 +4274,7 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
                 await new Promise(r => setTimeout(r, 2000));
                 const infoData = `\n👤 NAMA: ${extractionResult.nama}\n💳 IDPEL: ${extractionResult.idpel}`;
                 const popupBuffer = await page.screenshot();
-                await bot.sendPhoto(chatId, popupBuffer, { caption: `✅ Hasil Cetak Token\nTarget: ${target}${infoData}\n(Gagal buka PDF, mengirim Screenshot)` }, { filename: `cetak_${target}_popup.png`, contentType: 'image/png' });
+                await bot.sendPhoto(chatId, popupBuffer, { caption: `o. Hasil Cetak Token\nTarget: ${target}${infoData}\n(Gagal buka PDF, mengirim Screenshot)` }, { filename: `cetak_${target}_popup.png`, contentType: 'image/png' });
                 await bot.editMessageText(`✅ Selesai mengeksekusi cetak_token.`, { chat_id: chatId, message_id: statusMsg.message_id });
             }
 
@@ -4054,7 +4286,7 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `[i] Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
     }
 });
 
@@ -4218,11 +4450,11 @@ bot.onText(/\/cek_token(?:\s+(.+))?/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `[i] Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
     }
 });
 
-console.log('🤖 Bot AP2T berjalan. Kirim /start di Telegram.');
+console.log('s Bot AP2T berjalan. Kirim /start di Telegram.');
 
 bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
@@ -4243,25 +4475,32 @@ bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `[i] Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
     }
 });
 
 // Setup Menu Bawah Kiri di Telegram
 const standardCommands = [
-    { command: 'start', description: '📌 Menu Utama' },
-    { command: 'ct', description: '⚡ Buat CT Otomatis' },
-    { command: 'login_ap2t', description: '🔓 Login AP2T' },
+    { command: 'start', description: '🏠 Menu Utama' },
+    { command: 'ct', description: '🤖 Buat CT Otomatis' },
+    { command: 'login_ap2t', description: '🔑 Login AP2T' },
     { command: 'login_webmail', description: '📧 Tes Login Webmail' },
     { command: 'cek_pelanggan', description: '🔍 Cek Data Pelanggan' },
     { command: 'cetak_token', description: '🖨️ Cetak Token PDF' },
     { command: 'ambil_token', description: '🎟️ Ambil Token 20 Digit' },
     { command: 'cek_token', description: '📊 Monitoring Token Excel' },
-    { command: 'aktivasi_no_meter', description: '📡 Aktivasi No Meter' },
+    { command: 'aktivasi_no_meter', description: '🔌 Aktivasi No Meter' },
     { command: 'status', description: '🖥️ Cek Status Layar' },
     { command: 'cek_akun_aktif', description: '✅ Cek Akun Aktif' },
     { command: 'reset_akun', description: '🔄 Restart Akun/Browser' },
     { command: 'logout', description: '🚪 Logout' },
+    { command: 'pakai_profil', description: '👥 Pilih / Ganti Profil' },
+    { command: 'tambah_profil', description: '➕ Tambah Profil Baru' },
+    { command: 'hapus_profil', description: '🗑️ Hapus Profil' },
+    { command: 'update_user_webmail', description: '👤 Ubah User Webmail' },
+    { command: 'update_user_ap2t', description: '👤 Ubah User AP2T' },
+    { command: 'update_pass_webmail', description: '🔐 Ubah Password Webmail' },
+    { command: 'update_pass_ap2t', description: '🔐 Ubah Password AP2T' },
     { command: 'reset_ct', description: '🗑️ Reset Memori CT' },
     { command: 'pause_bot', description: '⏸️ Bekukan Bot' },
     { command: 'resume_bot', description: '▶️ Lanjutkan Bot' },
@@ -4377,7 +4616,7 @@ bot.onText(/\/lapor_status/, async (msg) => {
     const loadMsg = await bot.sendMessage(msg.chat.id, "📡 Mengirim sinyal telemetri PC ini ke GitHub...");
     const success = await updateGitHubStatus();
     if (success) {
-        bot.editMessageText("✅ Laporan telemetri berhasil dikirim ke GitHub!", { chat_id: msg.chat.id, message_id: loadMsg.message_id });
+        bot.editMessageText("o. Laporan telemetri berhasil dikirim ke GitHub!", { chat_id: msg.chat.id, message_id: loadMsg.message_id });
     } else {
         bot.editMessageText("❌ Gagal mengirim laporan telemetri. Cek konfigurasi GitHub Token/Repo di web.", { chat_id: msg.chat.id, message_id: loadMsg.message_id });
     }
@@ -4416,7 +4655,7 @@ global.ProgressTracker = ProgressTracker;
 
 bot.onText(/\/reset_mac_address/, async (msg) => {
     const chatId = msg.chat.id;
-    if (isLoggingIn) return bot.sendMessage(chatId, "[i] Bot sedang sibuk (sedang login). Mohon tunggu...");
+    if (isLoggingIn) return bot.sendMessage(chatId, "ℹ️ Bot sedang sibuk (sedang login). Mohon tunggu...");
     isLoggingIn = true;
     try {
         await initBrowser(chatId);
@@ -4431,7 +4670,7 @@ bot.onText(/\/reset_mac_address/, async (msg) => {
 
 bot.onText(/\/reset_session/, async (msg) => {
     const chatId = msg.chat.id;
-    if (isLoggingIn) return bot.sendMessage(chatId, "[i] Bot sedang sibuk (sedang login). Mohon tunggu...");
+    if (isLoggingIn) return bot.sendMessage(chatId, "ℹ️ Bot sedang sibuk (sedang login). Mohon tunggu...");
     bot.sendMessage(chatId, "🔄 Menjalankan login AP2T untuk memeriksa dan memaksa Reset Session...");
     await loginAP2T(chatId);
 });
@@ -4448,7 +4687,7 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
         return bot.sendMessage(chatId, `[!] Format salah. Gunakan: /aktivasi_no_meter <No_Agenda>`);
     }
 
-    if (isLoggingIn) return bot.sendMessage(chatId, `[i] Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
+    if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
 
     bot.sendMessage(chatId, `[*] Perintah Aktivasi No Meter manual diterima.\nNo Agenda: ${noAgenda}\nSedang memproses...`);
 
@@ -4463,19 +4702,22 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `[i] Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `⏳ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
     }
 });
 
 async function processAktivasiOnly(noAgenda, chatId, pembuat) {
-    if (!page || page.isClosed()) {
-        bot.sendMessage(chatId, `[i] Browser belum siap, membuka ulang browser...`);
-        await initBrowser(chatId);
+    if (!isLoggedIn || !browser || !page || page.isClosed()) {
+        bot.sendMessage(chatId, `🔄 Browser belum siap atau belum login, login otomatis...`);
+        const ok = await login('main', chatId);
+        if (!ok) throw new Error("Gagal login ke AP2T otomatis.");
+        isLoggedIn = true;
+        currentAccount = 'main';
     }
     
     try {
-        bot.sendMessage(chatId, `🚚 Navigasi ke Menu Aktivasi No Meter...`);
-        await clickMenu(page, ['PELAYANAN PELANGGAN', 'Perintah Kerja', 'Aktivasi No Meter']);
+        bot.sendMessage(chatId, `🚀 Navigasi ke Menu Aktivasi No Meter...`);
+        await clickMenu(page, ['PELAYANAN PELANGGAN', 'Rekening', 'Perintah Kerja', 'Aktivasi No Meter']);
         bot.sendMessage(chatId, `⏳ Menunggu halaman Aktivasi No Meter terbuka...`);
         await new Promise(r => setTimeout(r, 2000));
 
@@ -4503,7 +4745,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
         }
         if (!aktivasiFrame) aktivasiFrame = page;
 
-        bot.sendMessage(chatId, `📝 Memasukkan No Agenda di Aktivasi...`);
+        bot.sendMessage(chatId, `🔍 Memasukkan No Agenda di Aktivasi...`);
         const inputIdentified = await aktivasiFrame.evaluate((val) => {
             const labels = Array.from(document.querySelectorAll('label, span'));
             const label = labels.find(l => l.textContent.includes('No Agenda') && l.offsetParent !== null);
@@ -4543,9 +4785,8 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
             });
             
             bot.sendMessage(chatId, `⏳ Menunggu loading pencarian selesai...`);
-            await new Promise(r => setTimeout(r, 1000)); // Biarkan mask muncul dulu
+            await new Promise(r => setTimeout(r, 1000)); 
             
-            // Tunggu cerdas sampai indikator loading hilang (maksimal 60 detik)
             try {
                 await aktivasiFrame.waitForFunction(() => {
                     const masks = Array.from(document.querySelectorAll('.ext-el-mask-msg, .x-mask-msg'));
@@ -4557,9 +4798,8 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                 console.log('Timeout waiting for loading mask to disappear');
             }
             
-            await new Promise(r => setTimeout(r, 1500)); // Ekstra buffer untuk stabilitas DOM
+            await new Promise(r => setTimeout(r, 1500)); 
             
-            // CEK APAKAH ADA POPUP ERROR "Data Tidak Ditemukan"
             const errorText = await aktivasiFrame.evaluate(() => {
                 const wins = Array.from(document.querySelectorAll('.x-window'));
                 const errWin = wins.find(w => w.style.display !== 'none' && w.offsetParent !== null);
@@ -4592,31 +4832,61 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                 bot.sendMessage(chatId, `⏳ Menunggu popup konfirmasi...`);
                 await new Promise(r => setTimeout(r, 1500));
 
-                const yaClicked = await aktivasiFrame.evaluate(() => {
+                let yaClicked = await aktivasiFrame.evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                    const yaBtn = btns.find(b => b.textContent.trim() === 'Ya' && b.offsetParent !== null);
+                    const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
                     if (yaBtn) { yaBtn.click(); return true; }
                     return false;
                 });
+                if (!yaClicked) {
+                    yaClicked = await page.evaluate(() => {
+                        const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                        const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
+                        if (yaBtn) { yaBtn.click(); return true; }
+                        return false;
+                    });
+                }
                 if (yaClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'Ya' diklik.`);
 
                 await new Promise(r => setTimeout(r, 1500));
 
-                const okClicked = await aktivasiFrame.evaluate(() => {
+                let okClicked = await aktivasiFrame.evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
                     const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
                     if (okBtn) { okBtn.click(); return true; }
                     return false;
                 });
+                if (!okClicked) {
+                    okClicked = await page.evaluate(() => {
+                        const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                        const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
+                        if (okBtn) { okBtn.click(); return true; }
+                        return false;
+                    });
+                }
                 if (okClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'OK' diklik.`);
 
-                bot.sendMessage(chatId, `🎉 **Aktivasi Manual Berhasil Disimpan!**`);
+                bot.sendMessage(chatId, `✅ **Aktivasi Manual Berhasil Disimpan!**`);
                 try {
                     const ssBuffer = await page.screenshot({ encoding: 'buffer' });
                     await bot.sendPhoto(chatId, ssBuffer, { caption: "Screenshot Keberhasilan" }, { filename: "success.png", contentType: 'image/png' });
                 } catch(ex) {}
+                
+                // NEW REQUIREMENT: Lanjut ke Monitoring Permohonan Token
+                bot.sendMessage(chatId, `🚀 Melanjutkan pencarian ke Monitoring Permohonan Token...`);
+                await clickMenu(page, ['PELAYANAN PELANGGAN', 'Monitoring', 'Monitoring Permohonan Token']);
+                const monitorFrame = await searchMonitoringToken(page, noAgenda, chatId);
+                if (monitorFrame) {
+                    bot.sendMessage(chatId, `📸 Mengambil hasil pencarian Monitoring untuk No Agenda ${noAgenda}...`);
+                    try {
+                        const ssBuffer = await page.screenshot({ encoding: 'buffer' });
+                        await bot.sendPhoto(chatId, ssBuffer, { caption: `Hasil pencarian Monitoring Token untuk No Agenda ${noAgenda}.` }, { filename: "monitoring.png", contentType: 'image/png' });
+                    } catch(ex) {
+                        console.error("Gagal screenshot monitoring", ex);
+                    }
+                }
             } else {
-                bot.sendMessage(chatId, `⚠️ Tombol SIMPAN tidak merespon/tidak ditemukan.`);
+                bot.sendMessage(chatId, `❌ Tombol SIMPAN tidak merespon/tidak ditemukan.`);
             }
         } else {
             throw new Error("Gagal menemukan kolom input No Agenda di halaman Aktivasi.");
@@ -4627,7 +4897,5 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
             const ssBuffer = await page.screenshot({ encoding: 'buffer' });
             await bot.sendPhoto(chatId, ssBuffer, { caption: "Error Aktivasi Manual" }, { filename: "error.png", contentType: 'image/png' });
         } catch(ex) {}
-    } finally {
-        await backToHome();
     }
 }
