@@ -5075,7 +5075,8 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                     if (okClicked) break;
                 }
                 
-                if (okClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'OK' berhasil diklik (Data Tersimpan).`);
+                if (okClicked) {
+    bot.sendMessage(chatId, `✅ Konfirmasi 'OK' berhasil diklik (Data Tersimpan).`);
 
                 // Verifikasi apakah tombol SIMPAN sudah menjadi ter-disable
                 await new Promise(r => setTimeout(r, 2000));
@@ -5095,7 +5096,8 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                     bot.sendMessage(chatId, `⚠️ Peringatan: Tombol SIMPAN masih bisa diklik! Mungkin penyimpanan tidak sempurna.`);
                 }
 
-                else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses akan tetap dilanjutkan.`);
+                }
+else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses akan tetap dilanjutkan.`);
 
                 bot.sendMessage(chatId, `✅ **Aktivasi Manual Berhasil Disimpan!**`);
                 try {
