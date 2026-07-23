@@ -4974,7 +4974,7 @@ bot.onText(/\/reset_session/, async (msg) => {
 // ==========================================
 // AKTIVASI NO METER MANUAL (Fallback)
 // ==========================================
-bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
+bot.onText(/\/(?:aktivasi_no_meter|aktifasi_no_meter)(?: \s*(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const noAgenda = match[1] ? match[1].trim() : null;
 
