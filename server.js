@@ -209,6 +209,9 @@ app.post('/api/fleet/config', async (req, res) => {
         
         await axios.put(`https://api.github.com/repos/${env.GITHUB_REPO}/contents/${file}`, payload, { headers });
         
+        // JEDA 4 DETIK agar GitHub benar-benar memproses file (Sesuai permintaan keamanan ekstra)
+        await new Promise(r => setTimeout(r, 4000));
+        
         // Update local UI cache
         localMaintenanceState[target] = maintenance;
         
