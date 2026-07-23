@@ -15,7 +15,7 @@
             <li data-tab="settings">Config (.env)</li>
             <li data-tab="profiles">Profiles</li>
             <li data-tab="users">Control Panel</li>
-            <li data-tab="panduan">Panduan Bot</li>
+            <li data-tab="panduan">Panduan Link Spreadsheet</li>
         </ul>
     </div>
     
@@ -158,13 +158,13 @@
         <!-- PANDUAN TAB -->
         <section id="panduan" class="tab-content">
             <div class="card">
-                <h3>📖 Panduan Penggunaan Bot</h3>
-                <p>Berikut adalah beberapa panduan penting untuk mengatur dan menggunakan bot Anda.</p>
+                <h3>📖 Panduan Link Spreadsheet</h3>
+                <p>Berikut adalah panduan penting untuk menghubungkan bot dengan Google Sheets.</p>
                 
                 <h4 style="margin-top:20px; color:#60a5fa;">1. Panduan Koneksi Google Sheets (Rekap CT)</h4>
                 <div style="background-color: #2a2a2a; padding: 15px; border-radius: 6px; margin-top: 10px; font-size: 14px; font-family: monospace;">
                     <p style="color: #a0a0a0;">// 1. Buat Spreadsheet baru di Google Sheets.</p>
-                    <p style="color: #a0a0a0;">// 2. Buat header di baris 1 (A1 - H1) persis seperti ini: waktu, id_pelanggan, nama, tarif, daya, no_gangguan, token, pembuat</p>
+                    <p style="color: #a0a0a0;">// 2. Buat header di baris 1 (A1 - J1) persis seperti ini: waktu, id_pelanggan, nama, tarif, daya, no_gangguan, token, panggilan, nama_lengkap, username</p>
                     <p style="color: #a0a0a0;">// 3. Klik menu Extensions > Apps Script.</p>
                     <p style="color: #a0a0a0;">// 4. Hapus kode bawaan, dan COPY-PASTE kode sakti di bawah ini:</p>
                     <br>
@@ -175,15 +175,17 @@ function doPost(e) {
     var data = JSON.parse(e.postData.contents);
     
     sheet.appendRow([
-      data.waktu,
-      data.idpel,
-      data.nama,
-      data.tarif,
-      data.daya,
-      data.nogan,
-      data.token,
-      data.pembuat
-    ]);
+        data.waktu,
+        data.idpel,
+        data.nama,
+        data.tarif,
+        data.daya,
+        data.nogan,
+        data.token,
+        data.pembuat,
+        data.nama_lengkap,
+        data.username
+      ]);
     
     return ContentService.createTextOutput(JSON.stringify({ "status": "sukses" })).setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
