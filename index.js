@@ -2063,6 +2063,14 @@ bot.on('callback_query', async (query) => {
         bot.sendMessage(chatId, "Ketik /resume untuk melanjutkan proses CT yang tertunda.");
     } else if (data === 'cmd_cetak_token') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cetak_token <no_meter_atau_idpel>`", { parse_mode: 'Markdown' });
+    } else if (data === 'cmd_aktivasi_no_meter') {
+        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/aktivasi_no_meter <no_agenda>`", { parse_mode: 'Markdown' });
+    } else if (data === 'cmd_pause_bot') {
+        if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, "⛔ Akses ditolak.");
+        bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/pause_bot', message_id: Date.now() });
+    } else if (data === 'cmd_resume_bot') {
+        if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, "⛔ Akses ditolak.");
+        bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/resume_bot', message_id: Date.now() });
     } else if (data === 'cmd_cektoken') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_token <no_meter_atau_idpel>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_logout') {
@@ -4974,7 +4982,7 @@ bot.onText(/\/reset_session/, async (msg) => {
 // ==========================================
 // AKTIVASI NO METER MANUAL (Fallback)
 // ==========================================
-bot.onText(/\/(?:aktivasi_no_meter|aktifasi_no_meter)(?: \s*(.+))?/, async (msg, match) => {
+bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const noAgenda = match[1] ? match[1].trim() : null;
 
