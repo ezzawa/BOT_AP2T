@@ -234,34 +234,6 @@ bot.sendMessage = async (chatId, text, options) => {
     // 2. Cek format khusus
     const hasSpecialOptions = options && (options.reply_markup || (options.parse_mode && options.parse_mode.toLowerCase() === 'html'));
 
-    const now = Date.now();
-    
-    // 3. Jika pesan akhir, error, atau format HTML, kirim terpisah dan reset bubble
-    if (isFinalOrError || hasSpecialOptions) {
-        delete statusMessages[chatId];
-        return await originalSendMessage(chatId, text, options);
-    }
-
-    // 4. Reset bubble jika umurnya sudah lebih dari 45 detik (menandakan command baru)
-    if (statusMessages[chatId] && (now - statusMessages[chatId].lastUpdate > 45000)) {
-        delete statusMessages[chatId];
-        const newText = `⚡ ${state.text}`;
-        if (state.msgId) {
-            await bot.editMessageText(newText, { chat_id: chatId, message_id: state.msgId, parse_mode: 'Markdown' }).catch(async (e) => {
-                if(e.message && e.message.includes('not found')) {
-                    const m = await originalSendMessage(chatId, newText, { parse_mode: 'Markdown' }).catch(()=>null);
-                    if (m) state.msgId = m.message_id;
-                }
-            });
-            return { message_id: state.msgId, chat: { id: chatId } };
-        } else {
-            return { message_id: 0, chat: { id: chatId } };
-        }
-    }
-};
-// ----------------------------------------------------------------
-
-// ===== OTORISASI ADMIN, USER, DAN LISENSI HARDWARE =====
 function getHWID() {
     try {
         try {
