@@ -1043,23 +1043,35 @@ async function handleOwaMacReset(chatId, isManual = false) {
         await bot.sendPhoto(chatId, ssEmail, { caption: `📸 Screenshot isi Email MAC` });
 
         // Ambil semua URL dari link "Hapus"
-        const hapusLinks = await mailPage.evaluate(() => {
+                const hapusData = await mailPage.evaluate(() => {
             const links = Array.from(document.querySelectorAll('a'))
-                .filter(a => a.textContent.trim().toLowerCase() === 'hapus')
-                .map(a => a.href);
-            return links;
+                .filter(a => a.textContent.trim().toLowerCase() === 'hapus');
+            return links.map(a => {
+                let mac = 'Unknown';
+                let pc = 'Unknown';
+                let tr = a.closest('tr');
+                if (tr) {
+                    const tds = tr.querySelectorAll('td');
+                    if (tds.length >= 3) {
+                        mac = tds[1].textContent.trim();
+                        pc = tds[2].textContent.trim();
+                    }
+                }
+                return { url: a.href, mac: mac, pc: pc };
+            });
         });
 
-        if (hapusLinks.length > 0) {
+        if (hapusData.length > 0) {
             if (!isManual) {
                 // OTOMATIS HAPUS
-                bot.sendMessage(chatId, `⚡ Ditemukan ${hapusLinks.length} MAC Address. Proses hapus otomatis...`);
-                for (let i = 0; i < hapusLinks.length; i++) {
-                    bot.sendMessage(chatId, `🗑 Menghapus MAC Address ${i + 1}...`);
+                const macList = hapusData.map((d, i) => `${i+1}. ${d.mac} (${d.pc})`).join('\n');
+                bot.sendMessage(chatId, `⚡ Ditemukan ${hapusData.length} MAC Address:\n${macList}\n\nProses hapus otomatis...`);
+                for (let i = 0; i < hapusData.length; i++) {
+                    bot.sendMessage(chatId, `🗑 Menghapus MAC Address ${i + 1} (${hapusData[i].mac})...`);
                     const delPage = await browser.newPage();
                     delPage.on('dialog', async dialog => await dialog.accept());
                     try {
-                        await delPage.goto(hapusLinks[i], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
+                        await delPage.goto(hapusData[i].url, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
                         await delPage.evaluate(() => {
                             const btns = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn'));
                             const target = btns.find(b => {
@@ -1075,15 +1087,17 @@ async function handleOwaMacReset(chatId, isManual = false) {
                         await delPage.close().catch(()=>{});
                     }
                 }
-            } else {
+                        } else {
                 // INTERAKTIF (MANUAL)
+                let msgText = 'Silakan pilih MAC Address yang ingin dihapus:\n\n';
                 const buttons = [];
-                for (let i = 0; i < hapusLinks.length; i++) {
+                for (let i = 0; i < hapusData.length; i++) {
+                    msgText += `${i+1}. ${hapusData[i].mac} (${hapusData[i].pc})\n`;
                     buttons.push([{ text: `🗑 Hapus MAC ${i + 1}`, callback_data: `mac_${i}` }]);
                 }
                 buttons.push([{ text: '❌ Batalkan', callback_data: `mac_cancel` }]);
                 
-                const optMsg = await bot.sendMessage(chatId, `Silakan pilih MAC Address yang ingin dihapus:`, {
+                const optMsg = await bot.sendMessage(chatId, msgText, {
                     reply_markup: { inline_keyboard: buttons }
                 });
 
@@ -1098,7 +1112,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
                         const delPage = await browser.newPage();
                         delPage.on('dialog', async dialog => await dialog.accept());
                         try {
-                            await delPage.goto(hapusLinks[idx], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
+                            await delPage.goto(hapusData[idx].url, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
                             await delPage.evaluate(() => {
                                 const btns = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn'));
                                 const target = btns.find(b => {
