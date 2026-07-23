@@ -1890,6 +1890,7 @@ bot.on('callback_query', async (query) => {
             [{text: '⏸️ Bekukan Bot', callback_data: 'cmd_pause_bot'}, {text: '▶️ Lanjut Bot', callback_data: 'cmd_resume_bot'}],
             [{text: '🛑 Matikan Bot', callback_data: 'cmd_stop_bot'}],
             [{text: '🔙 Kembali', callback_data: 'nav_main'}]
+        ];
     } else if (data === 'nav_admin') {
         keyboard = [
             [{text: '➕ Tambah User', callback_data: 'cmd_tambah_user'}, {text: '➖ Hapus User', callback_data: 'cmd_hapus_user'}],
