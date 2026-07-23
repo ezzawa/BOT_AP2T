@@ -963,7 +963,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
                     const delPage = await browser.newPage();
                     delPage.on('dialog', async dialog => await dialog.accept());
                     try {
-                        await delPage.goto([i], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
+                        await delPage.goto(hapusLinks[i], { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(()=>{});
                         await delPage.evaluate(() => {
                             const btns = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a.btn'));
                             const target = btns.find(b => {
