@@ -329,7 +329,35 @@ bot.processUpdate = async (update) => {
                 return originalProcessUpdate(update);
             } else {
         }
+                bot.sendMessage(msg.chat.id, `⚠️ Bot belum memiliki Admin.\n\nSilakan ketik /start untuk mengklaim bot ini.`);
+                return; // Stop
+            }
+        }
 
+        const isAdmin = (chatIdStr === adminChatId);
+        
+        // 2. Cek apakah ini user terdaftar
+        let users = [];
+        try { users = JSON.parse(fs.readFileSync(path.join(__dirname, 'users.json'))).users || []; } catch(e){}
+        const userObj = users.find(u => (typeof u === 'object' ? u.id : u) === chatIdStr);
+        const isUser = !!userObj;
+        
+        if (!isAdmin && !isUser) {
+            bot.sendMessage(msg.chat.id, `⛔ *AKSES DITOLAK*\nAnda belum terdaftar untuk menggunakan bot di komputer ini.\n\nSilakan sentuh/salin ID Anda di bawah ini dan berikan kepada Admin agar didaftarkan:\n\n\`${chatIdStr}\``, {parse_mode: 'Markdown'});
+            return;
+        }
+
+        // Cek Pemblokiran (Maintenance Mode)
+        if (!isAdmin) {
+            if (userObj && typeof userObj === 'object' && userObj.disabled) {
+                bot.sendMessage(msg.chat.id, `⛔ Maaf, akses Anda sedang dinonaktifkan secara manual oleh Admin.\nJika Anda merasa ini kesalahan, silakan hubungi Admin.`);
+                return;
+            }
+            if (globalMaintenanceActive || pcMaintenanceActive) {
+                bot.sendMessage(msg.chat.id, `⛔ Maaf, seluruh sistem (atau server PC ini) sedang dalam *Pemeliharaan (Maintenance)* atau dinonaktifkan dari pusat oleh Admin.\nSistem akan kembali aktif setelah perbaikan selesai.`, {parse_mode: 'Markdown'});
+                return;
+            }
+        }
         // 3. Validasi Lisensi Hardware
         const currentLicense = process.env.LICENSE_KEY || '';
         if (currentLicense !== EXPECTED_LICENSE) {
