@@ -1817,7 +1817,19 @@ async function startSmartLogin(chatId) {
         currentAccount = 'main';
         bot.sendMessage(chatId, `✅ Login berhasil dengan Akun Utama!`);
         // Beritahu user lain bahwa AP2T sedang digunakan
-        broadcastMessage(`✅ *INFORMASI:* Seseorang telah berhasil Login ke sistem AP2T secara otomatis.`, chatId);
+        let namaUser = 'Seseorang';
+        if (chatId.toString() === adminChatId) {
+            // Biarkan default "Seseorang" atau "Admin" untuk admin
+            namaUser = 'Seseorang';
+        } else {
+            try {
+                const MAIN_USERS_FILE = path.join(__dirname, 'users.json');
+                const d = JSON.parse(fs.readFileSync(MAIN_USERS_FILE, 'utf8'));
+                const u = d.users.find(x => x.id === chatId.toString());
+                if (u && u.nama) namaUser = "User " + u.nama.toUpperCase();
+            } catch(e){}
+        }
+        broadcastMessage(`✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.`, chatId);
     } else {
         bot.sendMessage(chatId, `⚠️ Login gagal. Coba lagi dengan \`/login_ap2t\` atau \`/reset_akun\``);
     }
