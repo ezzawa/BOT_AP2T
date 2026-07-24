@@ -721,6 +721,11 @@ async function initBrowser(chatId, startUrl = null) {
 }
 
 function setupPageHandlers() {
+    try {
+        const context = browser.defaultBrowserContext();
+        context.overridePermissions('https://ap2t.pln.co.id', ['clipboard-read', 'clipboard-write', 'notifications', 'geolocation']).catch(()=>{});
+        context.overridePermissions('https://webmail.pln.co.id', ['clipboard-read', 'clipboard-write', 'notifications', 'geolocation']).catch(()=>{});
+    } catch(e) {}
     page.on('dialog', async dialog => {
         console.log("Dialog:", dialog.message());
         if (activeChatId) bot.sendMessage(activeChatId, `⚠️ Alert Web: ${dialog.message()}`);
