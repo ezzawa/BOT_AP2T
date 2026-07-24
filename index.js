@@ -785,6 +785,16 @@ async function handleOwaSessionReset(chatId) {
 
         bot.sendMessage(chatId, `⏳ Menunggu email 'Reset Session' dari pusat...`);
         
+        // Refresh email otomatis setiap kali looping
+        await mailPage.evaluate(() => {
+            const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+            const refreshBtn = btns.find(b => {
+                const title = (b.getAttribute('title') || b.getAttribute('aria-label') || '').toLowerCase();
+                return title.includes('refresh') || title.includes('segarkan') || title.includes('check for new messages');
+            });
+            if (refreshBtn) refreshBtn.click();
+        }).catch(()=>{});
+        
         // Menutup popup batas penyimpanan jika ada
           await mailPage.evaluate(() => {
               try {
@@ -801,6 +811,24 @@ async function handleOwaSessionReset(chatId) {
                 const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
                     if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
+                    
+                    // CEGAH MEMBACA READING PANE! Hanya ambil item di daftar email (list view)
+                    let isRow = false;
+                    let p = el;
+                    while (p && p !== document.body) {
+                        const r = p.getAttribute('role');
+                        if (r === 'row' || r === 'option') {
+                            isRow = true;
+                            break;
+                        }
+                        if (r === 'main' || r === 'article' || (p.className && typeof p.className === 'string' && p.className.toLowerCase().includes('readingpane'))) {
+                            isRow = false;
+                            break; // Jangan ambil dari reading pane
+                        }
+                        p = p.parentElement;
+                    }
+                    if (!isRow) return false;
+
                     if (el.children.length > 0) return false;
                     
                     let row = el;
@@ -834,6 +862,24 @@ async function handleOwaSessionReset(chatId) {
                     const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
                     if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
+                    
+                    // CEGAH MEMBACA READING PANE! Hanya ambil item di daftar email (list view)
+                    let isRow = false;
+                    let p = el;
+                    while (p && p !== document.body) {
+                        const r = p.getAttribute('role');
+                        if (r === 'row' || r === 'option') {
+                            isRow = true;
+                            break;
+                        }
+                        if (r === 'main' || r === 'article' || (p.className && typeof p.className === 'string' && p.className.toLowerCase().includes('readingpane'))) {
+                            isRow = false;
+                            break; // Jangan ambil dari reading pane
+                        }
+                        p = p.parentElement;
+                    }
+                    if (!isRow) return false;
+
                     if (el.children.length > 0) return false;
                     
                     let row = el;
@@ -1043,6 +1089,24 @@ async function handleOwaMacReset(chatId, isManual = false) {
                 const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
                     if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
+                    
+                    // CEGAH MEMBACA READING PANE! Hanya ambil item di daftar email (list view)
+                    let isRow = false;
+                    let p = el;
+                    while (p && p !== document.body) {
+                        const r = p.getAttribute('role');
+                        if (r === 'row' || r === 'option') {
+                            isRow = true;
+                            break;
+                        }
+                        if (r === 'main' || r === 'article' || (p.className && typeof p.className === 'string' && p.className.toLowerCase().includes('readingpane'))) {
+                            isRow = false;
+                            break; // Jangan ambil dari reading pane
+                        }
+                        p = p.parentElement;
+                    }
+                    if (!isRow) return false;
+
                     if (el.children.length > 0) return false;
                     
                     let row = el;
@@ -1076,6 +1140,24 @@ async function handleOwaMacReset(chatId, isManual = false) {
                     const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
                     if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
+                    
+                    // CEGAH MEMBACA READING PANE! Hanya ambil item di daftar email (list view)
+                    let isRow = false;
+                    let p = el;
+                    while (p && p !== document.body) {
+                        const r = p.getAttribute('role');
+                        if (r === 'row' || r === 'option') {
+                            isRow = true;
+                            break;
+                        }
+                        if (r === 'main' || r === 'article' || (p.className && typeof p.className === 'string' && p.className.toLowerCase().includes('readingpane'))) {
+                            isRow = false;
+                            break; // Jangan ambil dari reading pane
+                        }
+                        p = p.parentElement;
+                    }
+                    if (!isRow) return false;
+
                     if (el.children.length > 0) return false;
                     
                     let row = el;
