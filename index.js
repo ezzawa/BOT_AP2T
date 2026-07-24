@@ -59,6 +59,11 @@ function getActiveUsers() {
         } catch (e) {}
     }
     
+    // Pastikan admin selalu mendapatkan notifikasi
+    if (adminChatId && !usersList.includes(adminChatId)) {
+        usersList.push(adminChatId);
+    }
+    
     return usersList;
 }
 
