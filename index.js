@@ -248,17 +248,28 @@ bot.sendMessage = async (chatId, text, options) => {
     }
 
     // 5. Anggap pesan lainnya sebagai progres (gabungkan ke dalam 1 bubble)
-    if (!statusMessages[chatId] || !statusMessages[chatId].msgId) {
+    if (!statusMessages[chatId]) {
+        // Tandai bahwa ada proses yang sedang berjalan (menggantikan promise lock yang lebih kompleks)
         statusMessages[chatId] = { msgId: null, text: text, lastUpdate: now };
+        
         // Coba kirim dengan markdown, kalau gagal (misal invalid markdown), kirim tanpa markdown
         let m = await originalSendMessage(chatId, `⚡ ${text}`, { parse_mode: 'Markdown' }).catch(() => null);
         if (!m) {
-            m = await originalSendMessage(chatId, `⚡ ${text}`).catch((e) => {
-                console.error("Failed to send initial progress message:", e);
-                return null;
-            });
+            m = await originalSendMessage(chatId, `⚡ ${text}`).catch(() => null);
         }
-        if (m && statusMessages[chatId]) statusMessages[chatId].msgId = m.message_id;
+        if (m && statusMessages[chatId]) {
+            statusMessages[chatId].msgId = m.message_id;
+            // Jika sementara menunggu originalSendMessage selesai, ada text baru yang di-update oleh proses lain,
+            // kita edit message tersebut sekarang.
+            if (statusMessages[chatId].text !== text) {
+                const latestText = `⚡ ${statusMessages[chatId].text}`;
+                bot.editMessageText(latestText, { chat_id: chatId, message_id: m.message_id, parse_mode: 'Markdown' }).catch(async (e) => {
+                    if (!e.message.includes('not modified')) {
+                        bot.editMessageText(latestText, { chat_id: chatId, message_id: m.message_id }).catch(()=>null);
+                    }
+                });
+            }
+        }
         return m || { message_id: 0, chat: { id: chatId } };
     } else {
         let state = statusMessages[chatId];
@@ -266,16 +277,15 @@ bot.sendMessage = async (chatId, text, options) => {
         state.lastUpdate = now;
         
         const newText = `⚡ ${state.text}`;
-        await bot.editMessageText(newText, { chat_id: chatId, message_id: state.msgId, parse_mode: 'Markdown' }).catch(async (e) => {
-            // Jika gagal edit (karena markdown error atau message tidak berubah atau not found)
-            if (!e.message.includes('not modified')) {
-                let m = await originalSendMessage(chatId, newText, { parse_mode: 'Markdown' }).catch(() => null);
-                if (!m) {
-                    m = await originalSendMessage(chatId, newText).catch(() => null);
+        if (state.msgId) {
+            await bot.editMessageText(newText, { chat_id: chatId, message_id: state.msgId, parse_mode: 'Markdown' }).catch(async (e) => {
+                // Jika gagal edit (karena markdown error)
+                if (!e.message.includes('not modified')) {
+                    // Coba edit tanpa markdown
+                    await bot.editMessageText(newText, { chat_id: chatId, message_id: state.msgId }).catch(()=>null);
                 }
-                if (m && statusMessages[chatId]) statusMessages[chatId].msgId = m.message_id;
-            }
-        });
+            });
+        }
         return { message_id: state.msgId || 0, chat: { id: chatId } };
     }
 };
