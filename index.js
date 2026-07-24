@@ -2088,6 +2088,12 @@ bot.onText(/\/daftar_user/, (msg) => {
     bot.sendMessage(msg.chat.id, `👥 **DAFTAR USER TERDAFTAR:**\n\n${list}`, {parse_mode: 'Markdown'});
 });
 
+bot.onText(/\/test_broadcast/, (msg) => {
+    console.log('TEST BROADCAST TRIGGERED');
+    broadcastMessage('✅ *INFORMASI:* Ini tes dari system.', msg.chat.id);
+    bot.sendMessage(msg.chat.id, 'Test broadcast dikirim');
+});
+
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     let activeProfileName = null;
