@@ -1476,18 +1476,34 @@ async function login(accountType, chatId, retryLevel = 0) {
             emailUser = emailUser.replace(/^.*[\\\/]/, ''); // Hapus domain seperti pusat\ atau uid\
             if (!emailUser.includes('@')) emailUser += '@pln.co.id';
 
+            // Pastikan halaman sudah termuat
+            await page.waitForSelector('input.x-form-text', { timeout: 15000 }).catch(()=>{});
+            
             const inputIds = await page.evaluate(() => {
                 const win = document.querySelector('.x-window');
                 const inputs = Array.from((win || document).querySelectorAll('input[type="text"], input[type="email"], input.x-form-text'));
                 let visibleInputs = inputs.filter(i => i.offsetParent !== null && !i.disabled && i.id);
-                return visibleInputs.slice(0, 2).map(i => i.id);
+                
+                // Coba cari berdasarkan Label agar akurat
+                const labels = Array.from((win || document).querySelectorAll('label'));
+                const userLabel = labels.find(l => l.textContent.includes('User ID'));
+                const emailLabel = labels.find(l => l.textContent.includes('Email'));
+                
+                let id1 = visibleInputs.length > 0 ? visibleInputs[0].id : null;
+                let id2 = visibleInputs.length > 1 ? visibleInputs[1].id : null;
+                
+                if (userLabel && userLabel.getAttribute('for')) id1 = userLabel.getAttribute('for');
+                if (emailLabel && emailLabel.getAttribute('for')) id2 = emailLabel.getAttribute('for');
+                
+                return [id1, id2];
             });
 
-            if (inputIds.length >= 2) {
+            if (inputIds[0] && inputIds[1]) {
                 await page.evaluate((id) => { const el = document.getElementById(id); if(el) el.value = ''; }, inputIds[0]);
-                await page.type('#' + inputIds[0], credentials[accountType].username);
+                await page.type('#' + inputIds[0], credentials[accountType].username, { delay: 50 });
+                
                 await page.evaluate((id) => { const el = document.getElementById(id); if(el) el.value = ''; }, inputIds[1]);
-                await page.type('#' + inputIds[1], emailUser);
+                await page.type('#' + inputIds[1], emailUser, { delay: 50 });
             }
             
             await new Promise(r => setTimeout(r, 1500));
