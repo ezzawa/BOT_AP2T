@@ -5146,6 +5146,7 @@ bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
 // Setup Menu Bawah Kiri di Telegram
 const standardCommands = [
     { command: 'start', description: '🏠 Menu Utama' },
+    { command: 'status', description: '🖥️ Cek Status Layar' },
     { command: 'ct', description: '🤖 Buat CT Otomatis' },
     { command: 'login_ap2t', description: '🔑 Login AP2T' },
     { command: 'login_webmail', description: '📧 Tes Login Webmail' },
@@ -5154,7 +5155,6 @@ const standardCommands = [
     { command: 'ambil_token', description: '🎟️ Ambil Token 20 Digit' },
     { command: 'cek_token', description: '📊 Monitoring Token Excel' },
     { command: 'aktivasi_no_meter', description: '🔌 Aktivasi No Meter' },
-    { command: 'status', description: '🖥️ Cek Status Layar' },
     { command: 'cek_akun_aktif', description: '✅ Cek Akun Aktif' },
     { command: 'reset_akun', description: '🔄 Restart Akun/Browser' },
     { command: 'logout', description: '🚪 Logout' },
