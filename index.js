@@ -3879,8 +3879,27 @@ async function processCariPelanggan(target, chatId) {
             if (searchBtn) searchBtn.click();
         });
 
+        
         // 4. Tunggu hasil
         await new Promise(r => setTimeout(r, 2000));
+
+        // Cek popup "Data tidak ditemukan"
+        const notFound = await infoFrame.evaluate(() => {
+            const wins = Array.from(document.querySelectorAll('.x-window'));
+            const infoWin = wins.find(w => w.textContent.includes('Data tidak ditemukan') && w.offsetParent !== null);
+            if (infoWin) {
+                const btn = infoWin.querySelector('.x-btn-text');
+                if (btn) btn.click();
+                return true;
+            }
+            return false;
+        });
+
+        if (notFound) {
+            bot.sendMessage(chatId, `[-] ID Pelanggan / No Meter tidak ditemukan di sistem AP2T.`);
+            return;
+        }
+
 
         // Handle popup "Master Nedisys"
         const checkNedisys2 = async (frame) => {
@@ -3976,7 +3995,7 @@ async function processCariPelanggan(target, chatId) {
                 const cells = Array.from(row.querySelectorAll('.x-grid3-cell-inner')).map(c => c.textContent.trim());
                 let data = {};
                 for (let i = 0; i < headers.length; i++) {
-                    if ([i]) data[[i]] = [i] || '-';
+                    if (headers[i]) data[headers[i]] = cells[i] || '-';
                 }
 
                 // Fallback jika headers tidak terbaca dengan baik
