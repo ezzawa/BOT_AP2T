@@ -4783,21 +4783,6 @@ bot.onText(/\/cek_token(?:\s+(.+))?/, async (msg, match) => {
                         height: Math.min(8000, Math.ceil(boundingBox.height) + 40)
                     } 
                 });
-                await tablePage.close();
-
-                await bot.sendPhoto(chatId, ssBuffer, { caption: `? Data Monitoring Token untuk ${target} (Format Tabel)` }, { filename: `monitoring_${target}.png`, contentType: `image/png` });
-                await bot.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
-            } else {
-                await bot.editMessageText(`❌ Data tidak ditemukan dalam tabel.`, { chat_id: chatId, message_id: statusMsg.message_id });
-            }
-
-        } catch (e) {
-            await bot.editMessageText(`❌ Error cek_token: ${e.message}`, {
-                chat_id: chatId,
-                message_id: statusMsg.message_id
-            });
-        }
-    });
 
     if (!isProcessingCT) {
         processQueue();
