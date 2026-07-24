@@ -1810,6 +1810,8 @@ async function startSmartLogin(chatId) {
         isLoggedIn = true;
         currentAccount = 'main';
         bot.sendMessage(chatId, `✅ Login berhasil dengan Akun Utama!`);
+        // Beritahu user lain bahwa AP2T sedang digunakan
+        broadcastMessage(`✅ *INFORMASI:* Seseorang telah berhasil Login ke sistem AP2T secara otomatis.`, chatId);
     } else {
         bot.sendMessage(chatId, `⚠️ Login gagal. Coba lagi dengan \`/login_ap2t\` atau \`/reset_akun\``);
     }
