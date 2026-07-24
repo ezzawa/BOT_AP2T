@@ -5352,8 +5352,17 @@ bot.onText(/\/reset_mac_address/, async (msg) => {
 bot.onText(/\/reset_session/, async (msg) => {
     const chatId = msg.chat.id;
     if (isLoggingIn) return bot.sendMessage(chatId, "ℹ️ Bot sedang sibuk (sedang login). Mohon tunggu...");
-    bot.sendMessage(chatId, "🔄 Menjalankan login AP2T untuk memeriksa dan memaksa Reset Session...");
-    await login('main', chatId);
+    bot.sendMessage(chatId, "🔄 Memeriksa Webmail untuk mencari email Reset Session terbaru...");
+    isLoggingIn = true;
+    try {
+        await initBrowser(chatId);
+        await handleOwaSessionReset(chatId);
+        bot.sendMessage(chatId, "✅ Reset Session dari email berhasil dieksekusi!");
+    } catch (e) {
+        bot.sendMessage(chatId, "❌ Gagal eksekusi Reset Session: " + e.message);
+    } finally {
+        isLoggingIn = false;
+    }
 });
 
 
