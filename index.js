@@ -4151,6 +4151,13 @@ async function processCariPelanggan(target, chatId) {
             });
             if (nf) { notFoundFast = true; break; }
             
+            // Tunggu mask loading hilang (jika ada)
+            const isMasked = await infoFrame.evaluate(() => {
+                const mask = document.querySelector('.ext-el-mask-msg');
+                return mask && mask.offsetParent !== null && mask.textContent.toLowerCase().includes('wait a few');
+            });
+            if (isMasked) continue; // Skip jika masih loading
+
             // Cek apakah tabel sudah berisi baris data
             const gl = await infoFrame.evaluate(() => {
                 const gridView = document.querySelector('.x-grid3');
