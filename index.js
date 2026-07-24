@@ -4418,17 +4418,20 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
                                             } catch(e) {}
                                         }
 
-                                        // Cari elemen DOM barisnya dan klik secara fisik untuk trigger event cetak
+                                        // Cari elemen DOM barisnya dan klik cell yang aman
                                         const rowEl = view.getRow(rowIndex);
                                         if (rowEl) {
                                             rowEl.scrollIntoView({ block: 'center' });
-                                            rowEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-                                            rowEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-                                            rowEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
                                             
                                             // Validasi apakah baris ini memiliki token 20 digit
                                             const cells = Array.from(rowEl.querySelectorAll('.x-grid3-cell-inner'));
                                             const hasToken = cells.some(c => c.textContent.replace(/\D/g, '').length === 20);
+                                            
+                                            // Klik pada cell yang aman (misal cell ke-4) agar tidak menekan hyperlink No Agenda di kolom 1
+                                            const safeCell = cells.length > 3 ? cells[3] : rowEl;
+                                            safeCell.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                                            safeCell.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                                            safeCell.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
                                             
                                             if (hasToken) {
                                                 success = true;
