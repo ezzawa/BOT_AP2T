@@ -258,9 +258,6 @@ bot.on('message', (msg) => {
                 // Teruskan input sebagai command
                 msg.text = `/${state} ${input}`;
                 bot.emit('message', msg);
-            } else if (['cetak_token', 'aktivasi_no_meter', 'cek_pelanggan', 'cek_token', 'ambil_token'].includes(state)) {
-                msg.text = `/${state} ${input}`;
-                bot.emit('message', msg);
             } else if (state === 'tambah_profil_pass_webmail') {
                 pendingInputData[chatId].pass_webmail = input;
                 const data = pendingInputData[chatId];
