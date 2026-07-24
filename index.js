@@ -2061,6 +2061,8 @@ bot.on('callback_query', async (query) => {
         bot.sendMessage(chatId, "Ketik /resume untuk melanjutkan proses CT yang tertunda.");
     } else if (data === 'cmd_cetak_token') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cetak_token <no_meter_atau_idpel>`", { parse_mode: 'Markdown' });
+    } else if (data === 'cmd_cek_pelanggan') {
+        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_pelanggan <idpel_atau_nometer>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_aktivasi_no_meter') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/aktivasi_no_meter <no_agenda>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_pause_bot') {
@@ -4793,7 +4795,7 @@ bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
         pendingInputState[chatId] = 'cek_pelanggan';
         return bot.sendMessage(chatId, '🔍 Silakan masukkan **ID Pelanggan / No Meter**:', {parse_mode: 'Markdown'});
     }
-    const query = match[1].trim();
+    const target = match[1].trim();
     if (target.length < 5) {
         return bot.sendMessage(chatId, `[!] Format salah. Gunakan: \n\`/cek_pelanggan <idpel_atau_nometer>\``, { parse_mode: 'Markdown' });
     }
