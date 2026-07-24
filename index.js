@@ -3774,12 +3774,12 @@ async function processCariPelanggan(target, chatId) {
     }
 
     try {
-        bot.sendMessage(chatId, `[*] Membuka menu Info Pelanggan...`);
+        await bot.sendMessage(chatId, `[*] Membuka menu Info Pelanggan...`).catch(console.error);
         await clickMenu(page, ['INFO PELANGGAN', 'Info Pelanggan']);
         await new Promise(r => setTimeout(r, 2000));
 
         // Bersihkan popup jika muncul
-        bot.sendMessage(chatId, `[*] Menghapus popup jika ada...`);
+        await bot.sendMessage(chatId, `[*] Menghapus popup jika ada...`).catch(console.error);
         for (let i = 0; i < 3; i++) {
             await closePopups(page);
             await new Promise(r => setTimeout(r, 500));
@@ -3805,7 +3805,7 @@ async function processCariPelanggan(target, chatId) {
         await closePopups(page);
         await new Promise(r => setTimeout(r, 500));
 
-        bot.sendMessage(chatId, `[*] Mencari data pelanggan: ${target}...`);
+        await bot.sendMessage(chatId, `[*] Mencari data pelanggan: ${target}...`).catch(console.error);
 
         // Tentukan tipe pencarian (11 digit = Nomor Meter, 12 digit = Id Pelanggan)
         const isNomet = target.length === 11;
@@ -4820,7 +4820,7 @@ bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
     }
     commandQueue.push(async () => {
         activeChatId = chatId;
-        bot.sendMessage(chatId, `[*] Memproses /cek_pelanggan untuk: ${target}`);
+        await bot.sendMessage(chatId, `[*] Memproses /cek_pelanggan untuk: ${target}`).catch(console.error);
         await processCariPelanggan(target, chatId);
     });
 
