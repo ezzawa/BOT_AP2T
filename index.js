@@ -4085,7 +4085,13 @@ async function processCariPelanggan(target, chatId) {
         }
 
     } catch (e) {
-        bot.sendMessage(chatId, `[x] Error cek pelanggan: ${e.message}`);
+        if (e.message.includes('AP2T_TERLOGOUT')) {
+            isLoggedIn = false;
+            bot.sendMessage(chatId, `❌ *GAGAL: Sesi AP2T Ter-Logout*
+Sistem AP2T PLN melakukan logout otomatis. Silakan ulangi perintah pencarian, bot akan login ulang otomatis.`, { parse_mode: 'Markdown' });
+        } else {
+            bot.sendMessage(chatId, `[x] Error cek pelanggan: ${e.message}`);
+        }
     }
 }
 
