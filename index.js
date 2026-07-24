@@ -248,25 +248,34 @@ bot.sendMessage = async (chatId, text, options) => {
     }
 
     // 5. Anggap pesan lainnya sebagai progres (gabungkan ke dalam 1 bubble)
-    if (!statusMessages[chatId]) {
+    if (!statusMessages[chatId] || !statusMessages[chatId].msgId) {
         statusMessages[chatId] = { msgId: null, text: text, lastUpdate: now };
-        const m = await originalSendMessage(chatId, `⚡ ${text}`, { parse_mode: 'Markdown' }).catch(()=>null);
+        // Coba kirim dengan markdown, kalau gagal (misal invalid markdown), kirim tanpa markdown
+        let m = await originalSendMessage(chatId, `⚡ ${text}`, { parse_mode: 'Markdown' }).catch(() => null);
+        if (!m) {
+            m = await originalSendMessage(chatId, `⚡ ${text}`).catch((e) => {
+                console.error("Failed to send initial progress message:", e);
+                return null;
+            });
+        }
         if (m && statusMessages[chatId]) statusMessages[chatId].msgId = m.message_id;
-        return m || { message_id: statusMessages[chatId] ? statusMessages[chatId].msgId : 0, chat: { id: chatId } };
+        return m || { message_id: 0, chat: { id: chatId } };
     } else {
         let state = statusMessages[chatId];
         state.text = text;
         state.lastUpdate = now;
         
         const newText = `⚡ ${state.text}`;
-        if (state.msgId) {
-            await bot.editMessageText(newText, { chat_id: chatId, message_id: state.msgId, parse_mode: 'Markdown' }).catch(async (e) => {
-                if(e.message && e.message.includes('not found')) {
-                    const m = await originalSendMessage(chatId, newText, { parse_mode: 'Markdown' }).catch(()=>null);
-                    if (m && statusMessages[chatId]) statusMessages[chatId].msgId = m.message_id;
+        await bot.editMessageText(newText, { chat_id: chatId, message_id: state.msgId, parse_mode: 'Markdown' }).catch(async (e) => {
+            // Jika gagal edit (karena markdown error atau message tidak berubah atau not found)
+            if (!e.message.includes('not modified')) {
+                let m = await originalSendMessage(chatId, newText, { parse_mode: 'Markdown' }).catch(() => null);
+                if (!m) {
+                    m = await originalSendMessage(chatId, newText).catch(() => null);
                 }
-            });
-        }
+                if (m && statusMessages[chatId]) statusMessages[chatId].msgId = m.message_id;
+            }
+        });
         return { message_id: state.msgId || 0, chat: { id: chatId } };
     }
 };
