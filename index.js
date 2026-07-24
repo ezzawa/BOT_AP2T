@@ -258,6 +258,9 @@ bot.on('message', (msg) => {
                 // Teruskan input sebagai command
                 msg.text = `/${state} ${input}`;
                 bot.emit('message', msg);
+            } else if (['cetak_token', 'aktivasi_no_meter', 'cek_pelanggan', 'cek_token', 'ambil_token'].includes(state)) {
+                msg.text = `/${state} ${input}`;
+                bot.emit('message', msg);
             } else if (state === 'tambah_profil_pass_webmail') {
                 pendingInputData[chatId].pass_webmail = input;
                 const data = pendingInputData[chatId];
@@ -2346,11 +2349,14 @@ bot.on('callback_query', async (query) => {
     } else if (data === 'cmd_resume') {
         bot.sendMessage(chatId, "Ketik /resume untuk melanjutkan proses CT yang tertunda.");
     } else if (data === 'cmd_cetak_token') {
-        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cetak_token <no_meter_atau_idpel>`", { parse_mode: 'Markdown' });
+        pendingInputState[chatId] = 'cetak_token';
+        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cetak_token <no_meter_atau_idpel>`\nAtau balas pesan ini dengan No Meter / ID Pelanggan:", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_cek_pelanggan') {
-        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_pelanggan <idpel_atau_nometer>`", { parse_mode: 'Markdown' });
+        pendingInputState[chatId] = 'cek_pelanggan';
+        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_pelanggan <idpel_atau_nometer>`\nAtau balas pesan ini dengan No Meter / ID Pelanggan:", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_aktivasi_no_meter') {
-        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/aktivasi_no_meter <no_agenda>`", { parse_mode: 'Markdown' });
+        pendingInputState[chatId] = 'aktivasi_no_meter';
+        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/aktivasi_no_meter <no_agenda>`\nAtau balas pesan ini dengan No Agenda:", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_pause_bot') {
         if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, "⛔ Akses ditolak.");
         bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/pause_bot', message_id: Date.now() });
