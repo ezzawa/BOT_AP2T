@@ -254,6 +254,10 @@ bot.on('message', (msg) => {
                 pendingInputData[chatId].user_webmail = input;
                 pendingInputState[chatId] = 'tambah_profil_pass_webmail';
                 bot.sendMessage(chatId, `Username Webmail: *${input}*\n\nTerakhir, masukkan **Password Webmail**:`, {parse_mode: 'Markdown'});
+            } else if (['cetak_token', 'aktivasi_no_meter', 'cek_pelanggan', 'cek_token', 'ambil_token'].includes(state)) {
+                // Teruskan input sebagai command
+                msg.text = `/${state} ${input}`;
+                bot.emit('message', msg);
             } else if (state === 'tambah_profil_pass_webmail') {
                 pendingInputData[chatId].pass_webmail = input;
                 const data = pendingInputData[chatId];
@@ -5559,13 +5563,8 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
             }
 
             if (errorText && errorText.toLowerCase().includes('tidak ditemukan')) {
-                bot.sendMessage(chatId, `❌ Data tidak ditemukan untuk No Agenda ${noAgenda}.`);
-                try {
-                    const ssBuffer = await page.screenshot({ encoding: 'buffer' });
-                    await bot.sendPhoto(chatId, ssBuffer, { caption: "Screenshot Kegagalan" }, { filename: "error.png", contentType: 'image/png' });
-                } catch(ex) {}
                 await closePopups(page);
-                throw new Error("Data tidak ditemukan");
+                throw new Error("Data tidak ditemukan untuk No Agenda " + noAgenda);
             }
             if (!dataFound) {
                 bot.sendMessage(chatId, `⚠️ Peringatan: Data pelanggan lambat dimuat. Tetap melanjutkan...`);
