@@ -5174,6 +5174,20 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
             await page.keyboard.press('Backspace');
             await new Promise(r => setTimeout(r, 500));
 
+            // PENTING: Kosongkan field Idpel agar pengecekan loading tidak tertipu oleh data lama
+            await aktivasiFrame.evaluate(() => {
+                const labels = Array.from(document.querySelectorAll('label'));
+                const idpelLabel = labels.find(l => l.textContent.includes('Idpel'));
+                if (idpelLabel) {
+                    const inp = idpelLabel.closest('.x-form-item')?.querySelector('input');
+                    if (inp) {
+                        inp.value = '';
+                        // Trigger change event to clear it thoroughly
+                        inp.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            });
+            
             bot.sendMessage(chatId, `⌨️ Mengetik No Agenda: ${noAgenda}...`);
             await aktivasiFrame.type('#target_input_aktivasi_manual', noAgenda, { delay: 50 });
             await page.keyboard.press('Enter');
