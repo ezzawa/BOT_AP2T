@@ -807,7 +807,9 @@ async function handleOwaSessionReset(chatId) {
           let elemHandle = null;
           let retries = 0;
           while (retries < 24) { // 2 menit
-            const found = await mailPage.evaluate(() => {
+            const nodeHours = new Date().getHours();
+            const nodeMins = new Date().getMinutes();
+            const found = await mailPage.evaluate((nH, nM) => {
                 const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
                     if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
@@ -841,16 +843,26 @@ async function handleOwaSessionReset(chatId) {
                     const hari = ['kemarin', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu', '/'];
                     if (hari.some(h => rowText.includes(h))) return false;
 
+                    // Terima jika ada teks indikator baru
+                    if (rowText.includes('baru saja') || rowText.includes('just now') || rowText.includes('mnt') || rowText.includes('min')) return true;
+                    
                     const match = rowText.match(/(\d{1,2})[\.:](\d{2})/);
                     if (match) {
                         const hh = parseInt(match[1]);
                         const mm = parseInt(match[2]);
+                        // Gunakan jam dari Node.js untuk menghindari masalah Timezone di Puppeteer
                         const now = new Date();
+                        now.setHours(nH, nM, 0, 0);
+                        
                         const emailTime = new Date();
                         emailTime.setHours(hh, mm, 0, 0);
+                        
                         let diff = (now - emailTime) / 60000;
-                        if (diff < 0) diff += 1440;
-                        if (diff > 15) return false;
+                        if (diff < 0) diff += 1440; // beda hari (tengah malam)
+                        if (diff > 10) return false; // Tolak jika lebih dari 10 menit
+                    } else {
+                        // Jika tidak ada waktu sama sekali dan bukan 'baru saja' dll, tolak
+                        return false; 
                     }
                     return true;
                 });
@@ -858,7 +870,7 @@ async function handleOwaSessionReset(chatId) {
             });
 
             if (found) {
-                elemHandle = await mailPage.evaluateHandle(() => {
+                elemHandle = await mailPage.evaluateHandle((nH, nM) => {
                     const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
                     if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
@@ -892,16 +904,26 @@ async function handleOwaSessionReset(chatId) {
                     const hari = ['kemarin', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu', '/'];
                     if (hari.some(h => rowText.includes(h))) return false;
 
+                    // Terima jika ada teks indikator baru
+                    if (rowText.includes('baru saja') || rowText.includes('just now') || rowText.includes('mnt') || rowText.includes('min')) return true;
+                    
                     const match = rowText.match(/(\d{1,2})[\.:](\d{2})/);
                     if (match) {
                         const hh = parseInt(match[1]);
                         const mm = parseInt(match[2]);
+                        // Gunakan jam dari Node.js untuk menghindari masalah Timezone di Puppeteer
                         const now = new Date();
+                        now.setHours(nH, nM, 0, 0);
+                        
                         const emailTime = new Date();
                         emailTime.setHours(hh, mm, 0, 0);
+                        
                         let diff = (now - emailTime) / 60000;
-                        if (diff < 0) diff += 1440;
-                        if (diff > 15) return false;
+                        if (diff < 0) diff += 1440; // beda hari (tengah malam)
+                        if (diff > 10) return false; // Tolak jika lebih dari 10 menit
+                    } else {
+                        // Jika tidak ada waktu sama sekali dan bukan 'baru saja' dll, tolak
+                        return false; 
                     }
                     return true;
                 });
@@ -1072,6 +1094,15 @@ async function handleOwaMacReset(chatId, isManual = false) {
           }
 
         bot.sendMessage(chatId, `⏳ Menunggu email 'Pemberitahuan Login' (Reset MAC)...`);
+        // Refresh email otomatis setiap kali looping
+        await mailPage.evaluate(() => {
+            const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+            const refreshBtn = btns.find(b => {
+                const title = (b.getAttribute('title') || b.getAttribute('aria-label') || '').toLowerCase();
+                return title.includes('refresh') || title.includes('segarkan') || title.includes('check for new messages');
+            });
+            if (refreshBtn) refreshBtn.click();
+        }).catch(()=>{});
         
         // Menutup popup batas penyimpanan jika ada
           await mailPage.evaluate(() => {
@@ -1085,7 +1116,9 @@ async function handleOwaMacReset(chatId, isManual = false) {
           let elemHandle = null;
           let retries = 0;
           while (retries < 24) { // 2 menit
-            const found = await mailPage.evaluate(() => {
+            const nodeHours = new Date().getHours();
+            const nodeMins = new Date().getMinutes();
+            const found = await mailPage.evaluate((nH, nM) => {
                 const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
                     if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
@@ -1119,16 +1152,26 @@ async function handleOwaMacReset(chatId, isManual = false) {
                     const hari = ['kemarin', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu', '/'];
                     if (hari.some(h => rowText.includes(h))) return false;
 
+                    // Terima jika ada teks indikator baru
+                    if (rowText.includes('baru saja') || rowText.includes('just now') || rowText.includes('mnt') || rowText.includes('min')) return true;
+                    
                     const match = rowText.match(/(\d{1,2})[\.:](\d{2})/);
                     if (match) {
                         const hh = parseInt(match[1]);
                         const mm = parseInt(match[2]);
+                        // Gunakan jam dari Node.js untuk menghindari masalah Timezone di Puppeteer
                         const now = new Date();
+                        now.setHours(nH, nM, 0, 0);
+                        
                         const emailTime = new Date();
                         emailTime.setHours(hh, mm, 0, 0);
+                        
                         let diff = (now - emailTime) / 60000;
-                        if (diff < 0) diff += 1440;
-                        if (diff > 15) return false;
+                        if (diff < 0) diff += 1440; // beda hari (tengah malam)
+                        if (diff > 10) return false; // Tolak jika lebih dari 10 menit
+                    } else {
+                        // Jika tidak ada waktu sama sekali dan bukan 'baru saja' dll, tolak
+                        return false; 
                     }
                     return true;
                 });
@@ -1136,7 +1179,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
             });
 
             if (found) {
-                elemHandle = await mailPage.evaluateHandle(() => {
+                elemHandle = await mailPage.evaluateHandle((nH, nM) => {
                     const elements = Array.from(document.querySelectorAll('*')).filter(el => {
                     const txt = el.textContent.toLowerCase();
                     if (!(txt.includes('notifikasi_ap2t') || txt.includes('pemberitahuan login') || txt.includes('reset session'))) return false;
@@ -1170,16 +1213,26 @@ async function handleOwaMacReset(chatId, isManual = false) {
                     const hari = ['kemarin', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu', '/'];
                     if (hari.some(h => rowText.includes(h))) return false;
 
+                    // Terima jika ada teks indikator baru
+                    if (rowText.includes('baru saja') || rowText.includes('just now') || rowText.includes('mnt') || rowText.includes('min')) return true;
+                    
                     const match = rowText.match(/(\d{1,2})[\.:](\d{2})/);
                     if (match) {
                         const hh = parseInt(match[1]);
                         const mm = parseInt(match[2]);
+                        // Gunakan jam dari Node.js untuk menghindari masalah Timezone di Puppeteer
                         const now = new Date();
+                        now.setHours(nH, nM, 0, 0);
+                        
                         const emailTime = new Date();
                         emailTime.setHours(hh, mm, 0, 0);
+                        
                         let diff = (now - emailTime) / 60000;
-                        if (diff < 0) diff += 1440;
-                        if (diff > 15) return false;
+                        if (diff < 0) diff += 1440; // beda hari (tengah malam)
+                        if (diff > 10) return false; // Tolak jika lebih dari 10 menit
+                    } else {
+                        // Jika tidak ada waktu sama sekali dan bukan 'baru saja' dll, tolak
+                        return false; 
                     }
                     return true;
                 });
@@ -5300,7 +5353,7 @@ bot.onText(/\/reset_session/, async (msg) => {
     const chatId = msg.chat.id;
     if (isLoggingIn) return bot.sendMessage(chatId, "ℹ️ Bot sedang sibuk (sedang login). Mohon tunggu...");
     bot.sendMessage(chatId, "🔄 Menjalankan login AP2T untuk memeriksa dan memaksa Reset Session...");
-    await loginAP2T(chatId);
+    await login('main', chatId);
 });
 
 
