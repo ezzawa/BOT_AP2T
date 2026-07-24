@@ -3899,10 +3899,47 @@ async function processCariPelanggan(target, chatId) {
         });
 
         
-        // 4. Tunggu hasil
-        await new Promise(r => setTimeout(r, 2000));
+        // 4. Tunggu hasil dengan Polling (maksimal 30 detik)
+        bot.sendMessage(chatId, `⏳ Menunggu loading data pelanggan...`);
+        let gridLoaded = false;
+        let notFoundFast = false;
+        
+        for (let i = 0; i < 30; i++) {
+            await new Promise(r => setTimeout(r, 1000));
+            
+            // Cek popup "Data tidak ditemukan"
+            const nf = await infoFrame.evaluate(() => {
+                const wins = Array.from(document.querySelectorAll('.x-window'));
+                const infoWin = wins.find(w => w.textContent.includes('Data tidak ditemukan') && w.offsetParent !== null);
+                if (infoWin) {
+                    const btn = infoWin.querySelector('.x-btn-text');
+                    if (btn) btn.click();
+                    return true;
+                }
+                return false;
+            });
+            if (nf) { notFoundFast = true; break; }
+            
+            // Cek apakah tabel sudah berisi baris data
+            const gl = await infoFrame.evaluate(() => {
+                const gridView = document.querySelector('.x-grid3');
+                if (gridView) {
+                    const row = gridView.querySelector('.x-grid3-row');
+                    if (row) return true;
+                }
+                // Fallback pencarian manual di td
+                const tds = Array.from(document.querySelectorAll('td'));
+                if (tds.some(td => td.textContent.trim().length > 3 && td.textContent.trim() !== 'Id Pelanggan' && td.offsetParent !== null)) {
+                    // Pastikan kita melihat data selain header
+                    const tableCells = Array.from(document.querySelectorAll('.x-grid3-cell-inner'));
+                    if (tableCells.length > 2) return true;
+                }
+                return false;
+            });
+            if (gl) { gridLoaded = true; break; }
+        }
 
-        // Cek popup "Data tidak ditemukan"
+        // Cek popup "Data tidak ditemukan" (untuk jaga-jaga kalau lolos dari polling)
         const notFound = await infoFrame.evaluate(() => {
             const wins = Array.from(document.querySelectorAll('.x-window'));
             const infoWin = wins.find(w => w.textContent.includes('Data tidak ditemukan') && w.offsetParent !== null);
