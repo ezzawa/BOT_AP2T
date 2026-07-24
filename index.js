@@ -36,10 +36,30 @@ const crypto = require('crypto');
 const USERS_FILE = path.join(__dirname, 'active_users.json');
 
 function getActiveUsers() {
-    if (fs.existsSync(USERS_FILE)) {
-        try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch (e) { return []; }
+    const MAIN_USERS_FILE = path.join(__dirname, 'users.json');
+    let usersList = [];
+    
+    // Baca dari users.json bawaan bot
+    if (fs.existsSync(MAIN_USERS_FILE)) {
+        try { 
+            const data = JSON.parse(fs.readFileSync(MAIN_USERS_FILE, 'utf8')); 
+            if (data && data.users) {
+                usersList = data.users.map(u => u.id);
+            }
+        } catch (e) { console.log('Error reading users.json', e.message); }
     }
-    return [];
+    
+    // Baca dari active_users.json (fallback/tambahan)
+    if (fs.existsSync(USERS_FILE)) {
+        try { 
+            const active = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); 
+            active.forEach(id => {
+                if (!usersList.includes(id)) usersList.push(id);
+            });
+        } catch (e) {}
+    }
+    
+    return usersList;
 }
 
 function saveActiveUser(chatId) {
