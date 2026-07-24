@@ -72,9 +72,14 @@ function saveActiveUser(chatId) {
 
 async function broadcastMessage(text, excludeChatId = null) {
     const users = getActiveUsers();
+    console.log('Broadcasting to users:', users, 'excluding:', excludeChatId);
     for (const u of users) {
         if (u != excludeChatId) {
-            bot.sendMessage(u, text, { parse_mode: 'Markdown' }).catch(()=>{});
+            bot.sendMessage(u, text, { parse_mode: 'Markdown' }).catch((e)=>{
+                console.log('Failed to broadcast to', u, e.message);
+                // Coba kirim tanpa markdown jika error parsing
+                bot.sendMessage(u, text).catch(()=>{});
+            });
         }
     }
 }
@@ -299,6 +304,7 @@ bot.on('message', (msg) => {
 bot.sendMessage = async (chatId, text, options) => {
     // 1. Definisikan pesan akhir yang MURNI (jangan ditangkap ke dalam bubble)
     const isFinalOrError = text.includes('TOKEN CLEAR TAMPER') || 
+                           text.includes('INFORMASI:') || 
                            text.includes('Berhasil berganti ke profil') || 
                            text.includes('Hasil Pencarian') ||
                            text.includes('Kode enkripsi:') ||
