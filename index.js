@@ -32,6 +32,61 @@ function waitForUserInteraction(messageId, timeoutMs = 300000) {
 
 const crypto = require('crypto');
 
+// --- DATABASE USERS & BROADCAST ---
+const USERS_FILE = path.join(__dirname, 'active_users.json');
+
+function getActiveUsers() {
+    if (fs.existsSync(USERS_FILE)) {
+        try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch (e) { return []; }
+    }
+    return [];
+}
+
+function saveActiveUser(chatId) {
+    const users = getActiveUsers();
+    if (!users.includes(chatId)) {
+        users.push(chatId);
+        fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+    }
+}
+
+async function broadcastMessage(text, excludeChatId = null) {
+    const users = getActiveUsers();
+    for (const u of users) {
+        if (u != excludeChatId) {
+            bot.sendMessage(u, text, { parse_mode: 'Markdown' }).catch(()=>{});
+        }
+    }
+}
+
+
+// --- SISTEM HEARTBEAT (ANTI-LOGOUT) ---
+setInterval(async () => {
+    if (isLoggedIn && page && !page.isClosed()) {
+        try {
+            // Cek URL saat ini
+            const currentUrl = page.url().toLowerCase();
+            if (currentUrl.includes('login.aspx') || currentUrl.includes('/login')) {
+                isLoggedIn = false;
+                broadcastMessage(`❌ *INFORMASI: Sesi AP2T Ter-Logout*\nSistem AP2T PLN telah melakukan logout otomatis (sesi habis / ditendang oleh server).`);
+                return;
+            }
+            
+            // Lakukan tindakan ringan ke AP2T untuk mereset timer idle PLN
+            await page.evaluate(() => {
+                // Coba refresh header
+                const topPnl = document.querySelector('.x-panel-header');
+                if (topPnl) {
+                   topPnl.click();
+                }
+            });
+            console.log('Heartbeat dikirim ke AP2T');
+        } catch(e) {
+            console.log('Heartbeat error:', e.message);
+        }
+    }
+}, 300000); // 5 menit
+
 // Jalankan Web GUI Server lokal
 // require('./server.js'); dipindah ke bawah
 
