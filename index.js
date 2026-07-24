@@ -701,6 +701,7 @@ async function initBrowser(chatId, startUrl = null) {
 
             browser.on('disconnected', () => {
                 browser = null; page = null; isLoggedIn = false;
+                try { broadcastMessage(`✅ *INFORMASI:* Sesi Browser tertutup secara manual atau koneksi terputus.`); } catch(e){}
             });
 
             // Tunggu sebentar sebelum buka tab
