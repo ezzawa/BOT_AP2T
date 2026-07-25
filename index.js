@@ -5902,4 +5902,32 @@ bot.onText(/\/statistik/, async (msg) => {
     if (adminChatId && restartCount > 0) {
         bot.sendMessage(adminChatId, 'PERHATIAN: BOT AP2T BARU SAJA RESTART!\n\nBot baru saja menyala kembali. Kemungkinan penyebab: mati lampu, internet putus, atau error.\n\nWaktu: ' + new Date().toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}) + '\nTotal Restart: ' + restartCount + '\n\nGunakan /status untuk mengecek kondisi AP2T.', { parse_mode: 'Markdown' }).catch(()=>{});
     }
+
+    // --- AUTO-SETUP WINDOWS STARTUP ---
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const startupFolder = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+        const oldVbs = path.join(startupFolder, 'Watchdog_Bot_AP2T.vbs');
+        const newVbs = path.join(startupFolder, 'Start_PM2_Bot.vbs');
+
+        // Hapus Watchdog lama jika ada
+        if (fs.existsSync(oldVbs)) { fs.unlinkSync(oldVbs); }
+
+        // Buat file startup PM2 jika belum ada
+        if (!fs.existsSync(newVbs)) {
+            const vbsContent = 'Set WshShell = CreateObject("WScript.Shell")\r\n' +
+                               'WScript.Sleep 10000\r\n' +
+                               'WshShell.Run "cmd /c pm2 resurrect", 0, False\r\n';
+            fs.writeFileSync(newVbs, vbsContent, 'utf8');
+            
+            // Simpan konfigurasi PM2
+            require('child_process').exec('pm2 save', (err, stdout, stderr) => {
+                if (err) console.error("Auto-setup PM2 Save Error:", err);
+                else console.log("PM2 Auto-saved successfully for startup.");
+            });
+        }
+    } catch (e) {
+        console.error("Gagal melakukan auto-setup startup Windows:", e.message);
+    }
 })();
