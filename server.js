@@ -50,7 +50,21 @@ function getHWID() {
     }
 }
 
+let liveLogs = [];
+exports.addLiveLog = function(msg) {
+    if (!msg || typeof msg !== 'string') return;
+    const time = new Date().toLocaleTimeString('id-ID');
+    // Sanitize markdown
+    const cleanMsg = msg.replace(/\*/g, '').replace(/`/g, '');
+    liveLogs.unshift({ time, msg: cleanMsg });
+    if (liveLogs.length > 50) liveLogs.pop(); // Keep last 50 logs
+};
+
 // --- API Endpoints ---
+app.get('/api/livelogs', (req, res) => {
+    res.json(liveLogs);
+});
+
 app.get('/api/status', (req, res) => {
     const hwid = getHWID();
     const env = getEnv();
