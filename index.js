@@ -273,8 +273,9 @@ bot.on('message', (msg) => {
                 bot.sendMessage(chatId, `✅ Username AP2T berhasil diperbarui menjadi \`${newUser}\`!`, { parse_mode: 'Markdown' });
             } else if (state === 'update_pass_localhost') {
                 const newPass = input;
-                updateEnv('ADMIN_PASSWORD', newPass);
-                process.env.ADMIN_PASSWORD = newPass;
+                const b64 = 'B64:' + Buffer.from(newPass).toString('base64');
+                updateEnv('ADMIN_PASSWORD', b64);
+                process.env.ADMIN_PASSWORD = b64;
                 bot.sendMessage(chatId, `✅ Password Localhost Dashboard berhasil diperbarui menjadi \`${newPass}\`!\nPassword ini langsung aktif.`, { parse_mode: 'Markdown' });
             } else if (state === 'tambah_profil_nama') {
                 pendingInputData[chatId] = { nama: input };
@@ -2348,7 +2349,10 @@ bot.on('callback_query', async (query) => {
         bot.sendMessage(chatId, `❌ Aksi dibatalkan.`);
         return;
     } else if (data === 'cmd_password_localhost') {
-        const currentPass = process.env.ADMIN_PASSWORD || 'admin123';
+        let currentPass = process.env.ADMIN_PASSWORD || 'admin123';
+        if (currentPass.startsWith('B64:')) {
+            currentPass = Buffer.from(currentPass.substring(4), 'base64').toString('utf8');
+        }
         const opts = {
             parse_mode: 'Markdown',
             reply_markup: {
@@ -2635,6 +2639,18 @@ const updateEnv = (key, value) => {
     }
     fs.writeFileSync(envPath, envContent.trim() + '\n');
 };
+
+function obfuscateAdminPassword() {
+    let pass = process.env.ADMIN_PASSWORD;
+    if (pass && !pass.startsWith('B64:')) {
+        const b64 = 'B64:' + Buffer.from(pass).toString('base64');
+        updateEnv('ADMIN_PASSWORD', b64);
+        process.env.ADMIN_PASSWORD = b64;
+        console.log('[SECURITY] Password admin disamarkan (B64) ke dalam .env');
+    }
+}
+obfuscateAdminPassword();
+
 
 const updateProfileCredential = (type, username, newPassword) => {
     const path = require('path');
