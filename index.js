@@ -2541,10 +2541,10 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
     commandQueue.push(async () => {
         try {
             await processCT(idpel, nogan, chatId, msg.from);
-            recordStat('cetak_token', 'success', getActiveProfileName());
+            recordStat('cetak_token', 'success', getActiveProfileName(), msg.from);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan fatal CT: ${err.message}`);
-            recordStat('cetak_token', 'fail', getActiveProfileName());
+            recordStat('cetak_token', 'fail', getActiveProfileName(), msg.from);
         }
     });
     
@@ -5541,10 +5541,10 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
     commandQueue.push(async () => {
         try {
             await processAktivasiOnly(noAgenda, chatId, msg.from.first_name);
-            recordStat('aktivasi_no_meter', 'success', getActiveProfileName());
+            recordStat('aktivasi_no_meter', 'success', getActiveProfileName(), msg.from);
         } catch (err) {
-            bot.sendMessage(chatId, `? Terjadi kesalahan Aktivasi: ${err.message}`);
-            recordStat('aktivasi_no_meter', 'fail', getActiveProfileName());
+            bot.sendMessage(chatId, `❌ Terjadi kesalahan Aktivasi: ${err.message}`);
+            recordStat('aktivasi_no_meter', 'fail', getActiveProfileName(), msg.from);
         }
     });
     
