@@ -202,53 +202,58 @@ async function saveEnv() {
 // === PROFILES ===
 let currentProfiles = {};
 async function loadProfiles() {
-    const res = await fetch('/api/profiles');
-    currentProfiles = await res.json();
-    const tbody = document.querySelector('#profilesTable tbody');
-    tbody.innerHTML = '';
-    
-    for (const [name, data] of Object.entries(currentProfiles)) {
-        const ap2tUser = data.ap2t ? data.ap2t.username : data.ap2t_user;
-        const webUser = data.webmail ? data.webmail.username : data.web_user;
+    try {
+        const res = await fetch('/api/profiles');
+        const profiles = await res.json();
+        const activeRes = await fetch('/api/profiles/active');
+        const activeData = await activeRes.json();
+        const activeName = activeData.active;
         
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${name}</td>
-            <td><code style="background:rgba(0,0,0,0.3);padding:2px 5px;border-radius:4px;">${ap2tUser || '-'}</code></td>
-            <td><code style="background:rgba(0,0,0,0.3);padding:2px 5px;border-radius:4px;">${webUser || '-'}</code></td>
-            <td style="display: flex; gap: 5px;">
-                <button class="btn-primary" style="font-size: 11px; padding: 6px 10px;" onclick="editProfile('${name}')"><i class="fas fa-edit"></i> Edit</button>
-                <button class="btn-danger" style="font-size: 11px; padding: 6px 10px;" onclick="deleteProfile('${name}')"><i class="fas fa-trash"></i> Hapus</button>
-            </td>
-        `;
-        tbody.appendChild(tr);
+        const tbody = document.querySelector('#akun tbody');
+        tbody.innerHTML = '';
+        
+        for (const [nama, data] of Object.entries(profiles)) {
+            const tr = document.createElement('tr');
+            
+            const isAct = (nama === activeName);
+            const actLabel = isAct ? ' <span style="background:var(--success);color:white;padding:2px 6px;border-radius:4px;font-size:10px;">AKTIF</span>' : '';
+            
+            const btnPakai = isAct ? '' : `<button class="btn-outline" style="padding: 4px 8px; font-size: 11px; margin-right: 5px; color: var(--accent); border-color: var(--accent);" onclick="setProfileActive('${nama}')"><i class="fas fa-check"></i> Pakai</button>`;
+            
+            tr.innerHTML = `
+                <td>${nama}${actLabel}</td>
+                <td>${data.ap2t ? data.ap2t.username : data.ap2t_user || '-'}</td>
+                <td>${data.webmail ? data.webmail.username : data.web_user || '-'}</td>
+                <td style="text-align: center;">
+                    ${btnPakai}
+                    <button class="btn-primary" style="padding: 4px 8px; font-size: 11px; margin-right: 5px;" onclick="editProfile('${nama}')"><i class="fas fa-edit"></i> Edit</button>
+                    <button class="btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="deleteProfile('${nama}')"><i class="fas fa-trash"></i> Hapus</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+    } catch (e) {
+        console.error("Gagal load profil", e);
     }
 }
 
-async function saveProfileFromForm() {
-    const name = document.getElementById('profName').value;
-    if (!name) return alert("Pilih profil dari tabel (klik Edit)");
-    
-    currentProfiles[name] = {
-        ap2t: {
-            username: document.getElementById('profAp2tUser').value,
-            password: document.getElementById('profAp2tPass').value
-        },
-        webmail: {
-            username: document.getElementById('profWebUser').value,
-            password: document.getElementById('profWebPass').value
+async function setProfileActive(nama) {
+    if(!confirm('Gunakan profil ' + nama + ' sebagai akun aktif? Bot akan di-restart otomatis.')) return;
+    try {
+        const res = await fetch('/api/profiles/active', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profileName: nama })
+        });
+        if(res.ok) {
+            alert('Profil berhasil diaktifkan! Harap tunggu beberapa detik bot merestart.');
+            loadProfiles();
+        } else {
+            alert('Gagal mengaktifkan profil.');
         }
-    };
-    
-    await fetch('/api/profiles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(currentProfiles)
-    });
-    
-    alert(`Profil ${name} berhasil disimpan!`);
-    document.getElementById('profileForm').reset();
-    loadProfiles();
+    } catch(e) {
+        alert('Gagal menghubungi server.');
+    }
 }
 
 function editProfile(name) {
@@ -436,3 +441,32 @@ async function loadFleet() {
 
 
 
+
+async function unlockField(id) {
+    const pwd = prompt('Masukkan Password Admin untuk membuka kunci:');
+    if (!pwd) return;
+    try {
+        const res = await fetch('/api/auth', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pwd })
+        });
+        const data = await res.json();
+        if (data.success) {
+            const el = document.getElementById(id);
+            el.readOnly = false;
+            el.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+            el.style.color = 'white';
+            if (el.type === 'password') el.type = 'text';
+            const icon = document.getElementById('icon_' + id);
+            if (icon) {
+                icon.classList.remove('fa-lock');
+                icon.classList.add('fa-unlock');
+            }
+            alert('Kunci berhasil dibuka! Silakan ubah nilai dan klik Simpan.');
+        } else {
+            alert('Password Admin salah!');
+        }
+    } catch(e) {
+        alert('Gagal memverifikasi password.');
+    }
+}
