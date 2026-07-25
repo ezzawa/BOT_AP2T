@@ -94,7 +94,8 @@ function saveActiveUser(chatId) {
     }
 }
 
-async function broadcastMessage(text, excludeChatId = null) {
+async function broadcastMessage(text, excludeChatId = null, force = false) {
+    if (!force && (typeof pcMaintenanceActive !== 'undefined' && pcMaintenanceActive || typeof globalMaintenanceActive !== 'undefined' && globalMaintenanceActive)) return;
     const users = getActiveUsers();
     console.log('Broadcasting to users:', users, 'excluding:', excludeChatId);
     for (const u of users) {
@@ -122,11 +123,21 @@ async function broadcastPhoto(photoPath, caption, excludeChatId = null) {
 setInterval(async () => {
     if (isLoggedIn && page && !page.isClosed()) {
         try {
-            // Cek URL saat ini
+            // Cek URL saat ini dan pastikan UI dasbor masih ada
             const currentUrl = page.url().toLowerCase();
-            if (currentUrl.includes('login.aspx') || currentUrl.includes('/login')) {
+            
+            const isDashboard = await page.evaluate(() => {
+                return !!(document.querySelector('.x-tree-panel') || document.querySelector('#app-nav') || document.querySelector('.x-panel-header'));
+            }).catch(() => false);
+
+            if (currentUrl.includes('login.aspx') || currentUrl.includes('/login') || (!isDashboard && !currentUrl.includes('beranda') && !currentUrl.includes('menu') && !currentUrl.includes('default'))) {
                 isLoggedIn = false;
-                broadcastMessage(`❌ *INFORMASI: Sesi AP2T Ter-Logout*\nSistem AP2T PLN telah melakukan logout otomatis (sesi habis / ditendang oleh server).`);
+                const ssOut = await page.screenshot().catch(() => null);
+                if (ssOut) {
+                    await broadcastPhoto(ssOut, `❌ *INFORMASI: Sesi AP2T Ter-Logout / Terputus*\nSistem AP2T PLN tidak lagi menampilkan halaman dasbor. Bot memerlukan login ulang.`);
+                } else {
+                    broadcastMessage(`❌ *INFORMASI: Sesi AP2T Ter-Logout / Terputus*\nSistem AP2T PLN tidak lagi menampilkan halaman dasbor. Bot memerlukan login ulang.`);
+                }
                 return;
             }
             
@@ -226,6 +237,14 @@ const statusMessages = {};
 // Reset grup pesan setiap kali user memberikan perintah baru
 bot.on('message', (msg) => {
     if (msg && msg.chat) delete statusMessages[msg.chat.id];
+    
+    if (msg && msg.text && msg.chat) {
+        const isAdmin = (msg.chat.id.toString() === adminChatId);
+        if ((typeof pcMaintenanceActive !== 'undefined' && pcMaintenanceActive || typeof globalMaintenanceActive !== 'undefined' && globalMaintenanceActive) && !isAdmin && msg.text !== '/start') {
+            return bot.sendMessage(msg.chat.id, `⚠️ *MOHON MAAF*\nSistem AP2T di PC ini sedang dalam masa pemeliharaan (Maintenance) oleh Admin. Layanan dihentikan sementara.`, { parse_mode: 'Markdown' });
+        }
+    }
+
     if (msg && msg.text && !msg.text.startsWith('/')) {
         const chatId = msg.chat.id;
         if (pendingInputState[chatId]) {
@@ -1452,7 +1471,7 @@ async function login(accountType, chatId, retryLevel = 0) {
         const dashboardUrlCheck = page.url().toLowerCase();
         if (dashboardUrlCheck.includes('beranda') || dashboardUrlCheck.includes('menu') || dashboardUrlCheck.includes('default')) {
             bot.sendMessage(chatId, `✅ Sesi sebelumnya masih aktif! Anda sudah berada di dalam sistem AP2T.`);
-            return true;
+            return 'already_logged_in';
         }
 
         const { username, password } = credentials[accountType];
@@ -1468,7 +1487,7 @@ async function login(accountType, chatId, retryLevel = 0) {
             const cur = page.url().toLowerCase();
             if (cur.includes('beranda') || cur.includes('menu') || cur.includes('default')) {
                 bot.sendMessage(chatId, `ℹ️ Anda sudah login.`);
-                return true;
+                return 'already_logged_in';
             }
             bot.sendMessage(chatId, `⚠️ Halaman login tidak merespon dengan benar. Login dibatalkan.`);
             return false;
@@ -1749,6 +1768,29 @@ async function login(accountType, chatId, retryLevel = 0) {
             return await login(accountType, chatId, retryLevel + 1);
         }
 
+        // Cek generic ExtJS popup (seperti ORA-12170 atau error tak terduga)
+        const hasErrorPopup = await page.evaluate(() => {
+            const popup = document.querySelector('.ext-mb-text');
+            if (popup && popup.textContent.trim().length > 0) return popup.textContent.trim();
+            const alert = document.querySelector('.alert-danger');
+            if (alert && alert.textContent.trim().length > 0) return alert.textContent.trim();
+            return null;
+        }).catch(() => null);
+
+        if (hasErrorPopup) {
+            const ssErr = await page.screenshot();
+            await bot.sendPhoto(chatId, ssErr, { caption: `⚠️ Gagal login AP2T: Muncul pesan error tidak dikenal.\n\nPesan: ${hasErrorPopup}` });
+            
+            // Tutup popup agar tidak block
+            await page.evaluate(() => {
+                const btns = Array.from(document.querySelectorAll('.ext-mb-btn button, .x-window-mc button, button'));
+                const okBtn = btns.find(b => b.textContent.toLowerCase() === 'ok');
+                if (okBtn) okBtn.click();
+            }).catch(() => {});
+            
+            return false;
+        }
+
         // Cek apakah URL sudah bukan login page dan benar-benar di dashboard
         const currentUrl = page.url();
         if (!currentUrl.includes('Login.aspx')) {
@@ -1765,7 +1807,7 @@ async function login(accountType, chatId, retryLevel = 0) {
         return false;
     } catch (error) {
         console.error(`Login error [${accountType}]:`, error.message);
-        bot.sendMessage(chatId, `[x] Error login: ${error.message}`);
+        bot.sendMessage(chatId, `❌ **GAGAL MENGAKSES AP2T**\nTerjadi kesalahan koneksi atau server AP2T sedang down/gangguan.\n\nError: \`${error.message}\``, { parse_mode: 'Markdown' });
         browser = null; page = null;
         return false;
     }
@@ -1865,28 +1907,31 @@ async function startSmartLogin(chatId, userInfo = null) {
     if (success) {
         isLoggedIn = true;
         currentAccount = 'main';
-        // Tentukan nama user untuk broadcast
-        let namaUser = 'Seseorang';
-        if (chatId.toString() === adminChatId) {
-            let activeProfileName = 'Seseorang';
-            try {
-                const fs = require('fs');
-                const profiles = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'profiles.json'), 'utf8'));
-                for (const n in profiles) {
-                    if ((profiles[n].ap2t ? profiles[n].ap2t.username : profiles[n].ap2t_user) === credentials.main.username) {
-                        activeProfileName = n; break;
+        
+        if (success !== 'already_logged_in') {
+            // Tentukan nama user untuk broadcast
+            let namaUser = 'Seseorang';
+            if (chatId.toString() === adminChatId) {
+                let activeProfileName = 'Seseorang';
+                try {
+                    const fs = require('fs');
+                    const profiles = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'profiles.json'), 'utf8'));
+                    for (const n in profiles) {
+                        if ((profiles[n].ap2t ? profiles[n].ap2t.username : profiles[n].ap2t_user) === credentials.main.username) {
+                            activeProfileName = n; break;
+                        }
                     }
-                }
-            } catch(e){}
-            namaUser = "Profil " + activeProfileName;
-        } else if (userInfo) {
-            namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
+                } catch(e){}
+                namaUser = "Profil " + activeProfileName;
+            } else if (userInfo) {
+                namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
+            }
+
+            const msgText = `✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T sebelum melanjutkan perintah._`;
+
+            bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
+            broadcastMessage(msgText, chatId);
         }
-
-        const msgText = `✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T sebelum melanjutkan perintah._`;
-
-        bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
-        broadcastMessage(msgText, chatId);
     } else {
         bot.sendMessage(chatId, `⚠️ Login gagal. Coba lagi dengan \`/login_ap2t\` atau \`/reset_akun\``);
     }
@@ -2218,6 +2263,11 @@ bot.onText(/\/start/, (msg) => {
     
     let isAdmin = (chatId.toString() === adminChatId);
       
+    if ((typeof pcMaintenanceActive !== 'undefined' && pcMaintenanceActive || typeof globalMaintenanceActive !== 'undefined' && globalMaintenanceActive) && !isAdmin) {
+        let textMsg = `⚠️ *MOHON MAAF*\n\nSistem AP2T di PC ini sedang dalam masa pemeliharaan (Maintenance) oleh Admin. Layanan dihentikan sementara.\n\nSilakan coba lagi nanti.`;
+        return bot.sendMessage(chatId, textMsg, { parse_mode: 'Markdown' });
+    }
+
     let keyboard = [
         [{text: '⚙️ MENU SISTEM ⚙️', callback_data: 'nav_sistem'}],
         [{text: '🚀 MENU LAYANAN 🚀', callback_data: 'nav_layanan'}],
@@ -2446,18 +2496,22 @@ bot.on('callback_query', async (query) => {
         bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/statistik', message_id: Date.now() });
     } else if (data === 'maintenance_on') {
         if (chatId.toString() !== adminChatId) return bot.answerCallbackQuery(query.id, { text: 'Akses ditolak.' });
+        bot.answerCallbackQuery(query.id, { text: 'Menyinkronkan maintenance ke sistem global...' });
+        const pcName = process.env.PC_NAME || require('os').hostname();
+        require('axios').post('http://localhost:3000/api/updateMaintenance', { target: pcName, maintenance: true }).catch(()=>{});
         pcMaintenanceActive = true;
         global.forceUpdateMaintenance(true);
-        bot.answerCallbackQuery(query.id, { text: 'Maintenance PC DIAKTIFKAN.' });
         bot.sendMessage(chatId, 'Maintenance PC ini telah DIAKTIFKAN. Semua user tidak dapat menggunakan bot di PC ini. Gunakan /maintenance untuk menonaktifkan.', { parse_mode: 'Markdown' });
-        broadcastMessage(`🔴 *PENGUMUMAN:* Sistem AP2T di PC ini sedang dalam masa pemeliharaan (Maintenance) oleh Admin. Layanan dihentikan sementara.`, chatId);
+        broadcastMessage(`🔴 *PENGUMUMAN:* Sistem AP2T di PC ini sedang dalam masa pemeliharaan (Maintenance) oleh Admin. Layanan dihentikan sementara.`, chatId, true);
     } else if (data === 'maintenance_off') {
         if (chatId.toString() !== adminChatId) return bot.answerCallbackQuery(query.id, { text: 'Akses ditolak.' });
+        bot.answerCallbackQuery(query.id, { text: 'Menyinkronkan maintenance ke sistem global...' });
+        const pcName = process.env.PC_NAME || require('os').hostname();
+        require('axios').post('http://localhost:3000/api/updateMaintenance', { target: pcName, maintenance: false }).catch(()=>{});
         pcMaintenanceActive = false;
         global.forceUpdateMaintenance(false);
-        bot.answerCallbackQuery(query.id, { text: 'Maintenance PC DINONAKTIFKAN.' });
         bot.sendMessage(chatId, 'Maintenance PC ini telah DINONAKTIFKAN. Semua user sudah bisa kembali menggunakan bot di PC ini.', { parse_mode: 'Markdown' });
-        broadcastMessage(`🟢 *PENGUMUMAN:* Masa pemeliharaan telah selesai. Sistem AP2T di PC ini sudah aktif kembali.`, chatId);
+        broadcastMessage(`🟢 *PENGUMUMAN:* Masa pemeliharaan telah selesai. Sistem AP2T di PC ini sudah aktif kembali.`, chatId, true);
     } else if (data === 'cmd_cektoken') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_token <no_meter_atau_idpel>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_logout') {
@@ -4093,9 +4147,8 @@ async function getIdpelFromNomet(nomet, chatId) {
         if (searchBtn) searchBtn.click();
     });
     
-    bot.sendMessage(chatId, `⏳ Sedang mencari ID Pelanggan...`);
-    await new Promise(r => setTimeout(r, 2000));
-
+    bot.sendMessage(chatId, `⏳ Sedang mencari ID Pelanggan (Maksimal 50 detik)...`);
+    
     // Handle popup "Master Nedisys"
     const checkNedisys = async (frame) => {
         return await frame.evaluate(() => {
@@ -4123,54 +4176,70 @@ async function getIdpelFromNomet(nomet, chatId) {
         }).catch(() => null);
     };
 
-    let nedisysData = await checkNedisys(infoFrame);
-    let nFrame = infoFrame;
-    if (!nedisysData) { nedisysData = await checkNedisys(page); nFrame = page; }
-
-    if (nedisysData && nedisysData.btnId) {
-        bot.sendMessage(chatId, `🔍 Popup Master Nedisys terdeteksi, mengambil screenshot...`);
-        const ssNedisys = await page.screenshot().catch(() => null);
-        if (ssNedisys) await bot.sendPhoto(chatId, ssNedisys, { caption: "Data Master Nedisys" });
-        
-        await nFrame.click(`#${nedisysData.btnId}`).catch(() => null);
+    let resultIdpel = null;
+    
+    for (let attempt = 0; attempt < 50; attempt++) {
         await new Promise(r => setTimeout(r, 1000));
         
-        if (nedisysData.idpel) {
-            return nedisysData.idpel; // Langsung kembalikan IDPEL untuk /ct!
-        }
-    }
+        let nedisysData = await checkNedisys(infoFrame);
+        let nFrame = infoFrame;
+        if (!nedisysData) { nedisysData = await checkNedisys(page); nFrame = page; }
 
-    // Ekstrak IDPEL dari Grid
-    return await infoFrame.evaluate(() => {
-        let result = null;
-        try {
-            if (typeof Ext !== 'undefined' && Ext.ComponentMgr) {
-                Ext.ComponentMgr.all.each(function(cmp) {
-                    if (cmp.isXType && cmp.isXType('grid')) {
-                        if (cmp.el && cmp.el.dom && cmp.el.dom.offsetParent !== null) {
-                            const store = cmp.getStore();
-                            if (store && store.getCount() > 0) {
-                                const cm = cmp.getColumnModel();
-                                for (let j = 0; j < cm.getColumnCount(); j++) {
-                                    const header = cm.getColumnHeader(j).toUpperCase();
-                                    const dIndex = cm.getDataIndex(j);
-                                    if (header.includes('ID PELANGGAN') || header === 'IDPEL' || header.includes('ID_PELANGGAN')) {
-                                        result = String(store.getAt(0).data[dIndex]).trim();
+        if (nedisysData && nedisysData.btnId) {
+            if (attempt === 0) {
+                bot.sendMessage(chatId, `🔍 Popup Master Nedisys terdeteksi, mengambil screenshot...`);
+                const ssNedisys = await page.screenshot().catch(() => null);
+                if (ssNedisys) await bot.sendPhoto(chatId, ssNedisys, { caption: "Data Master Nedisys" });
+            }
+            
+            await nFrame.click(`#${nedisysData.btnId}`).catch(() => null);
+            await new Promise(r => setTimeout(r, 1000));
+            
+            if (nedisysData.idpel) {
+                resultIdpel = nedisysData.idpel;
+                break;
+            }
+        }
+
+        // Ekstrak IDPEL dari Grid
+        let gridResult = await infoFrame.evaluate(() => {
+            let result = null;
+            try {
+                if (typeof Ext !== 'undefined' && Ext.ComponentMgr) {
+                    Ext.ComponentMgr.all.each(function(cmp) {
+                        if (cmp.isXType && cmp.isXType('grid')) {
+                            if (cmp.el && cmp.el.dom && cmp.el.dom.offsetParent !== null) {
+                                const store = cmp.getStore();
+                                if (store && store.getCount() > 0) {
+                                    const cm = cmp.getColumnModel();
+                                    for (let j = 0; j < cm.getColumnCount(); j++) {
+                                        const header = cm.getColumnHeader(j).toUpperCase();
+                                        const dIndex = cm.getDataIndex(j);
+                                        if (header.includes('ID PELANGGAN') || header === 'IDPEL' || header.includes('ID_PELANGGAN')) {
+                                            result = String(store.getAt(0).data[dIndex]).trim();
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                });
-            }
-            if (!result) {
-                const cells = Array.from(document.querySelectorAll('.x-grid3-cell-inner'));
-                const idpelCell = cells.find(c => /^\d{12}$/.test(c.textContent.trim()));
-                if (idpelCell) result = idpelCell.textContent.trim();
-            }
-        } catch(e) {}
-        return result;
-    });
+                    });
+                }
+                if (!result) {
+                    const cells = Array.from(document.querySelectorAll('.x-grid3-cell-inner'));
+                    const idpelCell = cells.find(c => /^\d{12}$/.test(c.textContent.trim()));
+                    if (idpelCell) result = idpelCell.textContent.trim();
+                }
+            } catch(e) {}
+            return result;
+        });
+
+        if (gridResult) {
+            resultIdpel = gridResult;
+            break;
+        }
+    }
+    
+    return resultIdpel;
 }
 
 // ===== FUNGSI: Eksekusi Cari Nomor Meter (/nomet) =====
