@@ -86,16 +86,30 @@ function switchTab(tabId) {
 // === LIVE LOG ===
 async function fetchStats() {
     try {
-        const res = await fetch('/api/stats');
-        const stats = await res.json();
+        const [statsRes, usersRes, profilesRes, activeRes] = await Promise.all([
+            fetch('/api/stats'),
+            fetch('/api/users'),
+            fetch('/api/profiles'),
+            fetch('/api/profiles/active')
+        ]);
+        const stats = await statsRes.json();
+        const usersData = await usersRes.json();
+        const allProfiles = await profilesRes.json();
+        const activeData = await activeRes.json();
+
         const container = document.getElementById('statsContainer');
         if (!container) return;
         const today = stats.today || stats.daily || {};
-        const profiles = today.profiles || {};
-        const profileNames = Object.keys(profiles);
+        const profileStats = today.profiles || {};
+        const profileStatNames = Object.keys(profileStats);
+        const activeProfileName = activeData.active || '-';
+        const userList = (usersData.users || []);
 
-        // --- Stat boxes utama ---
-        let html = `
+        // Update stats grid to 5 cols
+        container.style.gridTemplateColumns = 'repeat(5, 1fr)';
+
+        // --- Stat boxes utama (5 boxes) ---
+        container.innerHTML = `
             <div style='background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); border-radius:8px; padding:10px; text-align:center;'>
                 <div style='font-size:11px; color:var(--text-muted);'>CT Sukses</div>
                 <div style='font-size:20px; font-weight:bold; color:var(--primary);'>${today.cetak_token?.success || 0}</div>
@@ -112,37 +126,72 @@ async function fetchStats() {
                 <div style='font-size:11px; color:var(--text-muted);'>Ambil Token</div>
                 <div style='font-size:20px; font-weight:bold; color:#8b5cf6;'>${today.ambil_token?.success || 0}</div>
             </div>
+            <div style='background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:10px; text-align:center;'>
+                <div style='font-size:11px; color:var(--text-muted);'>Cek Pelanggan</div>
+                <div style='font-size:20px; font-weight:bold; color:#f59e0b;'>${today.cek_pelanggan?.success || 0}</div>
+            </div>
         `;
-        container.innerHTML = html;
 
-        // --- Per profil breakdown ---
+        // --- Per profil breakdown + daftar user ---
         const profileBox = document.getElementById('profileStatsContainer');
         if (!profileBox) return;
-        if (profileNames.length === 0) {
-            profileBox.innerHTML = `<div style='color:var(--text-muted); font-size:12px; padding:8px 0;'>Belum ada data per profil hari ini.</div>`;
-            return;
-        }
-        let profileHtml = '';
-        for (const name of profileNames) {
-            const p = profiles[name];
-            const ctS = p.cetak_token?.success || 0;
-            const ctF = p.cetak_token?.fail || 0;
-            const akS = p.aktivasi_no_meter?.success || 0;
-            const akF = p.aktivasi_no_meter?.fail || 0;
-            profileHtml += `
-                <div style='background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px 14px; margin-bottom:8px;'>
-                    <div style='font-weight:600; color:var(--accent); margin-bottom:6px;'>👤 ${name}</div>
-                    <div style='display:flex; gap:16px; flex-wrap:wrap; font-size:12px;'>
-                        <span>🖨 CT: <b style='color:#4ade80;'>✅${ctS}</b> <b style='color:#f87171;'>❌${ctF}</b></span>
-                        <span>🔌 Aktivasi: <b style='color:#4ade80;'>✅${akS}</b> <b style='color:#f87171;'>❌${akF}</b></span>
-                    </div>
+
+        // Profil aktif saat ini
+        let infoHtml = `<div style='background:rgba(59,130,246,0.07); border:1px solid rgba(59,130,246,0.2); border-radius:8px; padding:10px 14px; margin-bottom:10px; font-size:13px;'>
+            <span style='color:var(--text-muted);'>Profil AP2T Aktif: </span>
+            <b style='color:var(--accent);'>👤 ${activeProfileName}</b>
+        </div>`;
+
+        // Daftar user terdaftar di PC ini
+        let usersHtml = '';
+        if (userList.length > 0) {
+            const userItems = userList.map(u => {
+                const name = u.nama || u.full_name || u.id;
+                const status = u.disabled ? `<span style='color:#f87171; font-size:10px;'>⛔ Nonaktif</span>` : `<span style='color:#4ade80; font-size:10px;'>✅ Aktif</span>`;
+                return `<div style='display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.05);'>
+                    <span style='font-size:12px;'>👤 <b>${name}</b> <span style='color:var(--text-muted); font-size:11px;'>${u.username || ''}</span></span>
+                    ${status}
                 </div>`;
+            }).join('');
+            usersHtml = `<div style='background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px 14px; margin-bottom:10px;'>
+                <div style='font-weight:600; color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;'>👥 User Terdaftar di PC Ini (${userList.length})</div>
+                ${userItems}
+            </div>`;
         }
-        profileBox.innerHTML = profileHtml;
-    } catch(e) {}
+
+        // Per-profil stats (hanya kalau ada data)
+        let profileHtml = '';
+        if (profileStatNames.length > 0) {
+            profileHtml = `<div style='font-weight:600; color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;'>📊 Rekap Per Profil Hari Ini</div>`;
+            for (const name of profileStatNames) {
+                const p = profileStats[name];
+                const ctS = p.cetak_token?.success || 0;
+                const ctF = p.cetak_token?.fail || 0;
+                const akS = p.aktivasi_no_meter?.success || 0;
+                const akF = p.aktivasi_no_meter?.fail || 0;
+                const ambS = p.ambil_token?.success || 0;
+                const ambF = p.ambil_token?.fail || 0;
+                const isActive = name === activeProfileName;
+                profileHtml += `
+                    <div style='background:rgba(255,255,255,0.04); border:1px solid ${isActive ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.08)'}; border-radius:8px; padding:10px 14px; margin-bottom:8px;'>
+                        <div style='font-weight:600; color:${isActive ? 'var(--accent)' : 'var(--primary)'}; margin-bottom:6px;'>👤 ${name}${isActive ? ' <span style="font-size:10px; background:rgba(16,185,129,0.2); color:#4ade80; padding:1px 6px; border-radius:4px;">AKTIF</span>' : ''}</div>
+                        <div style='display:flex; gap:16px; flex-wrap:wrap; font-size:12px;'>
+                            <span>🖨 CT: <b style='color:#4ade80;'>✅${ctS}</b> <b style='color:#f87171;'>❌${ctF}</b></span>
+                            <span>🔌 Aktivasi: <b style='color:#4ade80;'>✅${akS}</b> <b style='color:#f87171;'>❌${akF}</b></span>
+                            ${(ambS > 0 || ambF > 0) ? `<span>🎟 Token: <b style='color:#4ade80;'>✅${ambS}</b> <b style='color:#f87171;'>❌${ambF}</b></span>` : ''}
+                        </div>
+                    </div>`;
+            }
+        } else {
+            profileHtml = `<div style='color:var(--text-muted); font-size:12px; padding:4px 0;'>📊 Belum ada rekap aktivitas per profil hari ini.</div>`;
+        }
+
+        profileBox.innerHTML = infoHtml + usersHtml + profileHtml;
+    } catch(e) { console.log('fetchStats error', e); }
 }
 setInterval(fetchStats, 10000);
 fetchStats();
+
 
 
 async function fetchLiveLogs() {
