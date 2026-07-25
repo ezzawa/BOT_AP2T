@@ -1862,9 +1862,25 @@ async function startSmartLogin(chatId) {
 
 // --- ADMIN COMMANDS ---
 bot.onText(/\/maintenance/, async (msg) => {
-    if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, '? Akses ditolak.');
-    bot.sendMessage(msg.chat.id, '?? Gunakan Web Dashboard (Localhost) untuk mengatur Global/PC Maintenance.');
+    const chatId = msg.chat.id;
+    if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, '⛔ Akses ditolak.');
+    const currentStatus = pcMaintenanceActive ? '🔴 AKTIF' : '🟢 NONAKTIF';
+    bot.sendMessage(chatId, 
+        `🔧 *Status Maintenance PC Ini: ${currentStatus}*\n\nGunakan tombol di bawah untuk mengubah status maintenance PC ini.\n\n⚠️ Jika maintenance diaktifkan, semua user tidak bisa menggunakan bot di PC ini.`,
+        {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: '🔴 Aktifkan Maintenance', callback_data: 'maintenance_on' },
+                        { text: '🟢 Nonaktifkan', callback_data: 'maintenance_off' }
+                    ]
+                ]
+            }
+        }
+    );
 });
+
 bot.onText(/\/upload_perbaikan/, async (msg) => {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
     const opts = {
@@ -2383,6 +2399,18 @@ bot.on('callback_query', async (query) => {
     } else if (data === 'cmd_resume_bot') {
         if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, "⛔ Akses ditolak.");
         bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/resume_bot', message_id: Date.now() });
+    } else if (data === 'maintenance_on') {
+        if (chatId.toString() !== adminChatId) return bot.answerCallbackQuery(query.id, { text: 'Akses ditolak.' });
+        pcMaintenanceActive = true;
+        global.forceUpdateMaintenance(true);
+        bot.answerCallbackQuery(query.id, { text: 'Maintenance PC DIAKTIFKAN.' });
+        bot.sendMessage(chatId, 'Maintenance PC ini telah DIAKTIFKAN. Semua user tidak dapat menggunakan bot di PC ini. Gunakan /maintenance untuk menonaktifkan.', { parse_mode: 'Markdown' });
+    } else if (data === 'maintenance_off') {
+        if (chatId.toString() !== adminChatId) return bot.answerCallbackQuery(query.id, { text: 'Akses ditolak.' });
+        pcMaintenanceActive = false;
+        global.forceUpdateMaintenance(false);
+        bot.answerCallbackQuery(query.id, { text: 'Maintenance PC DINONAKTIFKAN.' });
+        bot.sendMessage(chatId, 'Maintenance PC ini telah DINONAKTIFKAN. Semua user sudah bisa kembali menggunakan bot di PC ini.', { parse_mode: 'Markdown' });
     } else if (data === 'cmd_cektoken') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_token <no_meter_atau_idpel>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_logout') {
@@ -5254,7 +5282,9 @@ if (adminChatId) {
         { command: 'keygen', description: '👑 Buat Lisensi HWID' },
         { command: 'upload_perbaikan', description: '👑 Upload Update GitHub' },
         { command: 'update_bot', description: '👑 Download Update GitHub' },
-        { command: 'lapor_status', description: '👑 Kirim Laporan Telemetri PC' }
+        { command: 'lapor_status', description: '?? Kirim Laporan Telemetri PC' },
+        { command: 'maintenance', description: '?? Aktifkan/Nonaktifkan Maintenance PC ini' },
+        { command: 'statistik', description: '?? Laporan Statistik Penggunaan Bot' }
     ];
     bot.setMyCommands(adminCommands, { scope: { type: 'chat', chat_id: adminChatId } }).catch(e => console.log('Failed to set admin commands', e.message));
 }
@@ -5783,4 +5813,5 @@ bot.onText(/\/statistik/, async (msg) => {
     const url = 'https://quickchart.io/chart?c=' + encodeURIComponent(JSON.stringify(chart));
     await bot.sendPhoto(chatId, url, { caption: '📊 **Statistik Penggunaan Harian**\n\nIni adalah grafik performa bot hari ini.', parse_mode: 'Markdown' });
 });
+
 
