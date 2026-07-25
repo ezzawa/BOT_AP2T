@@ -226,7 +226,21 @@ async function fetchStats() {
             profileHtml = `<div style='color:var(--text-muted); font-size:12px; padding:4px 0;'>📊 Belum ada rekap aktivitas per profil hari ini.</div>`;
         }
 
-        profileBox.innerHTML = infoHtml + usersHtml + profileHtml;
+        let failsHtml = '';
+        const failReasons = today.fail_reasons || [];
+        if (failReasons.length > 0) {
+            failsHtml = `<div style='background:rgba(248,113,113,0.05); border:1px solid rgba(248,113,113,0.2); border-radius:8px; padding:10px 14px; margin-top:10px;'>
+                <div style='font-weight:600; color:#f87171; font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;'>⚠️ REKAP GAGAL HARI INI (${failReasons.length})</div>`;
+            failReasons.forEach((f, i) => {
+                const actionName = f.action === 'cetak_token' ? 'CT' : f.action === 'aktivasi_no_meter' ? 'Aktivasi' : f.action;
+                failsHtml += `<div style='font-size:11px; color:#e2e8f0; margin-bottom:4px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05);'>
+                    <b style='color:#f87171;'>[${f.time}] ${actionName}</b> <span style='color:var(--text-muted);'>(${f.user})</span> - ${f.reason}
+                </div>`;
+            });
+            failsHtml += `</div>`;
+        }
+
+        profileBox.innerHTML = infoHtml + usersHtml + profileHtml + failsHtml;
     } catch(e) { console.log('fetchStats error', e); }
 }
 setInterval(fetchStats, 10000);
