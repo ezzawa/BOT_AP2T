@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const puppeteer = require('puppeteer');
 const { exec, execSync, spawnSync } = require('child_process');
@@ -32,6 +32,11 @@ function waitForUserInteraction(messageId, timeoutMs = 300000) {
 }
 
 const crypto = require('crypto');
+
+// --- MAINTENANCE STATE (harus di atas agar tersedia saat handler pertama kali dipanggil) ---
+let globalMaintenanceActive = false;
+let pcMaintenanceActive = false;
+global.forceUpdateMaintenance = (state) => { pcMaintenanceActive = state; };
 
 // --- DATABASE USERS & BROADCAST ---
 const USERS_FILE = path.join(__dirname, 'active_users.json');
@@ -5271,32 +5276,32 @@ bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
 
 // Setup Menu Bawah Kiri di Telegram
 const standardCommands = [
-    { command: 'start', description: '🏠 Menu Utama' },
-    { command: 'status', description: '🖥️ Cek Status Layar' },
-    { command: 'ct', description: '🤖 Buat CT Otomatis' },
-    { command: 'login_ap2t', description: '🔑 Login AP2T' },
-    { command: 'login_webmail', description: '📧 Tes Login Webmail' },
+    { command: 'start', description: '\ud83c\udfe0 Menu Utama' },
+    { command: 'status', description: '\ud83d\udda5\ufe0f Cek Status Layar' },
+    { command: 'ct', description: '\ud83e\udd16 Buat CT Otomatis' },
+    { command: 'login_ap2t', description: '\ud83d\udd11 Login AP2T' },
+    { command: 'login_webmail', description: '\ud83d\udce7 Tes Login Webmail' },
     
-    { command: 'cetak_token', description: '🖨️ Cetak Token PDF' },
-    { command: 'ambil_token', description: '🎟️ Ambil Token 20 Digit' },
-    { command: 'cek_token', description: '📊 Monitoring Token Excel' },
-    { command: 'aktivasi_no_meter', description: '🔌 Aktivasi No Meter' },
-    { command: 'cek_akun_aktif', description: '✅ Cek Akun Aktif' },
-    { command: 'reset_akun', description: '🔄 Restart Akun/Browser' },
-    { command: 'logout', description: '🚪 Logout' },
-    { command: 'pakai_profil', description: '👥 Pilih / Ganti Profil' },
-    { command: 'tambah_profil', description: '➕ Tambah Profil Baru' },
-    { command: 'hapus_profil', description: '🗑️ Hapus Profil' },
-    { command: 'update_user_webmail', description: '👤 Ubah User Webmail' },
-    { command: 'update_user_ap2t', description: '👤 Ubah User AP2T' },
-    { command: 'update_pass_webmail', description: '🔐 Ubah Password Webmail' },
-    { command: 'update_pass_ap2t', description: '🔐 Ubah Password AP2T' },
-    { command: 'reset_ct', description: '🗑️ Reset Memori CT' },
-    { command: 'pause_bot', description: '⏸️ Bekukan Bot' },
-    { command: 'resume_bot', description: '▶️ Lanjutkan Bot' },
-    { command: 'reset_mac_address', description: '🔄 Paksa cek email Reset MAC' },
-    { command: 'reset_session', description: '🔄 Paksa cek email Reset Session' },
-    { command: 'stop_bot', description: '🛑 Matikan bot dari jarak jauh' }
+    { command: 'cetak_token', description: '\ud83d\udda8\ufe0f Cetak Token PDF' },
+    { command: 'ambil_token', description: '\ud83c\udf9f\ufe0f Ambil Token 20 Digit' },
+    { command: 'cek_token', description: '\ud83d\udcca Monitoring Token Excel' },
+    { command: 'aktivasi_no_meter', description: '\ud83d\udd0c Aktivasi No Meter' },
+    { command: 'cek_akun_aktif', description: '\u2705 Cek Akun Aktif' },
+    { command: 'reset_akun', description: '\ud83d\udd04 Restart Akun/Browser' },
+    { command: 'logout', description: '\ud83d\udeaa Logout' },
+    { command: 'pakai_profil', description: '\ud83d\udc65 Pilih / Ganti Profil' },
+    { command: 'tambah_profil', description: '\u2795 Tambah Profil Baru' },
+    { command: 'hapus_profil', description: '\ud83d\uddd1\ufe0f Hapus Profil' },
+    { command: 'update_user_webmail', description: '\ud83d\udc64 Ubah User Webmail' },
+    { command: 'update_user_ap2t', description: '\ud83d\udc64 Ubah User AP2T' },
+    { command: 'update_pass_webmail', description: '\ud83d\udd10 Ubah Password Webmail' },
+    { command: 'update_pass_ap2t', description: '\ud83d\udd10 Ubah Password AP2T' },
+    { command: 'reset_ct', description: '\ud83d\uddd1\ufe0f Reset Memori CT' },
+    { command: 'pause_bot', description: '\u23f8\ufe0f Bekukan Bot' },
+    { command: 'resume_bot', description: '\u25b6\ufe0f Lanjutkan Bot' },
+    { command: 'reset_mac_address', description: '\ud83d\udd04 Reset MAC Address' },
+    { command: 'reset_session', description: '\ud83d\udd04 Reset Session OWA' },
+    { command: 'stop_bot', description: '\ud83d\uded1 Matikan bot dari jarak jauh' }
 ];
 
 bot.setMyCommands(standardCommands);
@@ -5304,22 +5309,20 @@ bot.setMyCommands(standardCommands);
 if (adminChatId) {
     const adminCommands = [
         ...standardCommands,
-        { command: 'tambah_user', description: '👑 Tambah User' },
-        { command: 'hapus_user', description: '👑 Hapus User' },
-        { command: 'keygen', description: '👑 Buat Lisensi HWID' },
-        { command: 'upload_perbaikan', description: '👑 Upload Update GitHub' },
-        { command: 'update_bot', description: '👑 Download Update GitHub' },
-        { command: 'lapor_status', description: '?? Kirim Laporan Telemetri PC' },
-        { command: 'maintenance', description: '?? Aktifkan/Nonaktifkan Maintenance PC ini' },
-        { command: 'statistik', description: '?? Laporan Statistik Penggunaan Bot' }
+        { command: 'tambah_user', description: '\u2795 Tambah User' },
+        { command: 'hapus_user', description: '\u2796 Hapus User' },
+        { command: 'keygen', description: '\ud83d\udd11 Buat Lisensi HWID' },
+        { command: 'upload_perbaikan', description: '\ud83d\ude80 Upload Update GitHub' },
+        { command: 'update_bot', description: '\u2b07\ufe0f Download Update GitHub' },
+        { command: 'lapor_status', description: '\ud83d\udc51 Kirim Laporan Telemetri PC' },
+        { command: 'maintenance', description: '\ud83d\udc51 Aktifkan/Nonaktifkan Maintenance PC ini' },
+        { command: 'statistik', description: '\ud83d\udc51 Laporan Statistik Penggunaan Bot' }
     ];
     bot.setMyCommands(adminCommands, { scope: { type: 'chat', chat_id: adminChatId } }).catch(e => console.log('Failed to set admin commands', e.message));
 }
 
 
-let globalMaintenanceActive = false;
-let pcMaintenanceActive = false;
-global.forceUpdateMaintenance = (state) => { pcMaintenanceActive = state; };
+// (globalMaintenanceActive & pcMaintenanceActive sudah dideklarasikan di atas)
 
 async function fetchMaintenanceConfig() {
     const token = process.env.GITHUB_TOKEN;
