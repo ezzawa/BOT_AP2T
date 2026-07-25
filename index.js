@@ -2402,26 +2402,38 @@ bot.onText(/\/status/, async (msg) => {
 
 bot.onText(/\/login_ap2t/, async (msg) => {
     const chatId = msg.chat.id;
-    if (isLoggingIn) return bot.sendMessage(chatId, `ℹ️ Sedang proses login...`);
-    isLoggingIn = true;
-    try { await startSmartLogin(chatId); }
-    finally { isLoggingIn = false; }
+    if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Sedang proses login...`);
+    commandQueue.push(async () => {
+        isLoggingIn = true;
+        try { await startSmartLogin(chatId); }
+        finally { isLoggingIn = false; }
+    });
+    if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
 });
 
 bot.onText(/\/login_webmail/, async (msg) => {
     const chatId = msg.chat.id;
-    if (isLoggingIn) return bot.sendMessage(chatId, `ℹ️ Bot sedang sibuk (sedang login). Mohon tunggu...`);
-    isLoggingIn = true;
-    try { await testWebmailLogin(chatId); }
-    finally { isLoggingIn = false; }
+    if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Bot sedang sibuk (sedang login). Mohon tunggu...`);
+    commandQueue.push(async () => {
+        isLoggingIn = true;
+        try { await testWebmailLogin(chatId); }
+        finally { isLoggingIn = false; }
+    });
+    if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
 });
 
 bot.onText(/\/reset_akun/, async (msg) => {
     const chatId = msg.chat.id;
-    bot.sendMessage(chatId, `[*] Mereset semua koneksi...`);
-    killChromeAndClean();
-    browser = null; page = null; isLoggedIn = false; isLoggingIn = false;
-    bot.sendMessage(chatId, `[+] Selesai. Silakan /login_ap2t kembali.`);
+    commandQueue.push(async () => {
+        bot.sendMessage(chatId, `[*] Mereset semua koneksi...`);
+        try {
+            if (page && !page.isClosed()) { await page.close().catch(() => { }); page = null; }
+            isLoggedIn = false;
+            currentAccount = 'none';
+            bot.sendMessage(chatId, `✅ Koneksi berhasil direset. Silakan login kembali.`);
+        } catch (e) { bot.sendMessage(chatId, `❌ Gagal mereset: ${e.message}`); }
+    });
+    if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
 });
 
 bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
@@ -2758,9 +2770,17 @@ bot.onText(/\/cek_akun_aktif/, async (msg) => {
 
 bot.onText(/\/logout/, async (msg) => {
     const chatId = msg.chat.id;
-    if (!isLoggedIn) return bot.sendMessage(chatId, `ℹ️ Belum login.`);
-    try {
-        if (page && !page.isClosed()) { await page.close().catch(() => { }); page = null; }
+    commandQueue.push(async () => {
+        if (!isLoggedIn) return bot.sendMessage(chatId, `❌ Belum login.`);
+        try {
+            if (page && !page.isClosed()) { await page.close().catch(() => { }); page = null; }
+            isLoggedIn = false; currentAccount = 'none';
+            bot.sendMessage(chatId, `✅ Logout & tab AP2T ditutup.`);
+            broadcastMessage(`👋 Informasi: AP2T telah logout dan koneksi ditutup.`);
+        } catch (e) { bot.sendMessage(chatId, `❌ Gagal logout: ${e.message}`); }
+    });
+    if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
+}); page = null; }
         isLoggedIn = false; currentAccount = 'none';
         bot.sendMessage(chatId, `✅ Logout & tab AP2T ditutup.`);
     } catch (e) { bot.sendMessage(chatId, `❌ Gagal logout: ${e.message}`); }
@@ -2768,10 +2788,21 @@ bot.onText(/\/logout/, async (msg) => {
 
 bot.onText(/\/stop_bot/, async (msg) => {
     const chatId = msg.chat.id;
-    bot.sendMessage(chatId, `🛑 Mematikan bot dan menutup browser...`);
-    try {
-        if (browser) {
-            await browser.close().catch(() => {});
+    commandQueue.push(async () => {
+        bot.sendMessage(chatId, `⏳ Mematikan bot dan menutup browser...`);
+        try {
+            if (browser) {
+                await browser.close().catch(() => {});
+            }
+            await bot.sendMessage(chatId, `✅ Bot telah dimatikan dari Telegram.`);
+            broadcastMessage(`⛔ Peringatan: Bot AP2T dimatikan oleh sistem.`);
+            setTimeout(() => process.exit(0), 1500);
+        } catch(e) {
+            bot.sendMessage(chatId, `❌ Gagal mematikan bot: ${e.message}`);
+        }
+    });
+    if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
+});
         }
         await bot.sendMessage(chatId, `✅ Bot telah dimatikan dari Telegram.`);
         setTimeout(() => process.exit(0), 1500);
