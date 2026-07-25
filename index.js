@@ -4,7 +4,7 @@ const puppeteer = require('puppeteer');
 const { exec, execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { recordStat, getStats, isCTDuplicate, recordSuccessfulCTData } = require('./stats');
+const { recordStat, getStats } = require('./stats');
 
 // Helper function to wait for an inline keyboard callback
 function waitForUserInteraction(messageId, timeoutMs = 300000) {
@@ -130,30 +130,20 @@ setInterval(async () => {
                 return;
             }
             
-            const isAlive = await page.evaluate(async () => {
-                try {
-                    // Coba ambil Menu.aspx untuk menjaga session (AJAX Fetch)
-                    const res = await fetch('/ap2t/Menu.aspx', { cache: 'no-cache' });
-                    if (res.status >= 500) {
-                        return { ok: false, status: res.status, text: 'Server Error ' + res.status };
-                    }
-                    return { ok: true };
-                } catch(e) {
-                    return { ok: false, error: e.message };
+            // Lakukan tindakan ringan ke AP2T untuk mereset timer idle PLN
+            await page.evaluate(() => {
+                // Coba refresh header
+                const topPnl = document.querySelector('.x-panel-header');
+                if (topPnl) {
+                   topPnl.click();
                 }
             });
-            
-            if (isAlive.ok) {
-                console.log('Heartbeat berhasil dikirim ke AP2T');
-            } else {
-                console.log('Heartbeat mendeteksi AP2T gangguan:', isAlive.text || isAlive.error);
-                try { broadcastMessage(`⚠️ *PING GANGGUAN:* Server AP2T terdeteksi tidak merespon dengan baik atau sedang gangguan.\nInfo: ${isAlive.text || isAlive.error}`); } catch(e){}
-            }
+            console.log('Heartbeat dikirim ke AP2T');
         } catch(e) {
-            console.log('Heartbeat puppeteer error:', e.message);
+            console.log('Heartbeat error:', e.message);
         }
     }
-}, 150000); // 2.5 menit
+}, 300000); // 5 menit
 
 // Jalankan Web GUI Server lokal
 // require('./server.js'); dipindah ke bawah
@@ -273,9 +263,8 @@ bot.on('message', (msg) => {
                 bot.sendMessage(chatId, `✅ Username AP2T berhasil diperbarui menjadi \`${newUser}\`!`, { parse_mode: 'Markdown' });
             } else if (state === 'update_pass_localhost') {
                 const newPass = input;
-                const b64 = 'B64:' + Buffer.from(newPass).toString('base64');
-                updateEnv('ADMIN_PASSWORD', b64);
-                process.env.ADMIN_PASSWORD = b64;
+                updateEnv('ADMIN_PASSWORD', newPass);
+                process.env.ADMIN_PASSWORD = newPass;
                 bot.sendMessage(chatId, `✅ Password Localhost Dashboard berhasil diperbarui menjadi \`${newPass}\`!\nPassword ini langsung aktif.`, { parse_mode: 'Markdown' });
             } else if (state === 'tambah_profil_nama') {
                 pendingInputData[chatId] = { nama: input };
@@ -293,7 +282,7 @@ bot.on('message', (msg) => {
                 pendingInputData[chatId].user_webmail = input;
                 pendingInputState[chatId] = 'tambah_profil_pass_webmail';
                 bot.sendMessage(chatId, `Username Webmail: *${input}*\n\nTerakhir, masukkan **Password Webmail**:`, {parse_mode: 'Markdown'});
-            } else if (['ct', 'cetak_token', 'aktivasi_no_meter', 'cek_pelanggan', 'cek_token', 'ambil_token'].includes(state)) {
+            } else if (['cetak_token', 'aktivasi_no_meter', 'cek_pelanggan', 'cek_token', 'ambil_token'].includes(state)) {
                 // Teruskan input sebagai command
                 msg.text = `/${state} ${input}`;
                 bot.emit('message', msg);
@@ -1894,7 +1883,7 @@ async function startSmartLogin(chatId, userInfo = null) {
             namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
         }
 
-        const msgText = `✅ *Berhasil Login AP2T*\nUser ${namaUser} telah berhasil masuk ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T._`;
+        const msgText = `✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T sebelum melanjutkan perintah._`;
 
         bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
         broadcastMessage(msgText, chatId);
@@ -2349,10 +2338,7 @@ bot.on('callback_query', async (query) => {
         bot.sendMessage(chatId, `❌ Aksi dibatalkan.`);
         return;
     } else if (data === 'cmd_password_localhost') {
-        let currentPass = process.env.ADMIN_PASSWORD || 'admin123';
-        if (currentPass.startsWith('B64:')) {
-            currentPass = Buffer.from(currentPass.substring(4), 'base64').toString('utf8');
-        }
+        const currentPass = process.env.ADMIN_PASSWORD || 'admin123';
         const opts = {
             parse_mode: 'Markdown',
             reply_markup: {
@@ -2431,8 +2417,7 @@ bot.on('callback_query', async (query) => {
     } else if (data === 'cmd_status') {
         bot.sendMessage(chatId, "Ketik /status untuk mengecek kondisi browser.");
     } else if (data === 'cmd_ct') {
-        pendingInputState[chatId] = 'ct';
-        bot.sendMessage(chatId, "❓ Silakan masukkan **ID Pelanggan / No Meter**:\n_(Tambahkan No Gangguan / Uraian di sebelahnya dengan dipisah spasi jika ada)_", { parse_mode: 'Markdown' });
+        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/ct <idpel_atau_nometer> <no_gangguan>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_resume') {
         bot.sendMessage(chatId, "Ketik /resume untuk melanjutkan proses CT yang tertunda.");
     } else if (data === 'cmd_cetak_token') {
@@ -2516,11 +2501,6 @@ bot.onText(/\/status/, async (msg) => {
 bot.onText(/\/login_ap2t/, async (msg) => {
     const chatId = msg.chat.id;
     if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Sedang proses login...`);
-    
-    if (isLoggedIn) {
-        return bot.sendMessage(chatId, `ℹ️ Bot masih dalam status login dan terhubung ke AP2T dengan baik.`);
-    }
-
     commandQueue.push(async () => {
         isLoggingIn = true;
         try { await startSmartLogin(chatId, msg.from); }
@@ -2554,21 +2534,18 @@ bot.onText(/\/reset_akun/, async (msg) => {
     if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
 });
 
-async function handleCTCommand(chatId, from, input) {
-    if (!input || input.trim() === '') {
+bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    if (!match[1] || match[1].trim() === '') {
         pendingInputState[chatId] = 'ct';
         return bot.sendMessage(chatId, '⚡ Silakan masukkan **ID Pelanggan / No Meter**:\n_(Tambahkan No Gangguan / Uraian di sebelahnya dengan dipisah spasi jika ada)_', {parse_mode: 'Markdown'});
     }
-    const parts = input.trim().split(/\s+/);
+    const parts = match[1].trim().split(/\s+/);
     const idpel = parts[0];
     const nogan = parts.slice(1).join(' ') || '-';
 
     if (idpel.length !== 11 && idpel.length !== 12) {
         return bot.sendMessage(chatId, `[!] Gagal!\nID Pelanggan / No Meter wajib terdiri dari 11 atau 12 digit angka. Anda memasukkan ${idpel.length} digit.`);
-    }
-
-    if (isCTDuplicate(idpel, nogan)) {
-        return bot.sendMessage(chatId, `⚠️ *DITOLAK: CT Duplikat!*\nID Pelanggan \`${idpel}\` dengan No Gangguan \`${nogan}\` sudah berhasil dicetak tokennya hari ini. Tidak perlu diulang.`, { parse_mode: 'Markdown' });
     }
 
     if (isLoggingIn) return bot.sendMessage(chatId, `ℹ️ Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
@@ -2578,11 +2555,11 @@ async function handleCTCommand(chatId, from, input) {
 
     commandQueue.push(async () => {
         try {
-            await processCT(idpel, nogan, chatId, from);
-            recordStat('cetak_token', 'success', getActiveProfileName(), from);
+            await processCT(idpel, nogan, chatId, msg.from);
+            recordStat('cetak_token', 'success', getActiveProfileName(), msg.from);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan fatal CT: ${err.message}`);
-            recordStat('cetak_token', 'fail', getActiveProfileName(), from, err.message);
+            recordStat('cetak_token', 'fail', getActiveProfileName(), msg.from);
         }
     });
     
@@ -2591,16 +2568,6 @@ async function handleCTCommand(chatId, from, input) {
     } else {
         bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
     }
-}
-
-bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
-    await handleCTCommand(msg.chat.id, msg.from, match[1]);
-});
-
-bot.onText(/^(\d{11,12}(?:\s+.*)?)$/, async (msg, match) => {
-    // Abaikan jika ini adalah balasan dari sebuah state yang sedang pending
-    if (pendingInputState[msg.chat.id]) return;
-    await handleCTCommand(msg.chat.id, msg.from, match[1]);
 });
 
 bot.onText(/\/reset_ct (.+)/, (msg, match) => {
@@ -2639,18 +2606,6 @@ const updateEnv = (key, value) => {
     }
     fs.writeFileSync(envPath, envContent.trim() + '\n');
 };
-
-function obfuscateAdminPassword() {
-    let pass = process.env.ADMIN_PASSWORD;
-    if (pass && !pass.startsWith('B64:')) {
-        const b64 = 'B64:' + Buffer.from(pass).toString('base64');
-        updateEnv('ADMIN_PASSWORD', b64);
-        process.env.ADMIN_PASSWORD = b64;
-        console.log('[SECURITY] Password admin disamarkan (B64) ke dalam .env');
-    }
-}
-obfuscateAdminPassword();
-
 
 const updateProfileCredential = (type, username, newPassword) => {
     const path = require('path');
@@ -4024,10 +3979,10 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             }
 
             // Bersihkan memori (state) CT untuk IDPEL ini karena sudah selesai sukses
+            // Sehingga pembuatan CT selanjutnya untuk IDPEL yang sama akan dimulai dari awal lagi
             clearCTState(idpel);
-            recordSuccessfulCTData(idpel, nogan);
         } else {
-            throw new Error("Waktu habis. Status belum '3' atau Token CLEAR TAMPER belum muncul di tabel.");
+            bot.sendMessage(chatId, `⚠️ Waktu habis. Status belum '3' atau Token CLEAR TAMPER belum muncul di tabel.`);
         }
 
         // Rapikan tab HANYA JIKA SUKSES
@@ -4298,15 +4253,20 @@ async function processCariPelanggan(target, chatId) {
 
         // 2. Isi Input
         const filterInputId = await infoFrame.evaluate(() => {
-            const inputs = Array.from(document.querySelectorAll('input[type="text"], input.x-form-text')).filter(i => {
-                const rect = i.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0 && !i.readOnly && !i.disabled;
-            });
-            if (inputs.length > 0) {
-                // Ambil input terakhir (biasanya adalah kotak teks untuk 'Nilai Pencarian')
-                const targetInput = inputs[inputs.length - 1];
-                targetInput.id = 'filter_input_nomet_final';
-                return 'filter_input_nomet_final';
+            const inputs = Array.from(document.querySelectorAll('.x-form-text'));
+            let combo = inputs.find(i => i.id === 'filter_combo_nomet');
+            if (!combo) {
+                // ExtJS DOM mungkin di-rebuild saat dropdown diganti, cari ulang by value
+                combo = inputs.find(i => i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama');
+            }
+            if (!combo) return null;
+            
+            const comboIdx = inputs.indexOf(combo);
+            // Kolom input selalu elemen form-text selanjutnya setelah combo di ExtJS
+            if (comboIdx >= 0 && comboIdx + 1 < inputs.length) {
+                const targetInput = inputs[comboIdx + 1];
+                targetInput.id = 'filter_input_nomet';
+                return targetInput.id;
             }
             return null;
         });
@@ -5599,7 +5559,7 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
             recordStat('aktivasi_no_meter', 'success', getActiveProfileName(), msg.from);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan Aktivasi: ${err.message}`);
-            recordStat('aktivasi_no_meter', 'fail', getActiveProfileName(), msg.from, err.message);
+            recordStat('aktivasi_no_meter', 'fail', getActiveProfileName(), msg.from);
         }
     });
     
@@ -5846,14 +5806,14 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
                     }
                 }
             } else {
-                throw new Error("Tombol SIMPAN tidak merespon/tidak ditemukan.");
+                bot.sendMessage(chatId, `❌ Tombol SIMPAN tidak merespon/tidak ditemukan.`);
             }
         } else {
             throw new Error("Gagal menemukan kolom input No Agenda di halaman Aktivasi.");
         }
     } catch (e) {
         const { recordStat } = require('./stats');
-        await recordStat('aktivasi_no_meter', 'fail', 'Unknown', null, e.message);
+        await recordStat('aktivasi_no_meter', 'fail');
         bot.sendMessage(chatId, `❌ Gagal dalam proses Aktivasi Manual: ${e.message}`);
         try {
             const ssBuffer = await page.screenshot({ encoding: 'buffer' });
@@ -5864,7 +5824,7 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
 
 
 
-bot.onText(/\/(statistik|rekapan)/, async (msg) => {
+bot.onText(/\/statistik/, async (msg) => {
     const chatId = msg.chat.id;
     if (chatId.toString() !== (process.env.ADMIN_CHAT_ID || '').toString()) {
         return bot.sendMessage(chatId, 'Perintah ini khusus untuk Admin.');
@@ -5925,14 +5885,6 @@ bot.onText(/\/(statistik|rekapan)/, async (msg) => {
             if (ambS > 0 || ambF > 0) text += `  🎟 Ambil: ✅${ambS} ❌${ambF}\n`;
         }
     }
-    const failReasons = t.fail_reasons || [];
-    if (failReasons.length > 0) {
-        text += `\n*⚠️ REKAPAN GAGAL HARI INI:*\n`;
-        failReasons.forEach((f, i) => {
-            const actionName = f.action === 'cetak_token' ? 'CT' : f.action === 'aktivasi_no_meter' ? 'Aktivasi' : f.action;
-            text += `${i+1}. [${f.time}] *${actionName}* (${f.user}) - ${f.reason}\n`;
-        });
-    }
 
     await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
 });
@@ -5943,33 +5895,5 @@ bot.onText(/\/(statistik|rekapan)/, async (msg) => {
     const restartCount = parseInt(process.env.PM2_RESTART_COUNT || '0');
     if (adminChatId && restartCount > 0) {
         bot.sendMessage(adminChatId, 'PERHATIAN: BOT AP2T BARU SAJA RESTART!\n\nBot baru saja menyala kembali. Kemungkinan penyebab: mati lampu, internet putus, atau error.\n\nWaktu: ' + new Date().toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}) + '\nTotal Restart: ' + restartCount + '\n\nGunakan /status untuk mengecek kondisi AP2T.', { parse_mode: 'Markdown' }).catch(()=>{});
-    }
-
-    // --- AUTO-SETUP WINDOWS STARTUP ---
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        const startupFolder = path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
-        const oldVbs = path.join(startupFolder, 'Watchdog_Bot_AP2T.vbs');
-        const newVbs = path.join(startupFolder, 'Start_PM2_Bot.vbs');
-
-        // Hapus Watchdog lama jika ada
-        if (fs.existsSync(oldVbs)) { fs.unlinkSync(oldVbs); }
-
-        // Buat file startup PM2 jika belum ada
-        if (!fs.existsSync(newVbs)) {
-            const vbsContent = 'Set WshShell = CreateObject("WScript.Shell")\r\n' +
-                               'WScript.Sleep 10000\r\n' +
-                               'WshShell.Run "cmd /c pm2 resurrect", 0, False\r\n';
-            fs.writeFileSync(newVbs, vbsContent, 'utf8');
-            
-            // Simpan konfigurasi PM2
-            require('child_process').exec('pm2 save', (err, stdout, stderr) => {
-                if (err) console.error("Auto-setup PM2 Save Error:", err);
-                else console.log("PM2 Auto-saved successfully for startup.");
-            });
-        }
-    } catch (e) {
-        console.error("Gagal melakukan auto-setup startup Windows:", e.message);
     }
 })();
