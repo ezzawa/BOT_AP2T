@@ -25,10 +25,10 @@
         <h2><i class="fas fa-robot"></i> AP2T Bot</h2>
         <ul>
             <li id="tab-livelog" class="active" onclick="switchTab('livelog')"><i class="fas fa-desktop"></i> Live Log (PC Ini)</li>
-            <li class="admin-only" id="tab-config" style="display:none;" onclick="switchTab('config')"><i class="fas fa-cog"></i> Config Utama</li>
-            <li class="admin-only" id="tab-akun" style="display:none;" onclick="switchTab('akun')"><i class="fas fa-users"></i> Akun & Profil</li>
-            <li class="admin-only" id="tab-users" style="display:none;" onclick="switchTab('users')"><i class="fas fa-server"></i> Fleet & Users</li>
-            <li class="admin-only" id="tab-panduan" style="display:none;" onclick="switchTab('panduan')"><i class="fas fa-book"></i> Panduan Sheets</li>
+            <li id="tab-config" style="display:none;" onclick="switchTab('config')"><i class="fas fa-cog"></i> Config Utama</li>
+            <li id="tab-akun" style="display:none;" onclick="switchTab('akun')"><i class="fas fa-users"></i> Akun & Profil</li>
+            <li id="tab-users" style="display:none;" onclick="switchTab('users')"><i class="fas fa-server"></i> Fleet & Users</li>
+            <li id="tab-panduan" style="display:none;" onclick="switchTab('panduan')"><i class="fas fa-book"></i> Panduan Sheets</li>
         </ul>
         <div class="sidebar-footer">
             <p>Versi Bot: <span class="status-badge" style="padding: 2px 8px; font-size: 11px;">1.0.47</span></p>
@@ -146,10 +146,7 @@
 
         <!-- FLEET TAB -->
         <section id="users" class="tab-content">
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <div>
-                        <h3 style="margin: 0;"><i class="fas fa-network-wired"></i> Status PC Cabang (Fleet Monitor)</h3>
+            <div class="card admin-only"> <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;"> <div> <h3 style="margin: 0;"><i class="fas fa-network-wired"></i> Status PC Cabang (Fleet Monitor)</h3>
                         <p style="color: #a0a0a0; font-size: 13px; margin: 5px 0 0 0;"><i>Memantau seluruh komputer yang menjalankan bot ini (via GitHub).</i></p>
                     </div>
                     <div style="display: flex; gap: 10px;">
@@ -228,3 +225,5 @@ function doPost(e) {
     <script src="app.js?v=3"></script>
 </body>
 </html>
+
+
