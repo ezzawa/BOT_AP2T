@@ -25,10 +25,10 @@
         <h2><i class="fas fa-robot"></i> AP2T Bot</h2>
         <ul>
             <li id="tab-livelog" class="active" onclick="switchTab('livelog')"><i class="fas fa-desktop"></i> Live Log (PC Ini)</li>
-            <li id="tab-config" onclick="switchTab('config')"><i class="fas fa-cog"></i> Config Utama</li>
-            <li id="tab-akun" onclick="switchTab('akun')"><i class="fas fa-users"></i> Akun & Profil</li>
-            <li id="tab-users" onclick="switchTab('users')"><i class="fas fa-server"></i> Fleet & Users</li>
-            <li id="tab-panduan" onclick="switchTab('panduan')"><i class="fas fa-book"></i> Panduan Sheets</li>
+            <li class="admin-only" id="tab-config" onclick="switchTab('config')"><i class="fas fa-cog"></i> Config Utama</li>
+            <li class="admin-only" id="tab-akun" onclick="switchTab('akun')"><i class="fas fa-users"></i> Akun & Profil</li>
+            <li class="admin-only" id="tab-users" onclick="switchTab('users')"><i class="fas fa-server"></i> Fleet & Users</li>
+            <li class="admin-only" id="tab-panduan" onclick="switchTab('panduan')"><i class="fas fa-book"></i> Panduan Sheets</li>
         </ul>
         <div class="sidebar-footer">
             <p>Versi Bot: <span class="status-badge" style="padding: 2px 8px; font-size: 11px;">1.0.47</span></p>
@@ -57,7 +57,7 @@
         <!-- CONFIG TAB -->
         <section id="config" class="tab-content">
             <div class="card">
-                <h3><i class="fas fa-sliders-h"></i> Pengaturan .env (Config)</h3>
+                <h3><i class="fas fa-sliders-h"></i> Pengaturan .env (Config)</h3><div style="background: rgba(16, 185, 129, 0.1); border-left: 3px solid var(--accent); padding: 10px; margin-bottom: 15px; font-size: 13px; color: #a0a0a0;"><b>INFO:</b> Pengaturan <b>Username & Password AP2T</b> sekarang telah dipindah ke tab menu <b><i class="fas fa-users"></i> Akun & Profil</b> di sebelah kiri.</div>
                 <form id="envForm" onsubmit="event.preventDefault(); saveEnv();">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div>
@@ -225,6 +225,8 @@ function doPost(e) {
     <script src="app.js?v=3"></script>
 </body>
 </html>
+
+
 
 
 
