@@ -4264,14 +4264,15 @@ async function processCariPelanggan(target, chatId) {
 
         // 2. Isi Input
         const filterInputId = await infoFrame.evaluate(() => {
-            const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => {
+            const inputs = Array.from(document.querySelectorAll('input[type="text"], input.x-form-text')).filter(i => {
                 const rect = i.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0;
+                return rect.width > 0 && rect.height > 0 && !i.readOnly && !i.disabled;
             });
-            // Kolom pertama biasanya Kriteria Pencarian, kolom kedua adalah Input Nilai Pencarian
-            if (inputs.length >= 2) {
-                inputs[1].id = 'filter_input_nomet';
-                return 'filter_input_nomet';
+            if (inputs.length > 0) {
+                // Ambil input terakhir (biasanya adalah kotak teks untuk 'Nilai Pencarian')
+                const targetInput = inputs[inputs.length - 1];
+                targetInput.id = 'filter_input_nomet_final';
+                return 'filter_input_nomet_final';
             }
             return null;
         });
