@@ -27,7 +27,8 @@ function recordStat(action, status, profileName = 'Unknown', userInfo = null) {
                 ambil_token: { success: 0, fail: 0 },
                 cek_pelanggan: { success: 0, fail: 0 },
                 profiles: {},
-                users: {}
+                users: {},
+                ct_history: []
             };
         }
         if (!stats.total) {
@@ -88,10 +89,50 @@ function recordStat(action, status, profileName = 'Unknown', userInfo = null) {
 function getStats() {
     try {
         if (!fs.existsSync(statsPath)) return null;
-        return JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+        const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+        return {
+            today: { ...stats.today },
+            total: { ...stats.total }
+        };
     } catch (e) {
         return null;
     }
 }
 
-module.exports = { recordStat, getStats };
+/**
+ * Cek apakah CT dengan IdPel dan No Pengaduan ini sudah sukses hari ini
+ */
+function isCTDuplicate(idpel, noPengaduan) {
+    try {
+        if (fs.existsSync(statsPath)) {
+            const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+            const todayDate = new Date().toISOString().split('T')[0];
+            if (stats.today && stats.today.date === todayDate && stats.today.ct_history) {
+                return stats.today.ct_history.some(ct => ct.idpel === idpel && ct.noPengaduan === noPengaduan);
+            }
+        }
+    } catch(e) {}
+    return false;
+}
+
+/**
+ * Catat CT yang sukses agar tidak terduplikat
+ */
+function recordSuccessfulCTData(idpel, noPengaduan) {
+    try {
+        let stats = {};
+        if (fs.existsSync(statsPath)) {
+            stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+        }
+        const todayDate = new Date().toISOString().split('T')[0];
+        if (!stats.today || stats.today.date !== todayDate) {
+            stats.today = { date: todayDate, ct_history: [] };
+        }
+        if (!stats.today.ct_history) stats.today.ct_history = [];
+        
+        stats.today.ct_history.push({ idpel, noPengaduan, time: new Date().toISOString() });
+        fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2));
+    } catch (e) {}
+}
+
+module.exports = { recordStat, getStats, isCTDuplicate, recordSuccessfulCTData };
