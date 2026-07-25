@@ -112,6 +112,38 @@ app.post('/api/profiles', (req, res) => {
 });
 
 // Users
+
+app.get('/api/profiles/active', (req, res) => {
+    try {
+        const creds = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'credentials.json'), 'utf8'));
+        const profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+        const u = creds.main ? creds.main.username : null;
+        let active = null;
+        for (const [k, v] of Object.entries(profiles)) {
+            const pu = v.ap2t ? v.ap2t.username : v.ap2t_user;
+            if (pu === u) { active = k; break; }
+        }
+        res.json({ active });
+    } catch(e) { res.json({ active: null }); }
+});
+
+app.post('/api/profiles/active', (req, res) => {
+    const { profileName } = req.body;
+    try {
+        const profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+        const p = profiles[profileName];
+        if (p) {
+            const creds = {
+                main: { username: p.ap2t ? p.ap2t.username : p.ap2t_user, password: p.ap2t ? p.ap2t.password : p.ap2t_pass },
+                webmail: { username: p.webmail ? p.webmail.username : p.web_user, password: p.webmail ? p.webmail.password : p.web_pass }
+            };
+            fs.writeFileSync(require('path').join(__dirname, 'credentials.json'), JSON.stringify(creds, null, 2));
+            res.json({ success: true });
+        } else {
+            res.status(400).json({ error: 'Profile not found' });
+        }
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
 app.get('/api/users', (req, res) => {
     if (!fs.existsSync(usersPath)) return res.json({ users: [] });
     res.json(JSON.parse(fs.readFileSync(usersPath, 'utf8')));
@@ -299,6 +331,7 @@ app.get('/api/fleet/config', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`✅ GUI Dashboard is running on http://localhost:${PORT}`);
 });
+
 
 
 
