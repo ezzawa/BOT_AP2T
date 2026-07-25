@@ -446,7 +446,7 @@ async function unlockField(id) {
     const pwd = prompt('Masukkan Password Admin untuk membuka kunci:');
     if (!pwd) return;
     try {
-        const res = await fetch('/api/auth', {
+        const res = await fetch('/api/admin_login', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password: pwd })
         });
