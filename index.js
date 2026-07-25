@@ -1451,8 +1451,11 @@ async function login(accountType, chatId, retryLevel = 0) {
         await new Promise(r => setTimeout(r, 3000));
         const dashboardUrlCheck = page.url().toLowerCase();
         if (dashboardUrlCheck.includes('beranda') || dashboardUrlCheck.includes('menu') || dashboardUrlCheck.includes('default')) {
-            bot.sendMessage(chatId, `✅ Sesi sebelumnya masih aktif! Anda sudah berada di dalam sistem AP2T.`);
-            return true;
+            const isDashboard = await page.$(SELECTORS.dashboardElement).catch(() => null);
+            if (isDashboard) {
+                bot.sendMessage(chatId, `✅ Sesi sebelumnya masih aktif! Anda sudah berada di dalam sistem AP2T.`);
+                return true;
+            }
         }
 
         const { username, password } = credentials[accountType];
@@ -1465,9 +1468,13 @@ async function login(accountType, chatId, retryLevel = 0) {
         try {
             await page.waitForSelector(SELECTORS.usernameInput, { timeout: 10000 });
         } catch (e) {
-            bot.sendMessage(chatId, `⚠️ Halaman login tidak merespon dengan benar atau Anda sudah login di halaman lain.`);
-            // Anggap saja sudah login untuk menghindari crash
-            return true;
+            const isDashboard = await page.$(SELECTORS.dashboardElement).catch(() => null);
+            if (isDashboard) {
+                bot.sendMessage(chatId, `ℹ️ Anda sudah login.`);
+                return true;
+            }
+            bot.sendMessage(chatId, `⚠️ Halaman login tidak merespon dengan benar. Login dibatalkan.`);
+            return false;
         }
 
         bot.sendMessage(chatId, `⏳ Mengisi User ID dan Password...`);
@@ -1746,10 +1753,11 @@ async function login(accountType, chatId, retryLevel = 0) {
             return await login(accountType, chatId, retryLevel + 1);
         }
 
-        // Cek apakah URL sudah bukan login page
+        // Cek apakah URL sudah bukan login page dan benar-benar di dashboard
         const currentUrl = page.url();
         if (!currentUrl.includes('Login.aspx')) {
-            return true; // berhasil
+            const isDash = await page.$(SELECTORS.dashboardElement).catch(() => null);
+            if (isDash) return true;
         }
 
         const errorEl = await page.$(SELECTORS.errorMessage).catch(() => null);
@@ -1882,29 +1890,8 @@ async function startSmartLogin(chatId, userInfo = null) {
 
         const msgText = `✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T sebelum melanjutkan perintah._`;
 
-        // Ambil screenshot dashboard AP2T
-        try {
-            const fs = require('fs');
-            const path = require('path');
-            const ssPath = path.join(__dirname, 'login_success.png');
-            
-            // Beri waktu sejenak agar dashboard selesai dimuat sepenuhnya (seperti screenshot lampiran user)
-            await new Promise(r => setTimeout(r, 4000));
-            
-            await page.screenshot({ path: ssPath, fullPage: true }).catch(()=>{});
-            
-            if (fs.existsSync(ssPath)) {
-                await bot.sendPhoto(chatId, ssPath, { caption: msgText, parse_mode: 'Markdown' });
-                await broadcastPhoto(ssPath, msgText, chatId);
-                fs.unlinkSync(ssPath);
-            } else {
-                bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
-                broadcastMessage(msgText, chatId);
-            }
-        } catch(e) {
-            bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
-            broadcastMessage(msgText, chatId);
-        }
+        bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
+        broadcastMessage(msgText, chatId);
     } else {
         bot.sendMessage(chatId, `⚠️ Login gagal. Coba lagi dengan \`/login_ap2t\` atau \`/reset_akun\``);
     }
