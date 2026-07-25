@@ -1451,11 +1451,8 @@ async function login(accountType, chatId, retryLevel = 0) {
         await new Promise(r => setTimeout(r, 3000));
         const dashboardUrlCheck = page.url().toLowerCase();
         if (dashboardUrlCheck.includes('beranda') || dashboardUrlCheck.includes('menu') || dashboardUrlCheck.includes('default')) {
-            const isDashboard = await page.$(SELECTORS.dashboardElement).catch(() => null);
-            if (isDashboard) {
-                bot.sendMessage(chatId, `✅ Sesi sebelumnya masih aktif! Anda sudah berada di dalam sistem AP2T.`);
-                return true;
-            }
+            bot.sendMessage(chatId, `✅ Sesi sebelumnya masih aktif! Anda sudah berada di dalam sistem AP2T.`);
+            return true;
         }
 
         const { username, password } = credentials[accountType];
@@ -1468,8 +1465,8 @@ async function login(accountType, chatId, retryLevel = 0) {
         try {
             await page.waitForSelector(SELECTORS.usernameInput, { timeout: 10000 });
         } catch (e) {
-            const isDashboard = await page.$(SELECTORS.dashboardElement).catch(() => null);
-            if (isDashboard) {
+            const cur = page.url().toLowerCase();
+            if (cur.includes('beranda') || cur.includes('menu') || cur.includes('default')) {
                 bot.sendMessage(chatId, `ℹ️ Anda sudah login.`);
                 return true;
             }
@@ -1571,10 +1568,9 @@ async function login(accountType, chatId, retryLevel = 0) {
         await checkPause(chatId);
         await new Promise(r => setTimeout(r, 3000));
 
-        // Cek hasil login
-        const isDashboard = await page.$(SELECTORS.dashboardElement).catch(() => null);
-        if (isDashboard) return true;
-
+        // Cek hasil login dari URL
+        const checkU = page.url().toLowerCase();
+        if (checkU.includes('beranda') || checkU.includes('menu') || checkU.includes('default')) return true;
 
         // Cek limit MAC
         const content = await page.content();
@@ -1756,9 +1752,7 @@ async function login(accountType, chatId, retryLevel = 0) {
         // Cek apakah URL sudah bukan login page dan benar-benar di dashboard
         const currentUrl = page.url();
         if (!currentUrl.includes('Login.aspx')) {
-            const isDash = await page.waitForSelector(SELECTORS.dashboardElement, { timeout: 20000 }).catch(() => null);
-            if (isDash) return true;
-            bot.sendMessage(chatId, `⚠️ Login berhasil dialihkan, tetapi dashboard AP2T terlalu lambat merespon (timeout).`);
+            return true;
         }
 
         const errorEl = await page.$(SELECTORS.errorMessage).catch(() => null);
