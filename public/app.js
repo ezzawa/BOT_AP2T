@@ -6,7 +6,7 @@ function checkAuth() {
     if (savedRole === 'admin') {
         isAdmin = true;
         document.getElementById('loginOverlay').classList.add('hidden');
-        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
         // default tab for admin could be livelog or config
     } else if (savedRole === 'user') {
         isAdmin = false;
@@ -83,6 +83,36 @@ function switchTab(tabId) {
 }
 
 // === LIVE LOG ===
+async function fetchStats() {
+    try {
+        const res = await fetch('/api/stats');
+        const stats = await res.json();
+        const container = document.getElementById('statsContainer');
+        if (!container) return;
+        const today = stats.daily || {};
+        container.innerHTML = "
+            <div style='background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); border-radius:8px; padding:10px; text-align:center;'>
+                <div style='font-size:11px; color:var(--text-muted);'>CT Sukses</div>
+                <div style='font-size:20px; font-weight:bold; color:var(--primary);'>" + (today.cetak_token?.success || 0) + "</div>
+            </div>
+            <div style='background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px; text-align:center;'>
+                <div style='font-size:11px; color:var(--text-muted);'>CT Gagal</div>
+                <div style='font-size:20px; font-weight:bold; color:var(--danger);'>" + (today.cetak_token?.fail || 0) + "</div>
+            </div>
+            <div style='background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:10px; text-align:center;'>
+                <div style='font-size:11px; color:var(--text-muted);'>Aktivasi Meter</div>
+                <div style='font-size:20px; font-weight:bold; color:var(--accent);'>" + (today.aktivasi_no_meter?.success || 0) + "</div>
+            </div>
+            <div style='background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:10px; text-align:center;'>
+                <div style='font-size:11px; color:var(--text-muted);'>Cek Pelanggan</div>
+                <div style='font-size:20px; font-weight:bold; color:#f59e0b;'>" + (today.cek_pelanggan?.success || 0) + "</div>
+            </div>
+        ";
+    } catch(e) {}
+}
+setInterval(fetchStats, 10000);
+fetchStats();
+
 async function fetchLiveLogs() {
     try {
         const res = await fetch('/api/livelogs');
@@ -403,4 +433,6 @@ async function loadFleet() {
         tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error: ${e.message}</td></tr>`;
     }
 }
+
+
 
