@@ -311,6 +311,9 @@ bot.on('message', (msg) => {
 });
 
 bot.sendMessage = async (chatId, text, options) => {
+    if (typeof text === 'string' && (text.includes('✅') || text.includes('❌') || text.includes('⚠️'))) {
+        try { require('./server').addLiveLog(text); } catch(e){}
+    }
     // 1. Definisikan pesan akhir yang MURNI (jangan ditangkap ke dalam bubble)
     const isFinalOrError = text.includes('TOKEN CLEAR TAMPER') || 
                            text.includes('INFORMASI:') || 
@@ -1823,15 +1826,19 @@ async function startSmartLogin(chatId) {
         // Beritahu user lain bahwa AP2T sedang digunakan
         let namaUser = 'Seseorang';
         if (chatId.toString() === adminChatId) {
-            // Biarkan default "Seseorang" atau "Admin" untuk admin
-            namaUser = 'Seseorang';
+            namaUser = 'Admin';
         } else {
+            let activeProfileName = 'Seseorang';
             try {
-                const MAIN_USERS_FILE = path.join(__dirname, 'users.json');
-                const d = JSON.parse(fs.readFileSync(MAIN_USERS_FILE, 'utf8'));
-                const u = d.users.find(x => x.id === chatId.toString());
-                if (u && u.nama) namaUser = "User " + u.nama.toUpperCase();
+                const fs = require('fs');
+                const profiles = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'profiles.json'), 'utf8'));
+                for (const n in profiles) {
+                    if ((profiles[n].ap2t ? profiles[n].ap2t.username : profiles[n].ap2t_user) === credentials.main.username) {
+                        activeProfileName = n; break;
+                    }
+                }
             } catch(e){}
+            namaUser = "Profil " + activeProfileName;
         }
         broadcastMessage(`✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.`, chatId);
     } else {
@@ -2460,6 +2467,7 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
             await processCT(idpel, nogan, chatId, msg.from);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan fatal CT: ${err.message}`);
+            recordStat('cetak_token', 'fail');
         }
     });
     
@@ -5468,6 +5476,7 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
             await processAktivasiOnly(noAgenda, chatId, msg.from.first_name);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan Aktivasi: ${err.message}`);
+        recordStat('aktivasi_no_meter', 'fail');
         }
     });
     
@@ -5732,3 +5741,40 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
         } catch(ex) {}
     }
 }
+
+
+bot.onText(/\/statistik/, async (msg) => {
+    const chatId = msg.chat.id;
+    if (chatId.toString() !== (process.env.ADMIN_CHAT_ID || '').toString()) {
+        return bot.sendMessage(chatId, '❌ Perintah ini khusus untuk Admin.');
+    }
+    const { getStats } = require('./stats');
+    const stats = getStats();
+    if (!stats) return bot.sendMessage(chatId, 'Belum ada data statistik.');
+    
+    // Generate simple chart URL via quickchart.io
+    const chart = {
+        type: 'bar',
+        data: {
+            labels: ['Cetak Token', 'Aktivasi', 'Cek Pelanggan'],
+            datasets: [
+                {
+                    label: 'Sukses',
+                    data: [stats.today.cetak_token.success, stats.today.aktivasi_no_meter.success, stats.today.cek_pelanggan.success],
+                    backgroundColor: 'rgba(75, 192, 192, 0.8)'
+                },
+                {
+                    label: 'Gagal',
+                    data: [stats.today.cetak_token.fail, stats.today.aktivasi_no_meter.fail, stats.today.cek_pelanggan.fail],
+                    backgroundColor: 'rgba(255, 99, 132, 0.8)'
+                }
+            ]
+        },
+        options: {
+            title: { display: true, text: 'Statistik Harian Bot (' + stats.today.date + ')' }
+        }
+    };
+    
+    const url = 'https://quickchart.io/chart?c=' + encodeURIComponent(JSON.stringify(chart));
+    await bot.sendPhoto(chatId, url, { caption: '📊 **Statistik Penggunaan Harian**\n\nIni adalah grafik performa bot hari ini.', parse_mode: 'Markdown' });
+});
