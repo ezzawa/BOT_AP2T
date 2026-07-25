@@ -1756,8 +1756,9 @@ async function login(accountType, chatId, retryLevel = 0) {
         // Cek apakah URL sudah bukan login page dan benar-benar di dashboard
         const currentUrl = page.url();
         if (!currentUrl.includes('Login.aspx')) {
-            const isDash = await page.$(SELECTORS.dashboardElement).catch(() => null);
+            const isDash = await page.waitForSelector(SELECTORS.dashboardElement, { timeout: 20000 }).catch(() => null);
             if (isDash) return true;
+            bot.sendMessage(chatId, `⚠️ Login berhasil dialihkan, tetapi dashboard AP2T terlalu lambat merespon (timeout).`);
         }
 
         const errorEl = await page.$(SELECTORS.errorMessage).catch(() => null);
