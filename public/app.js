@@ -247,14 +247,18 @@ async function loadActiveAccount() {
         
         const nameEl = document.getElementById('activeProfileName');
         const ap2tEl = document.getElementById('activeAp2tUser');
+        const ap2tPassEl = document.getElementById('activeAp2tPass');
         const webEl = document.getElementById('activeWebUser');
+        const webPassEl = document.getElementById('activeWebPass');
         if (!nameEl) return;
         
         if (!activeName) {
             nameEl.textContent = 'Tidak ada profil aktif';
             nameEl.style.color = 'var(--danger)';
-            ap2tEl.textContent = '-';
-            webEl.textContent = '-';
+            if(ap2tEl) ap2tEl.textContent = '-';
+            if(ap2tPassEl) ap2tPassEl.textContent = '-';
+            if(webEl) webEl.textContent = '-';
+            if(webPassEl) webPassEl.textContent = '-';
             return;
         }
         
@@ -264,8 +268,10 @@ async function loadActiveAccount() {
         
         nameEl.textContent = activeName;
         nameEl.style.color = 'var(--accent)';
-        ap2tEl.textContent = p ? (p.ap2t ? p.ap2t.username : p.ap2t_user || '-') : '-';
-        webEl.textContent = p ? (p.webmail ? p.webmail.username : p.web_user || '-') : '-';
+        if(ap2tEl) ap2tEl.textContent = p ? (p.ap2t ? p.ap2t.username : p.ap2t_user || '-') : '-';
+        if(ap2tPassEl) ap2tPassEl.textContent = p ? (p.ap2t ? p.ap2t.password : p.ap2t_pass || '-') : '-';
+        if(webEl) webEl.textContent = p ? (p.webmail ? p.webmail.username : p.web_user || '-') : '-';
+        if(webPassEl) webPassEl.textContent = p ? (p.webmail ? p.webmail.password : p.web_pass || '-') : '-';
     } catch(e) {
         const nameEl = document.getElementById('activeProfileName');
         if (nameEl) nameEl.textContent = 'Gagal memuat data';
