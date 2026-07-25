@@ -1856,10 +1856,10 @@ async function startSmartLogin(chatId, userInfo = null) {
         bot.sendMessage(chatId, `✅ Login berhasil dengan Akun Utama!`);
         // Beritahu user lain bahwa AP2T sedang digunakan
         let namaUser = 'Seseorang';
-        if (userInfo) {
-            namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
-        } else if (chatId.toString() === adminChatId) {
+        if (chatId.toString() === adminChatId) {
             namaUser = 'Admin';
+        } else if (userInfo) {
+            namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
         } else {
             let activeProfileName = 'Seseorang';
             try {
