@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const puppeteer = require('puppeteer');
 const { exec, execSync, spawnSync } = require('child_process');
@@ -2242,6 +2242,7 @@ bot.on('callback_query', async (query) => {
             [{text: '🔌 Aktivasi Meter', callback_data: 'cmd_aktivasi_no_meter'}],
             [{text: '📊 Monitor Token', callback_data: 'cmd_cek_token'}, {text: '🖨️ Cetak Token', callback_data: 'cmd_cetak_token'}],
             [{text: '🎟️ Ambil Token 20 Digit', callback_data: 'cmd_ambil_token'}],
+            [{text: '🔍 Cek Pelanggan', callback_data: 'cmd_cek_pelanggan'}],
             [{text: '🔙 Kembali', callback_data: 'nav_main'}]
         ];
     } else if (data === 'nav_sistem') {
@@ -5286,6 +5287,7 @@ const standardCommands = [
     { command: 'ambil_token', description: '\ud83c\udf9f\ufe0f Ambil Token 20 Digit' },
     { command: 'cek_token', description: '\ud83d\udcca Monitoring Token Excel' },
     { command: 'aktivasi_no_meter', description: '\ud83d\udd0c Aktivasi No Meter' },
+    { command: 'cek_pelanggan', description: '\ud83d\udd0d Cek Data Pelanggan' },
     { command: 'cek_akun_aktif', description: '\u2705 Cek Akun Aktif' },
     { command: 'reset_akun', description: '\ud83d\udd04 Restart Akun/Browser' },
     { command: 'logout', description: '\ud83d\udeaa Logout' },
@@ -5813,36 +5815,48 @@ bot.onText(/\/statistik/, async (msg) => {
         return bot.sendMessage(chatId, 'Perintah ini khusus untuk Admin.');
     }
     const stats = getStats();
-    if (!stats) return bot.sendMessage(chatId, 'Belum ada data statistik. Coba lagi setelah ada aktivitas CT atau Aktivasi.');
+    if (!stats) return bot.sendMessage(chatId, '📊 Belum ada data statistik. Coba lagi setelah ada aktivitas CT atau Aktivasi.');
     const t = stats.today || {};
     const tot = stats.total || {};
     const date = t.date || '-';
-    let text = '*STATISTIK BOT AP2T*\n';
-    text += 'Tanggal: ' + date + '\n\n';
-    text += '*TOTAL HARI INI:*\n';
-    text += 'CT (Cetak Token): Sukses ' + ((t.cetak_token||{}).success||0) + ' | Gagal ' + ((t.cetak_token||{}).fail||0) + '\n';
-    text += 'Aktivasi Meter: Sukses ' + ((t.aktivasi_no_meter||{}).success||0) + ' | Gagal ' + ((t.aktivasi_no_meter||{}).fail||0) + '\n';
-    text += 'Ambil Token: Sukses ' + ((t.ambil_token||{}).success||0) + ' | Gagal ' + ((t.ambil_token||{}).fail||0) + '\n';
-    text += '\n*TOTAL KESELURUHAN:*\n';
-    text += 'CT: Sukses ' + ((tot.cetak_token||{}).success||0) + ' | Gagal ' + ((tot.cetak_token||{}).fail||0) + '\n';
-    text += 'Aktivasi: Sukses ' + ((tot.aktivasi_no_meter||{}).success||0) + ' | Gagal ' + ((tot.aktivasi_no_meter||{}).fail||0) + '\n';
+    const pcName = process.env.PC_NAME || require('os').hostname();
+    const activeProfile = getActiveProfileName();
+
+    let text = `📈 *STATISTIK BOT AP2T*\n`;
+    text += `🖥 PC: *${pcName}*\n`;
+    text += `👤 Profil Aktif: *${activeProfile}*\n`;
+    text += `📅 Tanggal: ${date}\n\n`;
+
+    text += `*📊 TOTAL HARI INI:*\n`;
+    text += `🖨 CT (Cetak Token): ✅ ${(t.cetak_token||{}).success||0} sukses | ❌ ${(t.cetak_token||{}).fail||0} gagal\n`;
+    text += `🔌 Aktivasi Meter: ✅ ${(t.aktivasi_no_meter||{}).success||0} sukses | ❌ ${(t.aktivasi_no_meter||{}).fail||0} gagal\n`;
+    text += `🎟 Ambil Token: ✅ ${(t.ambil_token||{}).success||0} sukses | ❌ ${(t.ambil_token||{}).fail||0} gagal\n`;
+    text += `🔍 Cek Pelanggan: ✅ ${(t.cek_pelanggan||{}).success||0} sukses | ❌ ${(t.cek_pelanggan||{}).fail||0} gagal\n`;
+
+    text += `\n*📦 TOTAL KESELURUHAN:*\n`;
+    text += `🖨 CT: ✅ ${(tot.cetak_token||{}).success||0} | ❌ ${(tot.cetak_token||{}).fail||0}\n`;
+    text += `🔌 Aktivasi: ✅ ${(tot.aktivasi_no_meter||{}).success||0} | ❌ ${(tot.aktivasi_no_meter||{}).fail||0}\n`;
+    text += `🎟 Ambil Token: ✅ ${(tot.ambil_token||{}).success||0} | ❌ ${(tot.ambil_token||{}).fail||0}\n`;
+
     const profiles = t.profiles || {};
     const profileNames = Object.keys(profiles);
     if (profileNames.length > 0) {
-        text += '\nRINCIAN PER PROFIL (Hari Ini):\n';
+        text += `\n*👤 RINCIAN PER PROFIL (Hari Ini):*\n`;
         for (const name of profileNames) {
             const p = profiles[name];
-            text += '\nProfil: ' + name + '\n';
-            text += '  CT: Sukses' + ((p.cetak_token||{}).success||0) + ' Gagal' + ((p.cetak_token||{}).fail||0) + '\n';
-            text += '  Aktivasi: Sukses' + ((p.aktivasi_no_meter||{}).success||0) + ' Gagal' + ((p.aktivasi_no_meter||{}).fail||0) + '\n';
+            const isActive = name === activeProfile;
+            text += `\n${isActive ? '🟢' : '⚪'} *${name}*${isActive ? ' _(AKTIF)_' : ''}\n`;
+            text += `  🖨 CT: ✅${(p.cetak_token||{}).success||0} ❌${(p.cetak_token||{}).fail||0}\n`;
+            text += `  🔌 Aktivasi: ✅${(p.aktivasi_no_meter||{}).success||0} ❌${(p.aktivasi_no_meter||{}).fail||0}\n`;
+            const ambS = (p.ambil_token||{}).success||0;
+            const ambF = (p.ambil_token||{}).fail||0;
+            if (ambS > 0 || ambF > 0) text += `  🎟 Ambil: ✅${ambS} ❌${ambF}\n`;
         }
-    } else { text += '\nBelum ada data per profil hari ini.\n'; }
+    } else {
+        text += `\n_Belum ada rekap per profil hari ini._\n`;
+    }
+
     await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
-    try {
-        const chart = { type: 'bar', data: { labels: ['CT', 'Aktivasi', 'Ambil Token'], datasets: [ { label: 'Sukses', data: [(t.cetak_token||{}).success||0, (t.aktivasi_no_meter||{}).success||0, (t.ambil_token||{}).success||0], backgroundColor: 'rgba(75, 192, 192, 0.8)' }, { label: 'Gagal', data: [(t.cetak_token||{}).fail||0, (t.aktivasi_no_meter||{}).fail||0, (t.ambil_token||{}).fail||0], backgroundColor: 'rgba(255, 99, 132, 0.8)' } ] }, options: { title: { display: true, text: 'Statistik Harian (' + date + ')' } } };
-        const url = 'https://quickchart.io/chart?c=' + encodeURIComponent(JSON.stringify(chart));
-        await bot.sendPhoto(chatId, url, { caption: 'Grafik Statistik Harian Bot AP2T' });
-    } catch(e) { console.log('Gagal kirim chart statistik:', e.message); }
 });
 
 // NOTIFIKASI BOT RESTART ke ADMIN
