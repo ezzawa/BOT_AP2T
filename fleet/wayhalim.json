@@ -1,7 +1,7 @@
 {
   "pc_name": "wayhalim",
   "bot_version": "1.0.47",
-  "last_online": "25/7/2026, 16.31.49",
+  "last_online": "25/7/2026, 16.36.37",
   "last_updated": "25/7/2026, 00.01.39",
   "registered_users": [
     {
@@ -16,6 +16,13 @@
       "nama": "ezza",
       "full_name": "Horatius",
       "username": "@Horaitus",
+      "disabled": false
+    },
+    {
+      "id": "6655967432",
+      "nama": "Fitria PKL",
+      "full_name": "Fitria",
+      "username": "-",
       "disabled": false
     }
   ]
