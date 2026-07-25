@@ -105,10 +105,10 @@ async function fetchStats() {
         const activeProfileName = activeData.active || '-';
         const userList = (usersData.users || []);
 
-        // Update stats grid to 5 cols
-        container.style.gridTemplateColumns = 'repeat(5, 1fr)';
+        // Update stats grid to 6 cols
+        container.style.gridTemplateColumns = 'repeat(6, 1fr)';
 
-        // --- Stat boxes utama (5 boxes) ---
+        // --- 6 Stat boxes ---
         container.innerHTML = `
             <div style='background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); border-radius:8px; padding:10px; text-align:center;'>
                 <div style='font-size:11px; color:var(--text-muted);'>CT Sukses</div>
@@ -119,8 +119,12 @@ async function fetchStats() {
                 <div style='font-size:20px; font-weight:bold; color:var(--danger);'>${today.cetak_token?.fail || 0}</div>
             </div>
             <div style='background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:10px; text-align:center;'>
-                <div style='font-size:11px; color:var(--text-muted);'>Aktivasi Meter</div>
+                <div style='font-size:11px; color:var(--text-muted);'>Aktivasi Sukses</div>
                 <div style='font-size:20px; font-weight:bold; color:var(--accent);'>${today.aktivasi_no_meter?.success || 0}</div>
+            </div>
+            <div style='background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); border-radius:8px; padding:10px; text-align:center;'>
+                <div style='font-size:11px; color:var(--text-muted);'>Aktivasi Gagal</div>
+                <div style='font-size:20px; font-weight:bold; color:#fb923c;'>${today.aktivasi_no_meter?.fail || 0}</div>
             </div>
             <div style='background:rgba(139,92,246,0.1); border:1px solid rgba(139,92,246,0.3); border-radius:8px; padding:10px; text-align:center;'>
                 <div style='font-size:11px; color:var(--text-muted);'>Ambil Token</div>
@@ -132,34 +136,70 @@ async function fetchStats() {
             </div>
         `;
 
-        // --- Per profil breakdown + daftar user ---
+        // --- Per profil breakdown + daftar user + rekap per user ---
         const profileBox = document.getElementById('profileStatsContainer');
         if (!profileBox) return;
 
-        // Profil aktif saat ini
+        // Info profil aktif
         let infoHtml = `<div style='background:rgba(59,130,246,0.07); border:1px solid rgba(59,130,246,0.2); border-radius:8px; padding:10px 14px; margin-bottom:10px; font-size:13px;'>
             <span style='color:var(--text-muted);'>Profil AP2T Aktif: </span>
             <b style='color:var(--accent);'>👤 ${activeProfileName}</b>
         </div>`;
 
-        // Daftar user terdaftar di PC ini
+        // Daftar user + rekap per user (dari stats.today.users)
+        const userStats = today.users || {};
         let usersHtml = '';
         if (userList.length > 0) {
             const userItems = userList.map(u => {
-                const name = u.nama || u.full_name || u.id;
-                const status = u.disabled ? `<span style='color:#f87171; font-size:10px;'>⛔ Nonaktif</span>` : `<span style='color:#4ade80; font-size:10px;'>✅ Aktif</span>`;
-                return `<div style='display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.05);'>
-                    <span style='font-size:12px;'>👤 <b>${name}</b> <span style='color:var(--text-muted); font-size:11px;'>${u.username || ''}</span></span>
-                    ${status}
+                const uName = u.nama || u.full_name || u.id;
+                const uId = String(u.id);
+                const status = u.disabled
+                    ? `<span style='color:#f87171; font-size:10px;'>⛔ Nonaktif</span>`
+                    : `<span style='color:#4ade80; font-size:10px;'>✅ Aktif</span>`;
+
+                // Cari rekap user dari stats
+                // Coba cocokkan berdasarkan ID atau nama
+                let uStat = userStats[uId] || null;
+                // Jika tidak ketemu by ID, coba by nama
+                if (!uStat) {
+                    for (const [sid, sd] of Object.entries(userStats)) {
+                        if ((sd.nama || '').toLowerCase() === uName.toLowerCase()) { uStat = sd; break; }
+                    }
+                }
+
+                let statRow = '';
+                if (uStat) {
+                    const ctS = uStat.cetak_token?.success || 0;
+                    const ctF = uStat.cetak_token?.fail || 0;
+                    const akS = uStat.aktivasi_no_meter?.success || 0;
+                    const akF = uStat.aktivasi_no_meter?.fail || 0;
+                    const ambS = uStat.ambil_token?.success || 0;
+                    const ambF = uStat.ambil_token?.fail || 0;
+                    statRow = `<div style='margin-top:4px; display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--text-muted);'>
+                        <span>🖨 CT: <b style='color:#4ade80;'>✅${ctS}</b> <b style='color:#f87171;'>❌${ctF}</b></span>
+                        <span>🔌 Aktivasi: <b style='color:#4ade80;'>✅${akS}</b> <b style='color:#f87171;'>❌${akF}</b></span>
+                        ${(ambS > 0 || ambF > 0) ? `<span>🎟 Ambil: <b style='color:#4ade80;'>✅${ambS}</b> <b style='color:#f87171;'>❌${ambF}</b></span>` : ''}
+                    </div>`;
+                } else {
+                    statRow = `<div style='margin-top:3px; font-size:11px; color:var(--text-muted);'>Belum ada aktivitas hari ini</div>`;
+                }
+
+                return `<div style='padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05);'>
+                    <div style='display:flex; justify-content:space-between; align-items:center;'>
+                        <span style='font-size:12px;'>👤 <b>${uName}</b> <span style='color:var(--text-muted); font-size:11px;'>${u.username || ''}</span></span>
+                        ${status}
+                    </div>
+                    ${statRow}
                 </div>`;
             }).join('');
+
             usersHtml = `<div style='background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px 14px; margin-bottom:10px;'>
-                <div style='font-weight:600; color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;'>👥 User Terdaftar di PC Ini (${userList.length})</div>
+                <div style='font-weight:600; color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;'>👥 User Terdaftar di PC Ini (${userList.length})</div>
                 ${userItems}
             </div>`;
         }
 
-        // Per-profil stats (hanya kalau ada data)
+        // Per-profil stats
         let profileHtml = '';
         if (profileStatNames.length > 0) {
             profileHtml = `<div style='font-weight:600; color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;'>📊 Rekap Per Profil Hari Ini</div>`;
@@ -178,7 +218,7 @@ async function fetchStats() {
                         <div style='display:flex; gap:16px; flex-wrap:wrap; font-size:12px;'>
                             <span>🖨 CT: <b style='color:#4ade80;'>✅${ctS}</b> <b style='color:#f87171;'>❌${ctF}</b></span>
                             <span>🔌 Aktivasi: <b style='color:#4ade80;'>✅${akS}</b> <b style='color:#f87171;'>❌${akF}</b></span>
-                            ${(ambS > 0 || ambF > 0) ? `<span>🎟 Token: <b style='color:#4ade80;'>✅${ambS}</b> <b style='color:#f87171;'>❌${ambF}</b></span>` : ''}
+                            ${(ambS > 0 || ambF > 0) ? `<span>🎟 Ambil: <b style='color:#4ade80;'>✅${ambS}</b> <b style='color:#f87171;'>❌${ambF}</b></span>` : ''}
                         </div>
                     </div>`;
             }
