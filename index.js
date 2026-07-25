@@ -4,7 +4,7 @@ const puppeteer = require('puppeteer');
 const { exec, execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { recordStat, getStats } = require('./stats');
+const { recordStat, getStats, isCTDuplicate, recordSuccessfulCTData } = require('./stats');
 
 // Helper function to wait for an inline keyboard callback
 function waitForUserInteraction(messageId, timeoutMs = 300000) {
@@ -312,6 +312,14 @@ bot.on('message', (msg) => {
                 });
             }
             return;
+        } else {
+            const parts = msg.text.trim().split(/\s+/);
+            const firstWord = parts[0];
+            if (/^\d{11,12}$/.test(firstWord)) {
+                msg.text = `/ct ${msg.text.trim()}`;
+                bot.emit('message', msg);
+                return;
+            }
         }
     }
     
@@ -2550,12 +2558,17 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
 
     if (isLoggingIn) return bot.sendMessage(chatId, `ℹ️ Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
 
+    if (isCTDuplicate(idpel, nogan)) {
+        return bot.sendMessage(chatId, `⚠️ *Ditolak:* CT untuk ID Pelanggan/No Meter \`${idpel}\` dengan No Gangguan \`${nogan}\` sudah berhasil dibuat sebelumnya pada hari ini!`, { parse_mode: 'Markdown' });
+    }
+
     bot.sendMessage(chatId, `[*] Perintah CT diterima. Sedang memproses...`);
     console.log("[DEBUG] CT RECEIVED");
 
     commandQueue.push(async () => {
         try {
             await processCT(idpel, nogan, chatId, msg.from);
+            recordSuccessfulCTData(idpel, nogan);
             recordStat('cetak_token', 'success', getActiveProfileName(), msg.from);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan fatal CT: ${err.message}`);
@@ -4253,20 +4266,14 @@ async function processCariPelanggan(target, chatId) {
 
         // 2. Isi Input
         const filterInputId = await infoFrame.evaluate(() => {
-            const inputs = Array.from(document.querySelectorAll('.x-form-text'));
-            let combo = inputs.find(i => i.id === 'filter_combo_nomet');
-            if (!combo) {
-                // ExtJS DOM mungkin di-rebuild saat dropdown diganti, cari ulang by value
-                combo = inputs.find(i => i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama');
-            }
-            if (!combo) return null;
-            
-            const comboIdx = inputs.indexOf(combo);
-            // Kolom input selalu elemen form-text selanjutnya setelah combo di ExtJS
-            if (comboIdx >= 0 && comboIdx + 1 < inputs.length) {
-                const targetInput = inputs[comboIdx + 1];
-                targetInput.id = 'filter_input_nomet';
-                return targetInput.id;
+            const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => {
+                const rect = i.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            });
+            // Kolom pertama biasanya Kriteria Pencarian, kolom kedua adalah Input Nilai Pencarian
+            if (inputs.length >= 2) {
+                inputs[1].id = 'filter_input_nomet';
+                return 'filter_input_nomet';
             }
             return null;
         });
