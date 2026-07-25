@@ -1,22 +1,22 @@
 {
   "pc_name": "kalianda",
   "bot_version": "1.0.52",
-  "last_online": "25/7/2026, 23.31.47",
-  "last_updated": "25/7/2026, 23.23.44",
+  "last_online": "25/7/2026, 23.36.47",
+  "last_updated": "25/7/2026, 23.35.40",
   "registered_users": [
     {
       "id": "5590322784",
       "nama": "ezza",
       "full_name": "Horatius",
       "username": "@Horaitus",
-      "disabled": false
+      "disabled": true
     },
     {
       "id": "268531159",
       "nama": "bos",
       "full_name": "faiz",
       "username": "@agusharihari",
-      "disabled": false
+      "disabled": true
     },
     {
       "id": "5632467575",
