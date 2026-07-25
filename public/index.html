@@ -1,73 +1,109 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bot AP2T - Control Panel</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>AP2T Bot Dashboard</title>
+    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="sidebar">
-        <h2>🤖 Bot Admin</h2>
-        <ul>
-            <li class="active" data-tab="dashboard">Dashboard</li>
-            <li data-tab="settings">Config (.env)</li>
-            <li data-tab="profiles">Profiles</li>
-            <li data-tab="users">Control Panel</li>
-            <li data-tab="panduan">Panduan Link Spreadsheet</li>
-        </ul>
-    </div>
     
+    <!-- Admin Login Overlay -->
+    <div id="loginOverlay">
+        <div class="login-box">
+            <h2><i class="fas fa-lock" style="color: var(--primary); margin-bottom: 10px;"></i><br>Akses Terbatas</h2>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Masukkan password Admin untuk mengelola Konfigurasi & Fleet. Atau masuk sebagai User biasa.</p>
+            <input type="password" id="adminPwd" placeholder="Password Admin...">
+            <button class="btn-primary" style="width: 100%;" onclick="attemptLogin()">Login Admin</button>
+            <button class="btn-secondary" onclick="loginAsUser()">Masuk sebagai User (Live Log)</button>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2><i class="fas fa-robot"></i> AP2T Bot</h2>
+        <ul>
+            <li id="tab-livelog" class="active" onclick="switchTab('livelog')"><i class="fas fa-desktop"></i> Live Log (PC Ini)</li>
+            <li class="admin-only" id="tab-config" style="display:none;" onclick="switchTab('config')"><i class="fas fa-cog"></i> Config Utama</li>
+            <li class="admin-only" id="tab-akun" style="display:none;" onclick="switchTab('akun')"><i class="fas fa-users"></i> Akun & Profil</li>
+            <li class="admin-only" id="tab-users" style="display:none;" onclick="switchTab('users')"><i class="fas fa-server"></i> Fleet & Users</li>
+            <li class="admin-only" id="tab-panduan" style="display:none;" onclick="switchTab('panduan')"><i class="fas fa-book"></i> Panduan Sheets</li>
+        </ul>
+        <div class="sidebar-footer">
+            <p>Versi Bot: <span class="status-badge" style="padding: 2px 8px; font-size: 11px;">1.0.47</span></p>
+            <p style="margin-top: 10px; cursor: pointer; color: var(--danger);" onclick="logoutAdmin()" class="admin-only" style="display:none;"><i class="fas fa-sign-out-alt"></i> Keluar (Admin)</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
     <div class="main-content">
         <header>
-            <h1>Bot AP2T Web Dashboard</h1>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <div class="status-badge" id="botStatus">Checking Status...</div>
-                <div id="adminLoginContainer" style="display: flex; gap: 5px;">
-                    <input type="password" id="adminPwdInput" placeholder="Password Admin" style="padding: 5px; font-size: 12px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff; width: 120px;">
-                    <button id="adminLoginBtn" class="btn-primary" onclick="adminLogin()" style="padding: 5px 10px; font-size: 12px; border-radius: 4px;">Login 🔒</button>
-                </div>
-            </div>
+            <h1 id="pageTitle">Live Log (Status Proses)</h1>
+            <div id="serverStatus" class="status-badge">Menghubungkan...</div>
         </header>
 
-        <!-- DASHBOARD TAB -->
-        <section id="dashboard" class="tab-content active">
+        <!-- LIVE LOG TAB (User & Admin) -->
+        <section id="livelog" class="tab-content active">
             <div class="card">
-                <h3>System Information</h3>
-                <p><strong>Hardware ID (UUID):</strong> <span id="hwidDisplay">...</span></p>
-                <p><strong>License Status:</strong> <span id="licenseStatus">...</span></p>
-                <button onclick="fetchStatus()">Refresh Status</button>
+                <h3><i class="fas fa-terminal"></i> Log Aktivitas Terakhir di PC ini</h3>
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Memantau secara langsung proses Cetak Token, Aktivasi, dll yang sedang berjalan.</p>
+                <div class="log-box" id="liveLogBox">
+                    <div style="color: #64748b; text-align: center; margin-top: 20px;">Memuat log...</div>
+                </div>
             </div>
         </section>
 
-        <!-- SETTINGS TAB -->
-        <section id="settings" class="tab-content">
-            <form id="envForm" style="margin-top: 20px;">
-                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
-                    <i>Silakan ubah kredensial AP2T dan Webmail di sini. Perubahan akan merestart bot secara otomatis.</i>
-                </p>
-                <div id="envFields">
-                    <!-- Dinamis via JS -->
+        <!-- CONFIG TAB -->
+        <section id="config" class="tab-content">
+            <div class="card">
+                <h3><i class="fas fa-sliders-h"></i> Pengaturan .env (Config)</h3>
+                <form id="envForm" onsubmit="event.preventDefault(); saveEnv();">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Telegram Bot Token</label>
+                            <input type="text" id="tgToken" required>
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Admin Chat ID</label>
+                            <input type="text" id="adminChatId" required>
+                        </div>
+                        <div style="grid-column: 1 / -1;">
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Google Sheets Web App URL (Rekap CT)</label>
+                            <input type="text" id="gsUrl" placeholder="Kosongkan jika tidak dipakai">
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">GitHub Token (Otomatis Update/Fleet)</label>
+                            <input type="password" id="ghToken" placeholder="Kosongkan jika tidak dipakai">
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">GitHub Repo (misal: username/repo)</label>
+                            <input type="text" id="ghRepo" placeholder="Kosongkan jika tidak dipakai">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary" style="margin-top: 15px;"><i class="fas fa-save"></i> Simpan & Restart Bot</button>
+                </form>
+            </div>
+            
+            <div class="card" style="border-color: rgba(239, 68, 68, 0.3);">
+                <h3 style="color: var(--danger);"><i class="fas fa-shield-alt"></i> Keamanan Dashboard</h3>
+                <div class="inline-form">
+                    <input type="password" id="adminPassword" placeholder="Masukkan password Admin GUI baru...">
+                    <button class="btn-danger" onclick="saveAdminPassword()">Ubah Password</button>
                 </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="submit" class="btn-primary">Simpan Config & Restart Bot</button>
-                    <button type="button" class="btn-primary" style="background-color: #f59e0b;" onclick="saveEnvAsProfile()">Simpan Sebagai Profil Baru...</button>
-                </div>
-            </form>
+                <p style="color: var(--text-muted); font-size: 13px;">Ubah password untuk mengakses halaman Admin di PC ini.</p>
+            </div>
         </section>
 
-        <!-- PROFILE AP2T TAB -->
-        <section id="profiles" class="tab-content">
-            <h2>Manajemen Akun AP2T</h2>
-            
+        <!-- AKUN TAB -->
+        <section id="akun" class="tab-content">
             <div class="card" style="margin-bottom: 20px;">
-                <h3 style="margin-bottom: 15px; color: #60a5fa;">Edit Profil (Klik tombol Edit di tabel)</h3>
+                <h3><i class="fas fa-user-edit"></i> Edit Profil AP2T</h3>
                 <form id="profileForm" onsubmit="event.preventDefault(); saveProfileFromForm();">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div>
-                            <label style="display:block; margin-bottom:5px; color:#ccc;">Nama Profil (Tidak bisa diubah)</label>
-                            <input type="text" id="profName" placeholder="Pilih profil dari tabel di bawah..." readonly style="background-color: #2a2a2a; color: #888; cursor: not-allowed;" required>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Nama Profil (Baca-saja)</label>
+                            <input type="text" id="profName" placeholder="Pilih profil dari tabel di bawah..." readonly style="background-color: rgba(0,0,0,0.4); color: #888; cursor: not-allowed;" required>
                         </div>
                         <div></div>
                         
@@ -81,7 +117,7 @@
                         </div>
                         
                         <div>
-                            <label style="display:block; margin-bottom:5px; color:#ccc;">Username Webmail (Pusat\uid)</label>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Username Webmail</label>
                             <input type="text" id="profWebUser" required>
                         </div>
                         <div>
@@ -89,13 +125,10 @@
                             <input type="text" id="profWebPass" required>
                         </div>
                     </div>
-                    <button type="submit" class="btn-primary" style="margin-top: 15px;">Simpan Profil</button>
+                    <button type="submit" class="btn-primary" style="margin-top: 15px;"><i class="fas fa-check"></i> Simpan Profil</button>
                 </form>
             </div>
 
-            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
-                <i>Daftar profil yang tersimpan di profiles.json. Klik "Edit" untuk mengubah password, atau "Pakai Akun" untuk menjadikan profil aktif.</i>
-            </p>
             <div class="table-container">
                 <table id="profilesTable">
                     <thead>
@@ -111,99 +144,87 @@
             </div>
         </section>
 
-        <!-- CONTROL PANEL TAB -->
+        <!-- FLEET TAB -->
         <section id="users" class="tab-content">
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <div>
-                        <h3 style="margin: 0;">💻 Status PC Cabang (Fleet Monitor)</h3>
+                        <h3 style="margin: 0;"><i class="fas fa-network-wired"></i> Status PC Cabang (Fleet Monitor)</h3>
                         <p style="color: #a0a0a0; font-size: 13px; margin: 5px 0 0 0;"><i>Memantau seluruh komputer yang menjalankan bot ini (via GitHub).</i></p>
                     </div>
-                    <button id="btnGlobalMaintenance" class="btn btn-outline" onclick="toggleGlobalMaintenance()" style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: #ff4757; border-color: #ff4757;"><i class="fas fa-power-off"></i> Global Maintenance (OFF)</button>
-                    <button class="btn btn-outline" onclick="loadFleet()" style="display: flex; align-items: center; gap: 5px; cursor: pointer;"><i class="fas fa-sync-alt"></i> Refresh Data</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btnGlobalMaintenance" class="btn-outline" onclick="toggleGlobalMaintenance()" style="color: #ff4757; border-color: #ff4757;"><i class="fas fa-power-off"></i> Global Maint (OFF)</button>
+                        <button class="btn-outline" onclick="loadFleet()"><i class="fas fa-sync-alt"></i> Refresh</button>
+                    </div>
                 </div>
-                <table id="fleetTable">
-                    <thead>
-                        <tr>
-                            <th>Nama PC</th>
-                            <th>Versi Bot</th>
-                            <th>Status Terakhir (Online)</th>
-                            <th>Update Terakhir (Script)</th>
-                            <th>Daftar User Aktif</th>
-                            <th style="width: 80px; text-align: center;">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody id="fleetTbody">
-                        <tr><td colspan="6" style="text-align: center;">Mengambil data dari GitHub...</td></tr>
-                    </tbody>
-                </table>
+                <div class="table-container">
+                    <table id="fleetTable">
+                        <thead>
+                            <tr>
+                                <th>Nama PC</th>
+                                <th>Versi Bot</th>
+                                <th>Status Terakhir</th>
+                                <th>User Aktif</th>
+                                <th style="text-align: center;">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fleetTbody">
+                            <tr><td colspan="5" style="text-align: center;">Mengambil data dari GitHub...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div class="card" style="margin-top: 20px;">
-                <h3>👤 Daftar User Telegram Lokal (PC Ini)</h3>
-                <p style="color: #a0a0a0; font-size: 13px; margin-bottom: 15px;"><i>User yang terdaftar HANYA di PC ini. (Gunakan <b>/tambah_user</b> di Telegram untuk menambah).</i></p>
-                <table id="usersTable">
-                    <thead>
-                        <tr>
-                            <th>Nama Panggilan</th>
-                            <th>Nama Lengkap (Telegram)</th>
-                            <th>Username (@)</th>
-                            <th>Telegram Chat ID</th>
-                            <th style="width: 100px; text-align: center;">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+                <h3><i class="fas fa-users"></i> Daftar User Telegram (Lokal)</h3>
+                <p style="color: #a0a0a0; font-size: 13px; margin-bottom: 15px;"><i>User yang terdaftar HANYA di PC ini. (Gunakan <b>/tambah_user</b> di Telegram).</i></p>
+                <div class="table-container">
+                    <table id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>Panggilan</th>
+                                <th>Telegram Name</th>
+                                <th>Username (@)</th>
+                                <th>Chat ID</th>
+                                <th style="text-align: center;">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
         <!-- PANDUAN TAB -->
         <section id="panduan" class="tab-content">
             <div class="card">
-                <h3>📖 Panduan Link Spreadsheet</h3>
-                <p>Berikut adalah panduan penting untuk menghubungkan bot dengan Google Sheets.</p>
+                <h3><i class="fas fa-file-excel"></i> Panduan Google Sheets</h3>
+                <p style="margin-bottom: 15px;">Bot akan otomatis merekam riwayat Cetak Token ke Google Sheets.</p>
                 
-                <h4 style="margin-top:20px; color:#60a5fa;">1. Panduan Koneksi Google Sheets (Rekap CT)</h4>
-                <div style="background-color: #2a2a2a; padding: 15px; border-radius: 6px; margin-top: 10px; font-size: 14px; font-family: monospace;">
-                    <p style="color: #a0a0a0;">// 1. Buat Spreadsheet baru di Google Sheets.</p>
-                    <p style="color: #a0a0a0;">// 2. Buat header di baris 1 (A1 - J1) persis seperti ini: waktu, id_pelanggan, nama, tarif, daya, no_gangguan, token, panggilan, nama_lengkap, username</p>
-                    <p style="color: #a0a0a0;">// 3. Klik menu Extensions > Apps Script.</p>
-                    <p style="color: #a0a0a0;">// 4. Hapus kode bawaan, dan COPY-PASTE kode sakti di bawah ini:</p>
+                <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 8px; font-family: monospace; font-size: 13px;">
+                    <p style="color: #64748b;">// 1. Buat Spreadsheet baru.</p>
+                    <p style="color: #64748b;">// 2. Buat header di baris 1 (A1 - J1): waktu, id_pelanggan, nama, tarif, daya, no_gangguan, token, panggilan, nama_lengkap, username</p>
+                    <p style="color: #64748b;">// 3. Extensions > Apps Script. Hapus kode bawaan, dan PASTE kode di bawah ini:</p>
                     <br>
-                    <pre style="color: #4ade80; overflow-x: auto;">
+                    <pre style="color: var(--accent); overflow-x: auto;">
 function doPost(e) {
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     var data = JSON.parse(e.postData.contents);
-    
-    sheet.appendRow([
-        data.waktu,
-        data.idpel,
-        data.nama,
-        data.tarif,
-        data.daya,
-        data.nogan,
-        data.token,
-        data.pembuat,
-        data.nama_lengkap,
-        data.username
-      ]);
-    
-    return ContentService.createTextOutput(JSON.stringify({ "status": "sukses" })).setMimeType(ContentService.MimeType.JSON);
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ "status": "error", "pesan": error.message })).setMimeType(ContentService.MimeType.JSON);
+    sheet.appendRow([data.waktu, data.idpel, data.nama, data.tarif, data.daya, data.nogan, data.token, data.pembuat, data.nama_lengkap, data.username]);
+    return ContentService.createTextOutput(JSON.stringify({"status":"sukses"})).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({"status":"error"})).setMimeType(ContentService.MimeType.JSON);
   }
 }</pre>
                     <br>
-                    <p style="color: #a0a0a0;">// 5. Klik Save 💾, lalu klik Deploy > New Deployment.</p>
-                    <p style="color: #a0a0a0;">// 6. Pilih tipe Web App. Bagian 'Who has access' pilih 'Anyone'.</p>
-                    <p style="color: #a0a0a0;">// 7. Klik Deploy. Nanti akan dapat Web App URL panjang.</p>
-                    <p style="color: #a0a0a0;">// 8. Copy URL tersebut dan paste ke kolom GOOGLE_SHEETS_URL di tab Config (.env) web ini!</p>
+                    <p style="color: #64748b;">// 4. Deploy > New Deployment > Web App (Anyone).</p>
+                    <p style="color: #64748b;">// 5. Copy URL-nya ke menu Config Utama!</p>
                 </div>
             </div>
         </section>
     </div>
 
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=3"></script>
 </body>
 </html>
