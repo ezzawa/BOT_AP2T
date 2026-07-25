@@ -282,7 +282,7 @@ bot.on('message', (msg) => {
                 pendingInputData[chatId].user_webmail = input;
                 pendingInputState[chatId] = 'tambah_profil_pass_webmail';
                 bot.sendMessage(chatId, `Username Webmail: *${input}*\n\nTerakhir, masukkan **Password Webmail**:`, {parse_mode: 'Markdown'});
-            } else if (['cetak_token', 'aktivasi_no_meter', 'cek_pelanggan', 'cek_token', 'ambil_token'].includes(state)) {
+            } else if (['ct', 'cetak_token', 'aktivasi_no_meter', 'cek_pelanggan', 'cek_token', 'ambil_token'].includes(state)) {
                 // Teruskan input sebagai command
                 msg.text = `/${state} ${input}`;
                 bot.emit('message', msg);
@@ -312,14 +312,6 @@ bot.on('message', (msg) => {
                 });
             }
             return;
-        } else {
-            const parts = msg.text.trim().split(/\s+/);
-            const firstWord = parts[0];
-            if (/^\d{11,12}$/.test(firstWord)) {
-                msg.text = `/ct ${msg.text.trim()}`;
-                bot.emit('message', msg);
-                return;
-            }
         }
     }
     
@@ -2425,7 +2417,8 @@ bot.on('callback_query', async (query) => {
     } else if (data === 'cmd_status') {
         bot.sendMessage(chatId, "Ketik /status untuk mengecek kondisi browser.");
     } else if (data === 'cmd_ct') {
-        bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/ct <idpel_atau_nometer> <no_gangguan>`", { parse_mode: 'Markdown' });
+        pendingInputState[chatId] = 'ct';
+        bot.sendMessage(chatId, "❓ Silakan masukkan **ID Pelanggan / No Meter**:\n_(Tambahkan No Gangguan / Uraian di sebelahnya dengan dipisah spasi jika ada)_", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_resume') {
         bot.sendMessage(chatId, "Ketik /resume untuk melanjutkan proses CT yang tertunda.");
     } else if (data === 'cmd_cetak_token') {
@@ -2558,17 +2551,12 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
 
     if (isLoggingIn) return bot.sendMessage(chatId, `ℹ️ Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
 
-    if (isCTDuplicate(idpel, nogan)) {
-        return bot.sendMessage(chatId, `⚠️ *Ditolak:* CT untuk ID Pelanggan/No Meter \`${idpel}\` dengan No Gangguan \`${nogan}\` sudah berhasil dibuat sebelumnya pada hari ini!`, { parse_mode: 'Markdown' });
-    }
-
     bot.sendMessage(chatId, `[*] Perintah CT diterima. Sedang memproses...`);
     console.log("[DEBUG] CT RECEIVED");
 
     commandQueue.push(async () => {
         try {
             await processCT(idpel, nogan, chatId, msg.from);
-            recordSuccessfulCTData(idpel, nogan);
             recordStat('cetak_token', 'success', getActiveProfileName(), msg.from);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan fatal CT: ${err.message}`);
@@ -3992,8 +3980,8 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             }
 
             // Bersihkan memori (state) CT untuk IDPEL ini karena sudah selesai sukses
-            // Sehingga pembuatan CT selanjutnya untuk IDPEL yang sama akan dimulai dari awal lagi
-            clearCTState(idpel);
+            // DIHAPUS: Agar memori tetap ada dan lompat ke monitoring jika di-CT ulang
+            // clearCTState(idpel);
         } else {
             bot.sendMessage(chatId, `⚠️ Waktu habis. Status belum '3' atau Token CLEAR TAMPER belum muncul di tabel.`);
         }
