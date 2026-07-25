@@ -1759,7 +1759,7 @@ async function login(accountType, chatId, retryLevel = 0) {
     }
 }
 
-async function testWebmailLogin(chatId) {
+async function testWebmailLogin(chatId, userInfo = null) {
     try {
         await initBrowser(chatId);
         const mailPage = await browser.newPage();
@@ -1847,7 +1847,7 @@ async function testWebmailLogin(chatId) {
 }
 
 // ===== FUNGSI: Smart Login =====
-async function startSmartLogin(chatId) {
+async function startSmartLogin(chatId, userInfo = null) {
     bot.sendMessage(chatId, `🚀 Memulai proses login...`);
     const success = await login('main', chatId);
     if (success) {
@@ -1856,7 +1856,9 @@ async function startSmartLogin(chatId) {
         bot.sendMessage(chatId, `✅ Login berhasil dengan Akun Utama!`);
         // Beritahu user lain bahwa AP2T sedang digunakan
         let namaUser = 'Seseorang';
-        if (chatId.toString() === adminChatId) {
+        if (userInfo) {
+            namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
+        } else if (chatId.toString() === adminChatId) {
             namaUser = 'Admin';
         } else {
             let activeProfileName = 'Seseorang';
@@ -2488,7 +2490,7 @@ bot.onText(/\/login_ap2t/, async (msg) => {
     if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Sedang proses login...`);
     commandQueue.push(async () => {
         isLoggingIn = true;
-        try { await startSmartLogin(chatId); }
+        try { await startSmartLogin(chatId, msg.from); }
         finally { isLoggingIn = false; }
     });
     if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
@@ -2499,7 +2501,7 @@ bot.onText(/\/login_webmail/, async (msg) => {
     if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Bot sedang sibuk (sedang login). Mohon tunggu...`);
     commandQueue.push(async () => {
         isLoggingIn = true;
-        try { await testWebmailLogin(chatId); }
+        try { await testWebmailLogin(chatId, msg.from); }
         finally { isLoggingIn = false; }
     });
     if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
@@ -5854,6 +5856,21 @@ bot.onText(/\/statistik/, async (msg) => {
         }
     } else {
         text += `\n_Belum ada rekap per profil hari ini._\n`;
+    }
+
+    const usersData = t.users || {};
+    const userIds = Object.keys(usersData);
+    if (userIds.length > 0) {
+        text += `\n*👥 RINCIAN PER USER (Hari Ini):*\n`;
+        for (const uid of userIds) {
+            const u = usersData[uid];
+            text += `\n👤 *${u.nama}*\n`;
+            text += `  🖨 CT: ✅${(u.cetak_token||{}).success||0} ❌${(u.cetak_token||{}).fail||0}\n`;
+            text += `  🔌 Aktivasi: ✅${(u.aktivasi_no_meter||{}).success||0} ❌${(u.aktivasi_no_meter||{}).fail||0}\n`;
+            const ambS = (u.ambil_token||{}).success||0;
+            const ambF = (u.ambil_token||{}).fail||0;
+            if (ambS > 0 || ambF > 0) text += `  🎟 Ambil: ✅${ambS} ❌${ambF}\n`;
+        }
     }
 
     await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
