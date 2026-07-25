@@ -1849,6 +1849,10 @@ async function startSmartLogin(chatId) {
 // ===== COMMANDS =====
 
 // --- ADMIN COMMANDS ---
+bot.onText(/\/maintenance/, async (msg) => {
+    if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, '? Akses ditolak.');
+    bot.sendMessage(msg.chat.id, '?? Gunakan Web Dashboard (Localhost) untuk mengatur Global/PC Maintenance.');
+});
 bot.onText(/\/upload_perbaikan/, async (msg) => {
     if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
     const opts = {
@@ -5767,3 +5771,4 @@ bot.onText(/\/statistik/, async (msg) => {
     const url = 'https://quickchart.io/chart?c=' + encodeURIComponent(JSON.stringify(chart));
     await bot.sendPhoto(chatId, url, { caption: '📊 **Statistik Penggunaan Harian**\n\nIni adalah grafik performa bot hari ini.', parse_mode: 'Markdown' });
 });
+
