@@ -2570,7 +2570,7 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
             recordStat('cetak_token', 'success', getActiveProfileName(), msg.from);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan fatal CT: ${err.message}`);
-            recordStat('cetak_token', 'fail', getActiveProfileName(), msg.from);
+            recordStat('cetak_token', 'fail', getActiveProfileName(), msg.from, err.message);
         }
     });
     
@@ -3993,7 +3993,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             // DIHAPUS: Agar memori tetap ada dan lompat ke monitoring jika di-CT ulang
             // clearCTState(idpel);
         } else {
-            bot.sendMessage(chatId, `⚠️ Waktu habis. Status belum '3' atau Token CLEAR TAMPER belum muncul di tabel.`);
+            throw new Error("Waktu habis. Status belum '3' atau Token CLEAR TAMPER belum muncul di tabel.");
         }
 
         // Rapikan tab HANYA JIKA SUKSES
@@ -5565,7 +5565,7 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
             recordStat('aktivasi_no_meter', 'success', getActiveProfileName(), msg.from);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan Aktivasi: ${err.message}`);
-            recordStat('aktivasi_no_meter', 'fail', getActiveProfileName(), msg.from);
+            recordStat('aktivasi_no_meter', 'fail', getActiveProfileName(), msg.from, err.message);
         }
     });
     
@@ -5812,14 +5812,14 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
                     }
                 }
             } else {
-                bot.sendMessage(chatId, `❌ Tombol SIMPAN tidak merespon/tidak ditemukan.`);
+                throw new Error("Tombol SIMPAN tidak merespon/tidak ditemukan.");
             }
         } else {
             throw new Error("Gagal menemukan kolom input No Agenda di halaman Aktivasi.");
         }
     } catch (e) {
         const { recordStat } = require('./stats');
-        await recordStat('aktivasi_no_meter', 'fail');
+        await recordStat('aktivasi_no_meter', 'fail', 'Unknown', null, e.message);
         bot.sendMessage(chatId, `❌ Gagal dalam proses Aktivasi Manual: ${e.message}`);
         try {
             const ssBuffer = await page.screenshot({ encoding: 'buffer' });
@@ -5890,6 +5890,14 @@ bot.onText(/\/statistik/, async (msg) => {
             const ambF = (u.ambil_token||{}).fail||0;
             if (ambS > 0 || ambF > 0) text += `  🎟 Ambil: ✅${ambS} ❌${ambF}\n`;
         }
+    }
+    const failReasons = t.fail_reasons || [];
+    if (failReasons.length > 0) {
+        text += `\n*⚠️ REKAPAN GAGAL HARI INI:*\n`;
+        failReasons.forEach((f, i) => {
+            const actionName = f.action === 'cetak_token' ? 'CT' : f.action === 'aktivasi_no_meter' ? 'Aktivasi' : f.action;
+            text += `${i+1}. [${f.time}] *${actionName}* (${f.user}) - ${f.reason}\n`;
+        });
     }
 
     await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
