@@ -153,7 +153,7 @@ setInterval(async () => {
             console.log('Heartbeat puppeteer error:', e.message);
         }
     }
-}, 300000); // 5 menit
+}, 150000); // 2.5 menit
 
 // Jalankan Web GUI Server lokal
 // require('./server.js'); dipindah ke bawah
@@ -1893,10 +1893,9 @@ async function startSmartLogin(chatId, userInfo = null) {
             namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
         }
 
-        const msgText = `✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T sebelum melanjutkan perintah._`;
+        const msgText = `✅ *Berhasil Login AP2T*\nAnda telah masuk ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T._`;
 
         bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
-        broadcastMessage(msgText, chatId);
     } else {
         bot.sendMessage(chatId, `⚠️ Login gagal. Coba lagi dengan \`/login_ap2t\` atau \`/reset_akun\``);
     }
@@ -5830,7 +5829,7 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
 
 
 
-bot.onText(/\/statistik/, async (msg) => {
+bot.onText(/\/(statistik|rekapan)/, async (msg) => {
     const chatId = msg.chat.id;
     if (chatId.toString() !== (process.env.ADMIN_CHAT_ID || '').toString()) {
         return bot.sendMessage(chatId, 'Perintah ini khusus untuk Admin.');
