@@ -1893,9 +1893,10 @@ async function startSmartLogin(chatId, userInfo = null) {
             namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
         }
 
-        const msgText = `✅ *Berhasil Login AP2T*\nAnda telah masuk ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T._`;
+        const msgText = `✅ *Berhasil Login AP2T*\nUser ${namaUser} telah berhasil masuk ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T._`;
 
         bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
+        broadcastMessage(msgText, chatId);
     } else {
         bot.sendMessage(chatId, `⚠️ Login gagal. Coba lagi dengan \`/login_ap2t\` atau \`/reset_akun\``);
     }
@@ -2511,6 +2512,11 @@ bot.onText(/\/status/, async (msg) => {
 bot.onText(/\/login_ap2t/, async (msg) => {
     const chatId = msg.chat.id;
     if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Sedang proses login...`);
+    
+    if (isLoggedIn) {
+        return bot.sendMessage(chatId, `ℹ️ Bot masih dalam status login dan terhubung ke AP2T dengan baik.`);
+    }
+
     commandQueue.push(async () => {
         isLoggingIn = true;
         try { await startSmartLogin(chatId, msg.from); }
@@ -2544,18 +2550,21 @@ bot.onText(/\/reset_akun/, async (msg) => {
     if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
 });
 
-bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
-    const chatId = msg.chat.id;
-    if (!match[1] || match[1].trim() === '') {
+async function handleCTCommand(chatId, from, input) {
+    if (!input || input.trim() === '') {
         pendingInputState[chatId] = 'ct';
         return bot.sendMessage(chatId, '⚡ Silakan masukkan **ID Pelanggan / No Meter**:\n_(Tambahkan No Gangguan / Uraian di sebelahnya dengan dipisah spasi jika ada)_', {parse_mode: 'Markdown'});
     }
-    const parts = match[1].trim().split(/\s+/);
+    const parts = input.trim().split(/\s+/);
     const idpel = parts[0];
     const nogan = parts.slice(1).join(' ') || '-';
 
     if (idpel.length !== 11 && idpel.length !== 12) {
         return bot.sendMessage(chatId, `[!] Gagal!\nID Pelanggan / No Meter wajib terdiri dari 11 atau 12 digit angka. Anda memasukkan ${idpel.length} digit.`);
+    }
+
+    if (isCTDuplicate(idpel, nogan)) {
+        return bot.sendMessage(chatId, `⚠️ *DITOLAK: CT Duplikat!*\nID Pelanggan \`${idpel}\` dengan No Gangguan \`${nogan}\` sudah berhasil dicetak tokennya hari ini. Tidak perlu diulang.`, { parse_mode: 'Markdown' });
     }
 
     if (isLoggingIn) return bot.sendMessage(chatId, `ℹ️ Bot sedang sibuk login. Mohon tunggu sebentar lalu ulangi.`);
@@ -2565,11 +2574,11 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
 
     commandQueue.push(async () => {
         try {
-            await processCT(idpel, nogan, chatId, msg.from);
-            recordStat('cetak_token', 'success', getActiveProfileName(), msg.from);
+            await processCT(idpel, nogan, chatId, from);
+            recordStat('cetak_token', 'success', getActiveProfileName(), from);
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan fatal CT: ${err.message}`);
-            recordStat('cetak_token', 'fail', getActiveProfileName(), msg.from, err.message);
+            recordStat('cetak_token', 'fail', getActiveProfileName(), from, err.message);
         }
     });
     
@@ -2578,6 +2587,16 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
     } else {
         bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
     }
+}
+
+bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
+    await handleCTCommand(msg.chat.id, msg.from, match[1]);
+});
+
+bot.onText(/^(\d{11,12}(?:\s+.*)?)$/, async (msg, match) => {
+    // Abaikan jika ini adalah balasan dari sebuah state yang sedang pending
+    if (pendingInputState[msg.chat.id]) return;
+    await handleCTCommand(msg.chat.id, msg.from, match[1]);
 });
 
 bot.onText(/\/reset_ct (.+)/, (msg, match) => {
@@ -3989,8 +4008,8 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             }
 
             // Bersihkan memori (state) CT untuk IDPEL ini karena sudah selesai sukses
-            // DIHAPUS: Agar memori tetap ada dan lompat ke monitoring jika di-CT ulang
-            // clearCTState(idpel);
+            clearCTState(idpel);
+            recordSuccessfulCTData(idpel, nogan);
         } else {
             throw new Error("Waktu habis. Status belum '3' atau Token CLEAR TAMPER belum muncul di tabel.");
         }
