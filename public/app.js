@@ -615,8 +615,55 @@ async function loadFleet() {
 
 
 
+function showPasswordPrompt(message) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed'; overlay.style.top = '0'; overlay.style.left = '0';
+        overlay.style.width = '100%'; overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0,0,0,0.8)';
+        overlay.style.zIndex = '9999'; overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center';
+        
+        const box = document.createElement('div');
+        box.style.backgroundColor = 'var(--bg-card)'; box.style.padding = '20px';
+        box.style.borderRadius = '8px'; box.style.width = '320px';
+        box.style.textAlign = 'center'; box.style.border = '1px solid rgba(255,255,255,0.1)';
+        
+        const text = document.createElement('p');
+        text.textContent = message; text.style.marginBottom = '15px';
+        text.style.color = '#fff';
+        
+        const input = document.createElement('input');
+        input.type = 'password'; input.placeholder = 'PASSWORD_ADMIN';
+        input.style.width = '100%'; input.style.padding = '10px';
+        input.style.marginBottom = '15px'; input.style.borderRadius = '4px';
+        input.style.border = '1px solid rgba(255,255,255,0.2)';
+        input.style.backgroundColor = 'rgba(0,0,0,0.2)'; input.style.color = '#fff';
+        
+        const btnBox = document.createElement('div');
+        btnBox.style.display = 'flex'; btnBox.style.gap = '10px';
+        
+        const okBtn = document.createElement('button');
+        okBtn.textContent = 'OK'; okBtn.className = 'btn-primary'; okBtn.style.flex = '1';
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel'; cancelBtn.className = 'btn-secondary'; cancelBtn.style.flex = '1';
+        
+        btnBox.appendChild(okBtn); btnBox.appendChild(cancelBtn);
+        box.appendChild(text); box.appendChild(input); overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        
+        input.focus();
+        
+        const cleanup = () => document.body.removeChild(overlay);
+        okBtn.onclick = () => { resolve(input.value); cleanup(); };
+        cancelBtn.onclick = () => { resolve(null); cleanup(); };
+        input.onkeyup = (e) => { if (e.key === 'Enter') { resolve(input.value); cleanup(); } else if (e.key === 'Escape') { resolve(null); cleanup(); } };
+    });
+}
+
 async function unlockField(id) {
-    const pwd = prompt('Masukkan Password Admin untuk membuka kunci:');
+    const pwd = await showPasswordPrompt('Masukkan PASSWORD_ADMIN untuk membuka kunci:');
     if (!pwd) return;
     try {
         const res = await fetch('/api/admin_login', {
