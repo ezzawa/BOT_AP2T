@@ -13,8 +13,8 @@
     <div id="loginOverlay">
         <div class="login-box">
             <h2><i class="fas fa-lock" style="color: var(--primary); margin-bottom: 10px;"></i><br>Akses Terbatas</h2>
-            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Masukkan password Admin untuk mengelola Konfigurasi &amp; Fleet. Atau masuk sebagai User biasa.</p>
-            <input type="password" id="adminPwd" placeholder="Password Admin...">
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Masukkan PASSWORD_ADMIN untuk mengelola Konfigurasi &amp; Fleet. Atau masuk sebagai User biasa.</p>
+            <input type="password" id="adminPwd" placeholder="PASSWORD_ADMIN">
             <button class="btn-primary" style="width: 100%;" onclick="attemptLogin()">Login Admin</button>
             <button class="btn-secondary" onclick="loginAsUser()">Masuk sebagai User (Live Log)</button>
         </div>
@@ -31,7 +31,7 @@
             <li id="tab-panduan" onclick="switchTab('panduan')"><i class="fas fa-book"></i> Panduan Sheets</li>
         </ul>
         <div class="sidebar-footer">
-            <p>Versi Bot: <span class="status-badge" style="padding: 2px 8px; font-size: 11px;">1.0.47</span></p>
+            <p>Versi Bot: <span class="status-badge" style="padding: 2px 8px; font-size: 11px;">1.0.52</span></p>
             <p style="margin-top: 10px; cursor: pointer; color: var(--danger);" onclick="logoutAdmin()"><i class="fas fa-sign-out-alt"></i> Keluar / Ganti Akun</p>
         </div>
     </div>
