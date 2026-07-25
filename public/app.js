@@ -90,8 +90,12 @@ async function fetchStats() {
         const stats = await res.json();
         const container = document.getElementById('statsContainer');
         if (!container) return;
-        const today = stats.daily || {};
-        container.innerHTML = `
+        const today = stats.today || stats.daily || {};
+        const profiles = today.profiles || {};
+        const profileNames = Object.keys(profiles);
+
+        // --- Stat boxes utama ---
+        let html = `
             <div style='background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); border-radius:8px; padding:10px; text-align:center;'>
                 <div style='font-size:11px; color:var(--text-muted);'>CT Sukses</div>
                 <div style='font-size:20px; font-weight:bold; color:var(--primary);'>${today.cetak_token?.success || 0}</div>
@@ -104,15 +108,42 @@ async function fetchStats() {
                 <div style='font-size:11px; color:var(--text-muted);'>Aktivasi Meter</div>
                 <div style='font-size:20px; font-weight:bold; color:var(--accent);'>${today.aktivasi_no_meter?.success || 0}</div>
             </div>
-            <div style='background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:10px; text-align:center;'>
-                <div style='font-size:11px; color:var(--text-muted);'>Cek Pelanggan</div>
-                <div style='font-size:20px; font-weight:bold; color:#f59e0b;'>${today.cek_pelanggan?.success || 0}</div>
+            <div style='background:rgba(139,92,246,0.1); border:1px solid rgba(139,92,246,0.3); border-radius:8px; padding:10px; text-align:center;'>
+                <div style='font-size:11px; color:var(--text-muted);'>Ambil Token</div>
+                <div style='font-size:20px; font-weight:bold; color:#8b5cf6;'>${today.ambil_token?.success || 0}</div>
             </div>
         `;
+        container.innerHTML = html;
+
+        // --- Per profil breakdown ---
+        const profileBox = document.getElementById('profileStatsContainer');
+        if (!profileBox) return;
+        if (profileNames.length === 0) {
+            profileBox.innerHTML = `<div style='color:var(--text-muted); font-size:12px; padding:8px 0;'>Belum ada data per profil hari ini.</div>`;
+            return;
+        }
+        let profileHtml = '';
+        for (const name of profileNames) {
+            const p = profiles[name];
+            const ctS = p.cetak_token?.success || 0;
+            const ctF = p.cetak_token?.fail || 0;
+            const akS = p.aktivasi_no_meter?.success || 0;
+            const akF = p.aktivasi_no_meter?.fail || 0;
+            profileHtml += `
+                <div style='background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px 14px; margin-bottom:8px;'>
+                    <div style='font-weight:600; color:var(--accent); margin-bottom:6px;'>👤 ${name}</div>
+                    <div style='display:flex; gap:16px; flex-wrap:wrap; font-size:12px;'>
+                        <span>🖨 CT: <b style='color:#4ade80;'>✅${ctS}</b> <b style='color:#f87171;'>❌${ctF}</b></span>
+                        <span>🔌 Aktivasi: <b style='color:#4ade80;'>✅${akS}</b> <b style='color:#f87171;'>❌${akF}</b></span>
+                    </div>
+                </div>`;
+        }
+        profileBox.innerHTML = profileHtml;
     } catch(e) {}
 }
 setInterval(fetchStats, 10000);
 fetchStats();
+
 
 async function fetchLiveLogs() {
     try {
