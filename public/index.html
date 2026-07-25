@@ -13,7 +13,7 @@
     <div id="loginOverlay">
         <div class="login-box">
             <h2><i class="fas fa-lock" style="color: var(--primary); margin-bottom: 10px;"></i><br>Akses Terbatas</h2>
-            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Masukkan password Admin untuk mengelola Konfigurasi & Fleet. Atau masuk sebagai User biasa.</p>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Masukkan password Admin untuk mengelola Konfigurasi &amp; Fleet. Atau masuk sebagai User biasa.</p>
             <input type="password" id="adminPwd" placeholder="Password Admin...">
             <button class="btn-primary" style="width: 100%;" onclick="attemptLogin()">Login Admin</button>
             <button class="btn-secondary" onclick="loginAsUser()">Masuk sebagai User (Live Log)</button>
@@ -26,12 +26,13 @@
         <ul>
             <li id="tab-livelog" class="active" onclick="switchTab('livelog')"><i class="fas fa-desktop"></i> Live Log (PC Ini)</li>
             <li id="tab-config" onclick="switchTab('config')"><i class="fas fa-cog"></i> Config Utama</li>
-            <li class="admin-only" id="tab-users" onclick="switchTab('users')"><i class="fas fa-server"></i> Fleet & Users</li>
+            <li id="tab-akun" onclick="switchTab('akun')"><i class="fas fa-users"></i> Akun &amp; Profil</li>
+            <li class="admin-only" id="tab-users" onclick="switchTab('users')"><i class="fas fa-server"></i> Fleet &amp; Users</li>
             <li id="tab-panduan" onclick="switchTab('panduan')"><i class="fas fa-book"></i> Panduan Sheets</li>
         </ul>
         <div class="sidebar-footer">
             <p>Versi Bot: <span class="status-badge" style="padding: 2px 8px; font-size: 11px;">1.0.47</span></p>
-            <p style="margin-top: 10px; cursor: pointer; color: var(--danger);" onclick="logoutAdmin()" ><i class="fas fa-sign-out-alt"></i> Keluar / Ganti Akun</p>
+            <p style="margin-top: 10px; cursor: pointer; color: var(--danger);" onclick="logoutAdmin()"><i class="fas fa-sign-out-alt"></i> Keluar / Ganti Akun</p>
         </div>
     </div>
 
@@ -47,7 +48,8 @@
             <div class="card">
                 <h3><i class="fas fa-terminal"></i> Log Aktivitas Terakhir di PC ini</h3>
                 <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Memantau secara langsung proses Cetak Token, Aktivasi, dll yang sedang berjalan.</p>
-                <div id="statsContainer" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;"></div><div class="log-box" id="liveLogBox">
+                <div id="statsContainer" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;"></div>
+                <div class="log-box" id="liveLogBox">
                     <div style="color: #64748b; text-align: center; margin-top: 20px;">Memuat log...</div>
                 </div>
             </div>
@@ -55,8 +57,32 @@
 
         <!-- CONFIG TAB -->
         <section id="config" class="tab-content">
-            <div class="card">
-                <h3><i class="fas fa-sliders-h"></i> Pengaturan .env (Config)</h3><form id="envForm" class="admin-only" onsubmit="event.preventDefault(); saveEnv();">
+
+            <!-- Kotak Akun Aktif (tampil untuk semua user) -->
+            <div class="card" style="margin-bottom: 20px;">
+                <h3><i class="fas fa-user-circle"></i> Akun AP2T Aktif Saat Ini</h3>
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Informasi akun yang sedang digunakan oleh bot. Untuk mengganti, pergi ke menu <b>Akun &amp; Profil</b>.</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label style="display:block; margin-bottom:5px; color:#ccc; font-size: 12px;">👤 Profil Aktif</label>
+                        <div id="activeProfileName" style="background:rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 10px 14px; color: var(--accent); font-weight: bold;">Memuat...</div>
+                    </div>
+                    <div></div>
+                    <div>
+                        <label style="display:block; margin-bottom:5px; color:#ccc; font-size: 12px;">🔑 Username AP2T</label>
+                        <div id="activeAp2tUser" style="background:rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 10px 14px; color: #e2e8f0;">-</div>
+                    </div>
+                    <div>
+                        <label style="display:block; margin-bottom:5px; color:#ccc; font-size: 12px;">🌐 Username Webmail</label>
+                        <div id="activeWebUser" style="background:rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 10px 14px; color: #e2e8f0;">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form .env (hanya admin yang bisa lihat) -->
+            <div class="card admin-only">
+                <h3><i class="fas fa-sliders-h"></i> Pengaturan .env (Config) <span style="font-size:12px; color: var(--text-muted); font-weight: normal;">— Hanya Admin</span></h3>
+                <form id="envForm" onsubmit="event.preventDefault(); saveEnv();">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div>
                             <label style="display:block; margin-bottom:5px; color:#ccc;">Telegram Bot Token</label>
@@ -79,40 +105,45 @@
                             <div style="display:flex; gap:10px;"><input type="password" id="ghRepo" readonly style="background-color:rgba(0,0,0,0.3); color:#888; flex:1;" placeholder="Kosongkan jika tidak dipakai"><button type="button" class="btn-outline" onclick="unlockField('ghRepo')" title="Buka Kunci"><i class="fas fa-lock" id="icon_ghRepo"></i></button></div>
                         </div>
                     </div>
-                    <button type="submit" class="btn-primary" style="margin-top: 15px;"><i class="fas fa-save"></i> Simpan & Restart Bot</button>
+                    <button type="submit" class="btn-primary" style="margin-top: 15px;"><i class="fas fa-save"></i> Simpan &amp; Restart Bot</button>
                 </form>
             </div>
-            
-            <div id="akun_sub_section" style="margin-top: 20px;">
+        </section>
+
+        <!-- AKUN TAB -->
+        <section id="akun" class="tab-content">
             <div class="card" style="margin-bottom: 20px;">
-                <h3><i class="fas fa-user-edit"></i> Edit Profil AP2T</h3>
+                <h3><i class="fas fa-user-edit"></i> Manajemen Akun AP2T</h3>
                 <form id="profileForm" onsubmit="event.preventDefault(); saveProfileFromForm();">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div>
-                            <label style="display:block; margin-bottom:5px; color:#ccc;">Nama Profil (Baca-saja)</label>
-                            <input type="text" id="profName" placeholder="Pilih profil dari tabel di bawah..." readonly style="background-color: rgba(0,0,0,0.4); color: #888; cursor: not-allowed;" required>
+                            <label style="display:block; margin-bottom:5px; color:#ccc;">Nama Profil</label>
+                            <input type="text" id="profName" placeholder="Nama profil baru / pilih dari tabel untuk edit..." style="background-color: rgba(0,0,0,0.2);" required>
                         </div>
                         <div></div>
                         
                         <div>
                             <label style="display:block; margin-bottom:5px; color:#ccc;">Username AP2T</label>
-                            <input type="text" id="profAp2tUser" required>
+                            <input type="text" id="profAp2tUser" placeholder="Username AP2T" required>
                         </div>
                         <div>
                             <label style="display:block; margin-bottom:5px; color:#ccc;">Password AP2T</label>
-                            <input type="text" id="profAp2tPass" required>
+                            <input type="password" id="profAp2tPass" placeholder="Password AP2T" required>
                         </div>
                         
                         <div>
                             <label style="display:block; margin-bottom:5px; color:#ccc;">Username Webmail</label>
-                            <input type="text" id="profWebUser" required>
+                            <input type="text" id="profWebUser" placeholder="Username Webmail" required>
                         </div>
                         <div>
                             <label style="display:block; margin-bottom:5px; color:#ccc;">Password Webmail</label>
-                            <input type="text" id="profWebPass" required>
+                            <input type="password" id="profWebPass" placeholder="Password Webmail" required>
                         </div>
                     </div>
-                    <button type="submit" class="btn-primary" style="margin-top: 15px;"><i class="fas fa-check"></i> Simpan Profil</button>
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button type="submit" class="btn-primary"><i class="fas fa-check"></i> Simpan Profil</button>
+                        <button type="button" class="btn-outline" onclick="resetProfileForm()"><i class="fas fa-plus"></i> Tambah Baru</button>
+                    </div>
                 </form>
             </div>
 
@@ -123,17 +154,13 @@
                             <th>Nama Profil</th>
                             <th>Username AP2T</th>
                             <th>Username Webmail</th>
-                            <th style="width: 200px;">Aksi</th>
+                            <th style="width: 210px;">Aksi</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
                 </table>
             </div>
-        </div>
-</section>
-
-        <!-- AKUN TAB -->
-        
+        </section>
 
         <!-- FLEET TAB -->
         <section id="users" class="tab-content">
@@ -192,7 +219,7 @@
                 <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 8px; font-family: monospace; font-size: 13px;">
                     <p style="color: #64748b;">// 1. Buat Spreadsheet baru.</p>
                     <p style="color: #64748b;">// 2. Buat header di baris 1 (A1 - J1): waktu, id_pelanggan, nama, tarif, daya, no_gangguan, token, panggilan, nama_lengkap, username</p>
-                    <p style="color: #64748b;">// 3. Extensions > Apps Script. Hapus kode bawaan, dan PASTE kode di bawah ini:</p>
+                    <p style="color: #64748b;">// 3. Extensions &gt; Apps Script. Hapus kode bawaan, dan PASTE kode di bawah ini:</p>
                     <br>
                     <pre style="color: var(--accent); overflow-x: auto;">
 function doPost(e) {
@@ -206,7 +233,7 @@ function doPost(e) {
   }
 }</pre>
                     <br>
-                    <p style="color: #64748b;">// 4. Deploy > New Deployment > Web App (Anyone).</p>
+                    <p style="color: #64748b;">// 4. Deploy &gt; New Deployment &gt; Web App (Anyone).</p>
                     <p style="color: #64748b;">// 5. Copy URL-nya ke menu Config Utama!</p>
                 </div>
             </div>
@@ -216,8 +243,3 @@ function doPost(e) {
     <script src="app.js?v=3"></script>
 </body>
 </html>
-
-
-
-
-
