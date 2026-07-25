@@ -1667,6 +1667,7 @@ async function login(accountType, chatId, retryLevel = 0) {
             
             await new Promise(r => setTimeout(r, 1500));
 
+            // Klik tombol Kirim
             await page.evaluate(() => {
                 const win = document.querySelector('.x-window');
                 const btns = Array.from((win || document).querySelectorAll('button, .x-btn-text, input[type="button"]'));
@@ -1674,7 +1675,18 @@ async function login(accountType, chatId, retryLevel = 0) {
                 if (kirim) kirim.click();
             });
 
-            await new Promise(r => setTimeout(r, 3000));
+            // Tunggu popup "Permintaan dikirim" lalu klik OK
+            await new Promise(r => setTimeout(r, 2500));
+            await page.evaluate(() => {
+                const allBtns = Array.from(document.querySelectorAll('button, .x-btn-text, input[type="button"]'));
+                const okBtn = allBtns.find(b => (b.textContent || b.value || '').trim().toUpperCase() === 'OK');
+                if (okBtn) okBtn.click();
+            }).catch(() => {});
+            await new Promise(r => setTimeout(r, 1500));
+            const ssAfterOk = await page.screenshot().catch(() => null);
+            if (ssAfterOk) await bot.sendPhoto(chatId, ssAfterOk, { caption: '📋 Status setelah klik OK pada popup Reset Session' }).catch(()=>{});
+
+            await new Promise(r => setTimeout(r, 1000));
             bot.sendMessage(chatId, `ℹ️ Permintaan Reset Session dikirim. Memeriksa Webmail...`);
             await handleOwaSessionReset(chatId);
 
@@ -1840,7 +1852,7 @@ async function startSmartLogin(chatId) {
             } catch(e){}
             namaUser = "Profil " + activeProfileName;
         }
-        broadcastMessage(`✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.`, chatId);
+        broadcastMessage(`✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T sebelum melanjutkan perintah._`, chatId);
     } else {
         bot.sendMessage(chatId, `⚠️ Login gagal. Coba lagi dengan \`/login_ap2t\` atau \`/reset_akun\``);
     }
