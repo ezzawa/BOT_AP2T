@@ -2784,14 +2784,10 @@ bot.onText(/\/logout/, async (msg) => {
             if (page && !page.isClosed()) { await page.close().catch(() => { }); page = null; }
             isLoggedIn = false; currentAccount = 'none';
             bot.sendMessage(chatId, `✅ Logout & tab AP2T ditutup.`);
-            broadcastMessage(`👋 Informasi: AP2T telah logout dan koneksi ditutup.`);
+            broadcastMessage(`❌ *INFORMASI:* Sesi AP2T telah logout dan koneksi ditutup.`);
         } catch (e) { bot.sendMessage(chatId, `❌ Gagal logout: ${e.message}`); }
     });
     if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
-}); page = null; }
-        isLoggedIn = false; currentAccount = 'none';
-        bot.sendMessage(chatId, `✅ Logout & tab AP2T ditutup.`);
-    } catch (e) { bot.sendMessage(chatId, `❌ Gagal logout: ${e.message}`); }
 });
 
 bot.onText(/\/stop_bot/, async (msg) => {
@@ -2803,20 +2799,13 @@ bot.onText(/\/stop_bot/, async (msg) => {
                 await browser.close().catch(() => {});
             }
             await bot.sendMessage(chatId, `✅ Bot telah dimatikan dari Telegram.`);
-            broadcastMessage(`⛔ Peringatan: Bot AP2T dimatikan oleh sistem.`);
+            broadcastMessage(`⚠️ Peringatan: Bot AP2T dimatikan oleh sistem.`);
             setTimeout(() => process.exit(0), 1500);
         } catch(e) {
             bot.sendMessage(chatId, `❌ Gagal mematikan bot: ${e.message}`);
         }
     });
     if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
-});
-        }
-        await bot.sendMessage(chatId, `✅ Bot telah dimatikan dari Telegram.`);
-        setTimeout(() => process.exit(0), 1500);
-    } catch(e) {
-        bot.sendMessage(chatId, `❌ Gagal mematikan bot: ${e.message}`);
-    }
 });
 
 bot.onText(/\/update_user_ap2t/, async (msg) => {
