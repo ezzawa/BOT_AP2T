@@ -99,11 +99,11 @@ async function fetchLiveLogs() {
             const div = document.createElement('div');
             div.className = 'log-entry';
             let msgHtml = log.msg;
-            if (msgHtml.includes('✅')) msgHtml = \`<span class="log-msg success">\${msgHtml}</span>\`;
-            else if (msgHtml.includes('❌')) msgHtml = \`<span class="log-msg error">\${msgHtml}</span>\`;
-            else if (msgHtml.includes('⚠️')) msgHtml = \`<span class="log-msg warning">\${msgHtml}</span>\`;
+            if (msgHtml.includes('✅')) msgHtml = `<span class="log-msg success">${msgHtml}</span>`;
+            else if (msgHtml.includes('❌')) msgHtml = `<span class="log-msg error">${msgHtml}</span>`;
+            else if (msgHtml.includes('⚠️')) msgHtml = `<span class="log-msg warning">${msgHtml}</span>`;
             
-            div.innerHTML = \`<span class="log-time">[\${log.time}]</span> \${msgHtml}\`;
+            div.innerHTML = `<span class="log-time">[${log.time}]</span> ${msgHtml}`;
             box.appendChild(div);
         });
     } catch (e) {
@@ -137,7 +137,7 @@ setInterval(fetchStatus, 5000);
 
 // === CONFIG (ENV) ===
 async function loadEnv() {
-    const res = await fetch(\`/api/env\`);
+    const res = await fetch(`/api/env`);
     const env = await res.json();
     
     document.getElementById('tgToken').value = env.TELEGRAM_BOT_TOKEN || '';
@@ -182,15 +182,15 @@ async function loadProfiles() {
         const webUser = data.webmail ? data.webmail.username : data.web_user;
         
         const tr = document.createElement('tr');
-        tr.innerHTML = \`
-            <td>\${name}</td>
-            <td><code style="background:rgba(0,0,0,0.3);padding:2px 5px;border-radius:4px;">\${ap2tUser || '-'}</code></td>
-            <td><code style="background:rgba(0,0,0,0.3);padding:2px 5px;border-radius:4px;">\${webUser || '-'}</code></td>
+        tr.innerHTML = `
+            <td>${name}</td>
+            <td><code style="background:rgba(0,0,0,0.3);padding:2px 5px;border-radius:4px;">${ap2tUser || '-'}</code></td>
+            <td><code style="background:rgba(0,0,0,0.3);padding:2px 5px;border-radius:4px;">${webUser || '-'}</code></td>
             <td style="display: flex; gap: 5px;">
-                <button class="btn-primary" style="font-size: 11px; padding: 6px 10px;" onclick="editProfile('\${name}')"><i class="fas fa-edit"></i> Edit</button>
-                <button class="btn-danger" style="font-size: 11px; padding: 6px 10px;" onclick="deleteProfile('\${name}')"><i class="fas fa-trash"></i> Hapus</button>
+                <button class="btn-primary" style="font-size: 11px; padding: 6px 10px;" onclick="editProfile('${name}')"><i class="fas fa-edit"></i> Edit</button>
+                <button class="btn-danger" style="font-size: 11px; padding: 6px 10px;" onclick="deleteProfile('${name}')"><i class="fas fa-trash"></i> Hapus</button>
             </td>
-        \`;
+        `;
         tbody.appendChild(tr);
     }
 }
@@ -216,7 +216,7 @@ async function saveProfileFromForm() {
         body: JSON.stringify(currentProfiles)
     });
     
-    alert(\`Profil \${name} berhasil disimpan!\`);
+    alert(`Profil ${name} berhasil disimpan!`);
     document.getElementById('profileForm').reset();
     loadProfiles();
 }
@@ -234,7 +234,7 @@ function editProfile(name) {
 }
 
 async function deleteProfile(name) {
-    if (!confirm(\`Hapus profil: \${name}?\`)) return;
+    if (!confirm(`Hapus profil: ${name}?`)) return;
     delete currentProfiles[name];
     await fetch('/api/profiles', {
         method: 'POST',
@@ -264,17 +264,17 @@ async function loadUsers() {
         const tr = document.createElement('tr');
         if (disabled) tr.style.opacity = '0.5';
         
-        tr.innerHTML = \`
-            <td>\${nama}</td>
-            <td>\${full_name}</td>
-            <td><span style="color: var(--primary);">\${username}</span></td>
-            <td><code>\${id}</code></td>
+        tr.innerHTML = `
+            <td>${nama}</td>
+            <td>${full_name}</td>
+            <td><span style="color: var(--primary);">${username}</span></td>
+            <td><code>${id}</code></td>
             <td style="text-align: center;">
-                <button class="btn-outline" style="padding: 4px 8px; font-size: 12px; \${disabled ? 'color: var(--accent); border-color: var(--accent);' : 'color: #f59e0b; border-color: #f59e0b;'}" onclick="toggleLocalUser('\${id}')">
-                    \${disabled ? '<i class="fas fa-play"></i> Enable' : '<i class="fas fa-pause"></i> Disable'}
+                <button class="btn-outline" style="padding: 4px 8px; font-size: 12px; ${disabled ? 'color: var(--accent); border-color: var(--accent);' : 'color: #f59e0b; border-color: #f59e0b;'}" onclick="toggleLocalUser('${id}')">
+                    ${disabled ? '<i class="fas fa-play"></i> Enable' : '<i class="fas fa-pause"></i> Disable'}
                 </button>
             </td>
-        \`;
+        `;
         tbody.appendChild(tr);
     });
 }
@@ -302,9 +302,9 @@ async function toggleLocalUser(id) {
 
 async function toggleGlobalMaintenance() {
     const newState = !globalMaintenance;
-    if(!confirm(\`Yakin ingin \${newState ? 'MENONAKTIFKAN' : 'MENGAKTIFKAN'} SELURUH PC secara bersamaan?\`)) return;
+    if(!confirm(`Yakin ingin ${newState ? 'MENONAKTIFKAN' : 'MENGAKTIFKAN'} SELURUH PC secara bersamaan?`)) return;
     
-    document.getElementById('btnGlobalMaintenance').innerHTML = \`<i class="fas fa-spinner fa-spin"></i> Processing...\`;
+    document.getElementById('btnGlobalMaintenance').innerHTML = `<i class="fas fa-spinner fa-spin"></i> Processing...`;
     await fetch('/api/fleet/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -315,7 +315,7 @@ async function toggleGlobalMaintenance() {
 
 async function toggleRemotePC(pcName, currentState) {
     const newState = !currentState;
-    if(!confirm(\`Yakin ingin \${newState ? 'MENONAKTIFKAN' : 'MENGAKTIFKAN'} PC: \${pcName}?\`)) return;
+    if(!confirm(`Yakin ingin ${newState ? 'MENONAKTIFKAN' : 'MENGAKTIFKAN'} PC: ${pcName}?`)) return;
     
     const tbody = document.querySelector('#fleetTbody');
     const oldHTML = tbody.innerHTML;
@@ -336,8 +336,8 @@ async function toggleRemotePC(pcName, currentState) {
 }
 
 async function deleteFleet(pcName) {
-    if(!confirm(\`Hapus PC '\${pcName}' dari Fleet?\`)) return;
-    await fetch(\`/api/fleet/\${encodeURIComponent(pcName)}\`, { method: 'DELETE' });
+    if(!confirm(`Hapus PC '${pcName}' dari Fleet?`)) return;
+    await fetch(`/api/fleet/${encodeURIComponent(pcName)}`, { method: 'DELETE' });
     loadFleet();
 }
 
@@ -359,11 +359,11 @@ async function loadFleet() {
         const btnGlobal = document.getElementById('btnGlobalMaintenance');
         if (btnGlobal) {
             if (globalMaintenance) {
-                btnGlobal.innerHTML = \`<i class="fas fa-power-off"></i> Global Maint (ON)\`;
+                btnGlobal.innerHTML = `<i class="fas fa-power-off"></i> Global Maint (ON)`;
                 btnGlobal.style.color = '#fff';
                 btnGlobal.style.background = '#ff4757';
             } else {
-                btnGlobal.innerHTML = \`<i class="fas fa-power-off"></i> Global Maint (OFF)\`;
+                btnGlobal.innerHTML = `<i class="fas fa-power-off"></i> Global Maint (OFF)`;
                 btnGlobal.style.color = '#ff4757';
                 btnGlobal.style.background = 'transparent';
             }
@@ -383,23 +383,24 @@ async function loadFleet() {
             
             const userStr = (pc.registered_users || []).map(u => typeof u === 'object' ? u.nama : u).join(', ');
             
-            tr.innerHTML = \`
-                <td><strong>\${pc.pc_name || 'Unknown'}</strong> \${isMaintenance ? '<span style="color:#ef4444;font-size:11px;">(Disabled)</span>' : ''}</td>
-                <td><span style="color: var(--primary); background: rgba(59,130,246,0.1); padding: 2px 6px; border-radius: 4px;">v\${pc.bot_version || '1.0'}</span></td>
-                <td><span style="color: var(--accent);">\${pc.last_online || '-'}</span></td>
-                <td><span style="font-size: 12px; color: #888;">\${userStr || 'Kosong'}</span></td>
+            tr.innerHTML = `
+                <td><strong>${pc.pc_name || 'Unknown'}</strong> ${isMaintenance ? '<span style="color:#ef4444;font-size:11px;">(Disabled)</span>' : ''}</td>
+                <td><span style="color: var(--primary); background: rgba(59,130,246,0.1); padding: 2px 6px; border-radius: 4px;">v${pc.bot_version || '1.0'}</span></td>
+                <td><span style="color: var(--accent);">${pc.last_online || '-'}</span></td>
+                <td><span style="font-size: 12px; color: #888;">${userStr || 'Kosong'}</span></td>
                 <td style="text-align: center; display:flex; gap:5px; justify-content:center;">
-                    <button class="btn" style="padding: 4px 8px; font-size: 12px; color: #fff; background-color: \${isMaintenance ? 'var(--accent)' : '#f59e0b'}; border: none; cursor: pointer; border-radius: 4px;" onclick="toggleRemotePC('\${pc.pc_name}', \${isMaintenance})">
-                        \${isMaintenance ? 'Enable' : 'Disable'}
+                    <button class="btn" style="padding: 4px 8px; font-size: 12px; color: #fff; background-color: ${isMaintenance ? 'var(--accent)' : '#f59e0b'}; border: none; cursor: pointer; border-radius: 4px;" onclick="toggleRemotePC('${pc.pc_name}', ${isMaintenance})">
+                        ${isMaintenance ? 'Enable' : 'Disable'}
                     </button>
-                    <button class="btn" style="padding: 4px 8px; font-size: 12px; color: #fff; background-color: var(--danger); border: none; cursor: pointer; border-radius: 4px;" onclick="deleteFleet('\${pc.pc_name}')">
+                    <button class="btn" style="padding: 4px 8px; font-size: 12px; color: #fff; background-color: var(--danger); border: none; cursor: pointer; border-radius: 4px;" onclick="deleteFleet('${pc.pc_name}')">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
-            \`;
+            `;
             tbody.appendChild(tr);
         });
     } catch (e) {
-        tbody.innerHTML = \`<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error: \${e.message}</td></tr>\`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error: ${e.message}</td></tr>`;
     }
 }
+
