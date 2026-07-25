@@ -4,6 +4,7 @@ const puppeteer = require('puppeteer');
 const { exec, execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { recordStat, getStats } = require('./stats');
 
 // Helper function to wait for an inline keyboard callback
 function waitForUserInteraction(messageId, timeoutMs = 300000) {
@@ -34,6 +35,19 @@ const crypto = require('crypto');
 
 // --- DATABASE USERS & BROADCAST ---
 const USERS_FILE = path.join(__dirname, 'active_users.json');
+
+function getActiveProfileName() {
+    try {
+        const fs = require('fs');
+        const profiles = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'profiles.json'), 'utf8'));
+        for (const n in profiles) {
+            if ((profiles[n].ap2t ? profiles[n].ap2t.username : profiles[n].ap2t_user) === credentials.main.username) {
+                return n;
+            }
+        }
+    } catch(e) {}
+    return 'Unknown';
+}
 
 function getActiveUsers() {
     const MAIN_USERS_FILE = path.join(__dirname, 'users.json');
@@ -388,13 +402,13 @@ bot.sendMessage = async (chatId, text, options) => {
 function getHWID() {
     try {
         try {
-            const output = require('child_process').execSync('wmic csproduct get uuid', {stdio: 'pipe'}).toString();
+            const output = require('child_process').execSync('wmic csproduct get uuid', {stdio: 'pipe', windowsHide: true}).toString();
             const lines = output.split('\n').map(l => l.trim()).filter(Boolean);
             if (lines[1] && lines[1].length > 10) return lines[1];
         } catch(e) {}
         
         try {
-            const output = require('child_process').execSync('powershell -NoProfile -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"', {stdio: 'pipe'}).toString();
+            const output = require('child_process').execSync('powershell -NoProfile -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"', {stdio: 'pipe', windowsHide: true}).toString();
             const val = output.trim();
             if (val && val.length > 10) return val;
         } catch(e) {}
@@ -564,7 +578,7 @@ async function processQueue() {
 
 // ===== FUNGSI: Bersihkan Chrome sebelum launch =====
 function killChromeAndClean() {
-    try { execSync('taskkill /F /IM chrome.exe /T', { stdio: 'ignore' }); } catch (e) { }
+    try { execSync('taskkill /F /IM chrome.exe /T', { stdio: 'ignore', windowsHide: true }); } catch (e) { }
     // Hapus SingletonLock agar Chrome bisa start bersih
     const lockFile = path.join(BOT_PROFILE_DIR, 'SingletonLock');
     const lockFile2 = path.join(BOT_PROFILE_DIR, 'Default', 'SingletonLock');
@@ -577,14 +591,14 @@ async function getEncryptionCodeFromApp(chatId) {
     bot.sendMessage(chatId, `🔐 Membuka AP2T ENKRIPSI untuk membaca kode otomatis...`);
 
     // Matikan Token.exe jika sudah running (mencegah .NET error "key already added")
-    try { execSync('taskkill /F /IM Token.exe /T', { stdio: 'ignore' }); } catch (e) { }
+    try { execSync('taskkill /F /IM Token.exe /T', { stdio: 'ignore', windowsHide: true }); } catch (e) { }
     await new Promise(r => setTimeout(r, 1000));
 
     return new Promise((resolve, reject) => {
         const { spawn } = require('child_process');
         const ps = spawn('powershell.exe', [
             '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', READ_ENKRIPSI_PS1
-        ]);
+        ], { windowsHide: true });
 
         let output = '';
         let stderr = '';
@@ -1486,13 +1500,13 @@ async function login(accountType, chatId, retryLevel = 0) {
         // 1. Set kode ke clipboard Windows dulu via PowerShell (gunakan base64 agar aman dari karakter khusus)
         try {
             const b64 = Buffer.from(kodeEnkripsi).toString('base64');
-            execSync(`powershell -command "[System.Windows.Forms.Clipboard]::SetText([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${b64}')))"`, { stdio: 'ignore' });
+            execSync(`powershell -command "[System.Windows.Forms.Clipboard]::SetText([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${b64}')))"`, { stdio: 'ignore', windowsHide: true });
         } catch (e) {
             console.error('Set clipboard gagal:', e.message);
             // Fallback ke cara biasa jika gagal
             try {
                 const escaped = kodeEnkripsi.replace(/'/g, "''");
-                execSync(`powershell -command "Set-Clipboard -Value '${escaped}'"`, { stdio: 'ignore' });
+                execSync(`powershell -command "Set-Clipboard -Value '${escaped}'"`, { stdio: 'ignore', windowsHide: true });
             } catch (e2) { }
         }
         await new Promise(r => setTimeout(r, 1000));
@@ -2060,7 +2074,7 @@ async function executeUpdateBot(msg, match) {
     
     await bot.sendMessage(msg.chat.id, `\u2705 Update selesai! Berhasil memperbarui ${successCount} file.\nBot akan me-restart sekarang...`, { parse_mode: 'HTML' });
     setTimeout(() => {
-        try { require('child_process').execSync('pm2 restart AP2T_Bot'); } catch(e){ process.exit(0); }
+        try { require('child_process').execSync('pm2 restart AP2T_Bot', { windowsHide: true }); } catch(e){ process.exit(0); }
     }, 2000);
 }
 bot.onText(/\/keygen (.+)/, (msg, match) => {
@@ -2220,7 +2234,7 @@ bot.on('callback_query', async (query) => {
     } else if (data === 'nav_layanan') {
         keyboard = [
             [{text: '🤖 Buat CT Otomatis', callback_data: 'cmd_ct'}],
-            [{text: '🔍 Cek Pelanggan', callback_data: 'cmd_cek_pelanggan'}, {text: '🔌 Aktivasi Meter', callback_data: 'cmd_aktivasi_no_meter'}],
+            [{text: '🔌 Aktivasi Meter', callback_data: 'cmd_aktivasi_no_meter'}],
             [{text: '📊 Monitor Token', callback_data: 'cmd_cek_token'}, {text: '🖨️ Cetak Token', callback_data: 'cmd_cetak_token'}],
             [{text: '🎟️ Ambil Token 20 Digit', callback_data: 'cmd_ambil_token'}],
             [{text: '🔙 Kembali', callback_data: 'nav_main'}]
@@ -2248,8 +2262,9 @@ bot.on('callback_query', async (query) => {
         keyboard = [
             [{text: '➕ Tambah User', callback_data: 'cmd_tambah_user'}, {text: '➖ Hapus User', callback_data: 'cmd_hapus_user'}],
             [{text: '🔑 Password Localhost', callback_data: 'cmd_password_localhost'}],
-            [{text: '🚀 Upload Update GitHub', callback_data: 'cmd_upload_perbaikan'}],
-            [{text: '⬇️ Download Update', callback_data: 'cmd_update_bot'}],
+            [{text: '🚀 Upload Update GitHub', callback_data: 'cmd_upload_perbaikan'}, {text: '⬇️ Download Update', callback_data: 'cmd_update_bot'}],
+            [{text: '👑 Lapor Status', callback_data: 'cmd_lapor_status'}, {text: '👑 Maintenance', callback_data: 'cmd_maintenance'}],
+            [{text: '👑 Statistik', callback_data: 'cmd_statistik'}],
             [{text: '🔙 Kembali', callback_data: 'nav_main'}]
         ];
     }
@@ -2399,18 +2414,29 @@ bot.on('callback_query', async (query) => {
     } else if (data === 'cmd_resume_bot') {
         if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, "⛔ Akses ditolak.");
         bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/resume_bot', message_id: Date.now() });
+    } else if (data === 'cmd_lapor_status') {
+        if (chatId.toString() !== adminChatId) return bot.answerCallbackQuery(query.id, { text: '⛔ Akses ditolak.' });
+        bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/lapor_status', message_id: Date.now() });
+    } else if (data === 'cmd_maintenance') {
+        if (chatId.toString() !== adminChatId) return bot.answerCallbackQuery(query.id, { text: '⛔ Akses ditolak.' });
+        bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/maintenance', message_id: Date.now() });
+    } else if (data === 'cmd_statistik') {
+        if (chatId.toString() !== adminChatId) return bot.answerCallbackQuery(query.id, { text: '⛔ Akses ditolak.' });
+        bot.emit('message', { chat: { id: chatId }, from: { id: chatId }, text: '/statistik', message_id: Date.now() });
     } else if (data === 'maintenance_on') {
         if (chatId.toString() !== adminChatId) return bot.answerCallbackQuery(query.id, { text: 'Akses ditolak.' });
         pcMaintenanceActive = true;
         global.forceUpdateMaintenance(true);
         bot.answerCallbackQuery(query.id, { text: 'Maintenance PC DIAKTIFKAN.' });
         bot.sendMessage(chatId, 'Maintenance PC ini telah DIAKTIFKAN. Semua user tidak dapat menggunakan bot di PC ini. Gunakan /maintenance untuk menonaktifkan.', { parse_mode: 'Markdown' });
+        broadcastMessage(`🔴 *PENGUMUMAN:* Sistem AP2T di PC ini sedang dalam masa pemeliharaan (Maintenance) oleh Admin. Layanan dihentikan sementara.`, chatId);
     } else if (data === 'maintenance_off') {
         if (chatId.toString() !== adminChatId) return bot.answerCallbackQuery(query.id, { text: 'Akses ditolak.' });
         pcMaintenanceActive = false;
         global.forceUpdateMaintenance(false);
         bot.answerCallbackQuery(query.id, { text: 'Maintenance PC DINONAKTIFKAN.' });
         bot.sendMessage(chatId, 'Maintenance PC ini telah DINONAKTIFKAN. Semua user sudah bisa kembali menggunakan bot di PC ini.', { parse_mode: 'Markdown' });
+        broadcastMessage(`🟢 *PENGUMUMAN:* Masa pemeliharaan telah selesai. Sistem AP2T di PC ini sudah aktif kembali.`, chatId);
     } else if (data === 'cmd_cektoken') {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_token <no_meter_atau_idpel>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_logout') {
@@ -2509,9 +2535,10 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
     commandQueue.push(async () => {
         try {
             await processCT(idpel, nogan, chatId, msg.from);
+            recordStat('cetak_token', 'success', getActiveProfileName());
         } catch (err) {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan fatal CT: ${err.message}`);
-            recordStat('cetak_token', 'fail');
+            recordStat('cetak_token', 'fail', getActiveProfileName());
         }
     });
     
@@ -5249,7 +5276,7 @@ const standardCommands = [
     { command: 'ct', description: '🤖 Buat CT Otomatis' },
     { command: 'login_ap2t', description: '🔑 Login AP2T' },
     { command: 'login_webmail', description: '📧 Tes Login Webmail' },
-    { command: 'cek_pelanggan', description: '🔍 Cek Data Pelanggan' },
+    
     { command: 'cetak_token', description: '🖨️ Cetak Token PDF' },
     { command: 'ambil_token', description: '🎟️ Ambil Token 20 Digit' },
     { command: 'cek_token', description: '📊 Monitoring Token Excel' },
@@ -5509,9 +5536,10 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
     commandQueue.push(async () => {
         try {
             await processAktivasiOnly(noAgenda, chatId, msg.from.first_name);
+            recordStat('aktivasi_no_meter', 'success', getActiveProfileName());
         } catch (err) {
-            bot.sendMessage(chatId, `❌ Terjadi kesalahan Aktivasi: ${err.message}`);
-        recordStat('aktivasi_no_meter', 'fail');
+            bot.sendMessage(chatId, `? Terjadi kesalahan Aktivasi: ${err.message}`);
+            recordStat('aktivasi_no_meter', 'fail', getActiveProfileName());
         }
     });
     
@@ -5748,11 +5776,6 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
                     const ssBuffer = await page.screenshot({ encoding: 'buffer' });
                     await bot.sendPhoto(chatId, ssBuffer, { caption: "Screenshot Keberhasilan" }, { filename: "success.png", contentType: 'image/png' });
                 } catch(ex) {}
-                
-                // NEW REQUIREMENT: Lanjut ke Monitoring Permohonan Token
-                bot.sendMessage(chatId, `🚀 Melanjutkan pencarian ke Monitoring Permohonan Token...`);
-                await clickMenu(page, ['PELAYANAN PELANGGAN', 'Monitoring', 'Monitoring Permohonan Token']);
-                const monitorFrame = await searchMonitoringToken(page, noAgenda, chatId);
                 if (monitorFrame) {
                     bot.sendMessage(chatId, `📸 Mengambil hasil pencarian Monitoring untuk No Agenda ${noAgenda}...`);
                     try {
@@ -5769,6 +5792,8 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
             throw new Error("Gagal menemukan kolom input No Agenda di halaman Aktivasi.");
         }
     } catch (e) {
+        const { recordStat } = require('./stats');
+        await recordStat('aktivasi_no_meter', 'fail');
         bot.sendMessage(chatId, `❌ Gagal dalam proses Aktivasi Manual: ${e.message}`);
         try {
             const ssBuffer = await page.screenshot({ encoding: 'buffer' });
@@ -5778,40 +5803,50 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
 }
 
 
+
 bot.onText(/\/statistik/, async (msg) => {
     const chatId = msg.chat.id;
     if (chatId.toString() !== (process.env.ADMIN_CHAT_ID || '').toString()) {
-        return bot.sendMessage(chatId, '❌ Perintah ini khusus untuk Admin.');
+        return bot.sendMessage(chatId, 'Perintah ini khusus untuk Admin.');
     }
-    const { getStats } = require('./stats');
     const stats = getStats();
-    if (!stats) return bot.sendMessage(chatId, 'Belum ada data statistik.');
-    
-    // Generate simple chart URL via quickchart.io
-    const chart = {
-        type: 'bar',
-        data: {
-            labels: ['Cetak Token', 'Aktivasi', 'Cek Pelanggan'],
-            datasets: [
-                {
-                    label: 'Sukses',
-                    data: [stats.today.cetak_token.success, stats.today.aktivasi_no_meter.success, stats.today.cek_pelanggan.success],
-                    backgroundColor: 'rgba(75, 192, 192, 0.8)'
-                },
-                {
-                    label: 'Gagal',
-                    data: [stats.today.cetak_token.fail, stats.today.aktivasi_no_meter.fail, stats.today.cek_pelanggan.fail],
-                    backgroundColor: 'rgba(255, 99, 132, 0.8)'
-                }
-            ]
-        },
-        options: {
-            title: { display: true, text: 'Statistik Harian Bot (' + stats.today.date + ')' }
+    if (!stats) return bot.sendMessage(chatId, 'Belum ada data statistik. Coba lagi setelah ada aktivitas CT atau Aktivasi.');
+    const t = stats.today || {};
+    const tot = stats.total || {};
+    const date = t.date || '-';
+    let text = '*STATISTIK BOT AP2T*\n';
+    text += 'Tanggal: ' + date + '\n\n';
+    text += '*TOTAL HARI INI:*\n';
+    text += 'CT (Cetak Token): Sukses ' + ((t.cetak_token||{}).success||0) + ' | Gagal ' + ((t.cetak_token||{}).fail||0) + '\n';
+    text += 'Aktivasi Meter: Sukses ' + ((t.aktivasi_no_meter||{}).success||0) + ' | Gagal ' + ((t.aktivasi_no_meter||{}).fail||0) + '\n';
+    text += 'Ambil Token: Sukses ' + ((t.ambil_token||{}).success||0) + ' | Gagal ' + ((t.ambil_token||{}).fail||0) + '\n';
+    text += '\n*TOTAL KESELURUHAN:*\n';
+    text += 'CT: Sukses ' + ((tot.cetak_token||{}).success||0) + ' | Gagal ' + ((tot.cetak_token||{}).fail||0) + '\n';
+    text += 'Aktivasi: Sukses ' + ((tot.aktivasi_no_meter||{}).success||0) + ' | Gagal ' + ((tot.aktivasi_no_meter||{}).fail||0) + '\n';
+    const profiles = t.profiles || {};
+    const profileNames = Object.keys(profiles);
+    if (profileNames.length > 0) {
+        text += '\nRINCIAN PER PROFIL (Hari Ini):\n';
+        for (const name of profileNames) {
+            const p = profiles[name];
+            text += '\nProfil: ' + name + '\n';
+            text += '  CT: Sukses' + ((p.cetak_token||{}).success||0) + ' Gagal' + ((p.cetak_token||{}).fail||0) + '\n';
+            text += '  Aktivasi: Sukses' + ((p.aktivasi_no_meter||{}).success||0) + ' Gagal' + ((p.aktivasi_no_meter||{}).fail||0) + '\n';
         }
-    };
-    
-    const url = 'https://quickchart.io/chart?c=' + encodeURIComponent(JSON.stringify(chart));
-    await bot.sendPhoto(chatId, url, { caption: '📊 **Statistik Penggunaan Harian**\n\nIni adalah grafik performa bot hari ini.', parse_mode: 'Markdown' });
+    } else { text += '\nBelum ada data per profil hari ini.\n'; }
+    await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    try {
+        const chart = { type: 'bar', data: { labels: ['CT', 'Aktivasi', 'Ambil Token'], datasets: [ { label: 'Sukses', data: [(t.cetak_token||{}).success||0, (t.aktivasi_no_meter||{}).success||0, (t.ambil_token||{}).success||0], backgroundColor: 'rgba(75, 192, 192, 0.8)' }, { label: 'Gagal', data: [(t.cetak_token||{}).fail||0, (t.aktivasi_no_meter||{}).fail||0, (t.ambil_token||{}).fail||0], backgroundColor: 'rgba(255, 99, 132, 0.8)' } ] }, options: { title: { display: true, text: 'Statistik Harian (' + date + ')' } } };
+        const url = 'https://quickchart.io/chart?c=' + encodeURIComponent(JSON.stringify(chart));
+        await bot.sendPhoto(chatId, url, { caption: 'Grafik Statistik Harian Bot AP2T' });
+    } catch(e) { console.log('Gagal kirim chart statistik:', e.message); }
 });
 
-
+// NOTIFIKASI BOT RESTART ke ADMIN
+(async () => {
+    await new Promise(r => setTimeout(r, 8000));
+    const restartCount = parseInt(process.env.PM2_RESTART_COUNT || '0');
+    if (adminChatId && restartCount > 0) {
+        bot.sendMessage(adminChatId, 'PERHATIAN: BOT AP2T BARU SAJA RESTART!\n\nBot baru saja menyala kembali. Kemungkinan penyebab: mati lampu, internet putus, atau error.\n\nWaktu: ' + new Date().toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}) + '\nTotal Restart: ' + restartCount + '\n\nGunakan /status untuk mengecek kondisi AP2T.', { parse_mode: 'Markdown' }).catch(()=>{});
+    }
+})();
