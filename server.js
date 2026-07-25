@@ -41,14 +41,7 @@ function saveEnv(env) {
     fs.writeFileSync(envPath, content.trim() + '\n');
 }
 
-function getHWID() {
-    try {
-        const output = execSync('powershell -NoProfile -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"').toString();
-        return output.trim() || 'UNKNOWN_HWID';
-    } catch (e) {
-        return 'UNKNOWN_HWID';
-    }
-}
+let cachedHWID = null; function getHWID() { if (cachedHWID) return cachedHWID; try { const output = execSync('powershell -NoProfile -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"').toString(); cachedHWID = output.trim() || 'UNKNOWN_HWID'; return cachedHWID; } catch (e) { return 'UNKNOWN_HWID'; } }
 
 let liveLogs = [];
 exports.addLiveLog = function(msg) {
@@ -306,3 +299,6 @@ app.get('/api/fleet/config', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`✅ GUI Dashboard is running on http://localhost:${PORT}`);
 });
+
+
+
