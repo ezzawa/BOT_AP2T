@@ -108,6 +108,15 @@ async function broadcastMessage(text, excludeChatId = null) {
     }
 }
 
+async function broadcastPhoto(photoPath, caption, excludeChatId = null) {
+    const users = getActiveUsers();
+    for (const u of users) {
+        if (u != excludeChatId) {
+            bot.sendPhoto(u, photoPath, { caption, parse_mode: 'Markdown' }).catch(()=>{});
+        }
+    }
+}
+
 
 // --- SISTEM HEARTBEAT (ANTI-LOGOUT) ---
 setInterval(async () => {
@@ -1853,14 +1862,9 @@ async function startSmartLogin(chatId, userInfo = null) {
     if (success) {
         isLoggedIn = true;
         currentAccount = 'main';
-        bot.sendMessage(chatId, `✅ Login berhasil dengan Akun Utama!`);
-        // Beritahu user lain bahwa AP2T sedang digunakan
+        // Tentukan nama user untuk broadcast
         let namaUser = 'Seseorang';
         if (chatId.toString() === adminChatId) {
-            namaUser = 'Admin';
-        } else if (userInfo) {
-            namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
-        } else {
             let activeProfileName = 'Seseorang';
             try {
                 const fs = require('fs');
@@ -1872,8 +1876,35 @@ async function startSmartLogin(chatId, userInfo = null) {
                 }
             } catch(e){}
             namaUser = "Profil " + activeProfileName;
+        } else if (userInfo) {
+            namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
         }
-        broadcastMessage(`✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T sebelum melanjutkan perintah._`, chatId);
+
+        const msgText = `✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T sebelum melanjutkan perintah._`;
+
+        // Ambil screenshot dashboard AP2T
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const ssPath = path.join(__dirname, 'login_success.png');
+            
+            // Beri waktu sejenak agar dashboard selesai dimuat sepenuhnya (seperti screenshot lampiran user)
+            await new Promise(r => setTimeout(r, 4000));
+            
+            await page.screenshot({ path: ssPath, fullPage: true }).catch(()=>{});
+            
+            if (fs.existsSync(ssPath)) {
+                await bot.sendPhoto(chatId, ssPath, { caption: msgText, parse_mode: 'Markdown' });
+                await broadcastPhoto(ssPath, msgText, chatId);
+                fs.unlinkSync(ssPath);
+            } else {
+                bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
+                broadcastMessage(msgText, chatId);
+            }
+        } catch(e) {
+            bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown' });
+            broadcastMessage(msgText, chatId);
+        }
     } else {
         bot.sendMessage(chatId, `⚠️ Login gagal. Coba lagi dengan \`/login_ap2t\` atau \`/reset_akun\``);
     }
