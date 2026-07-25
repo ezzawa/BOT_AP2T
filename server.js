@@ -90,10 +90,7 @@ app.post('/api/env', (req, res) => {
 app.post('/api/admin_login', (req, res) => {
     const pwd = req.body.password;
     const env = getEnv();
-    let correctPassword = env.ADMIN_PASSWORD || 'admin123';
-    if (correctPassword.startsWith('B64:')) {
-        correctPassword = Buffer.from(correctPassword.substring(4), 'base64').toString('utf8');
-    }
+    const correctPassword = env.ADMIN_PASSWORD || 'admin123';
     
     if (pwd === correctPassword) {
         res.json({ success: true });
