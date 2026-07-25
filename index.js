@@ -1961,7 +1961,7 @@ async function executeUploadPerbaikan(msg) {
     } catch(e) { console.error("Gagal bump version", e); }
 
     const statusMsg = await bot.sendMessage(msg.chat.id, "⏳ Sedang memeriksa dan mengunggah perbaikan ke GitHub...\nMohon tunggu sebentar...");
-    const filesToSync = ['index.js', 'server.js', 'public/index.html', 'public/style.css', 'public/app.js', 'package.json'];
+    const filesToSync = ['index.js', 'server.js', 'stats.js', 'public/index.html', 'public/style.css', 'public/app.js', 'package.json'];
     const axios = require('axios');
     let successCount = 0;
     let sameCount = 0;
@@ -2079,7 +2079,7 @@ async function executeUpdateBot(msg, match) {
         await bot.sendMessage(msg.chat.id, "⏳ Sedang mengunduh update dari GitHub...", { parse_mode: 'HTML' });
     }
 
-    const filesToSync = ['index.js', 'server.js', 'public/index.html', 'public/style.css', 'public/app.js', 'package.json'];
+    const filesToSync = ['index.js', 'server.js', 'stats.js', 'public/index.html', 'public/style.css', 'public/app.js', 'package.json'];
     let successCount = 0;
     
     for (const file of filesToSync) {
