@@ -9,7 +9,7 @@ const statsPath = path.join(__dirname, 'stats.json');
  * @param {string} profileName - Active profile name
  * @param {object|null} userInfo - { id, nama } from Telegram msg.from
  */
-function recordStat(action, status, profileName = 'Unknown', userInfo = null) {
+function recordStat(action, status, profileName = 'Unknown', userInfo = null, reason = '') {
     try {
         let stats = {};
         if (fs.existsSync(statsPath)) {
@@ -28,7 +28,8 @@ function recordStat(action, status, profileName = 'Unknown', userInfo = null) {
                 cek_pelanggan: { success: 0, fail: 0 },
                 profiles: {},
                 users: {},
-                ct_history: []
+                ct_history: [],
+                fail_reasons: []
             };
         }
         if (!stats.total) {
@@ -39,6 +40,7 @@ function recordStat(action, status, profileName = 'Unknown', userInfo = null) {
                 cek_pelanggan: { success: 0, fail: 0 }
             };
         }
+        if (!stats.today.fail_reasons) stats.today.fail_reasons = [];
 
         // Per profil
         if (!stats.today.profiles) stats.today.profiles = {};
@@ -53,8 +55,9 @@ function recordStat(action, status, profileName = 'Unknown', userInfo = null) {
 
         // Per user
         if (!stats.today.users) stats.today.users = {};
+        let userName = "System";
         if (userInfo && userInfo.id) {
-            const userName = userInfo.nama || userInfo.first_name || String(userInfo.id);
+            userName = userInfo.nama || userInfo.first_name || String(userInfo.id);
             const userId = String(userInfo.id);
             if (!stats.today.users[userId]) {
                 stats.today.users[userId] = {
@@ -67,7 +70,6 @@ function recordStat(action, status, profileName = 'Unknown', userInfo = null) {
             }
             if (!stats.today.users[userId][action]) stats.today.users[userId][action] = { success: 0, fail: 0 };
             stats.today.users[userId][action][status]++;
-            // Update nama jika berubah
             stats.today.users[userId].nama = userName;
         }
 
@@ -79,6 +81,15 @@ function recordStat(action, status, profileName = 'Unknown', userInfo = null) {
         stats.today[action][status]++;
         stats.total[action][status]++;
         stats.today.profiles[profileName][action][status]++;
+
+        if (status === 'fail' && reason) {
+            stats.today.fail_reasons.push({
+                time: new Date().toLocaleTimeString('id-ID', {timeZone: 'Asia/Jakarta'}),
+                action,
+                user: userName,
+                reason
+            });
+        }
 
         fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2));
     } catch (e) {
