@@ -25,14 +25,14 @@
         <h2><i class="fas fa-robot"></i> AP2T Bot</h2>
         <ul>
             <li id="tab-livelog" class="active" onclick="switchTab('livelog')"><i class="fas fa-desktop"></i> Live Log (PC Ini)</li>
-            <li id="tab-config" style="display:none;" onclick="switchTab('config')"><i class="fas fa-cog"></i> Config Utama</li>
-            <li id="tab-akun" style="display:none;" onclick="switchTab('akun')"><i class="fas fa-users"></i> Akun & Profil</li>
-            <li id="tab-users" style="display:none;" onclick="switchTab('users')"><i class="fas fa-server"></i> Fleet & Users</li>
-            <li id="tab-panduan" style="display:none;" onclick="switchTab('panduan')"><i class="fas fa-book"></i> Panduan Sheets</li>
+            <li id="tab-config" onclick="switchTab('config')"><i class="fas fa-cog"></i> Config Utama</li>
+            <li id="tab-akun" onclick="switchTab('akun')"><i class="fas fa-users"></i> Akun & Profil</li>
+            <li id="tab-users" onclick="switchTab('users')"><i class="fas fa-server"></i> Fleet & Users</li>
+            <li id="tab-panduan" onclick="switchTab('panduan')"><i class="fas fa-book"></i> Panduan Sheets</li>
         </ul>
         <div class="sidebar-footer">
             <p>Versi Bot: <span class="status-badge" style="padding: 2px 8px; font-size: 11px;">1.0.47</span></p>
-            <p style="margin-top: 10px; cursor: pointer; color: var(--danger);" onclick="logoutAdmin()" class="admin-only" style="display:none;"><i class="fas fa-sign-out-alt"></i> Keluar (Admin)</p>
+            <p style="margin-top: 10px; cursor: pointer; color: var(--danger);" onclick="logoutAdmin()" ><i class="fas fa-sign-out-alt"></i> Keluar / Ganti Akun</p>
         </div>
     </div>
 
@@ -48,7 +48,7 @@
             <div class="card">
                 <h3><i class="fas fa-terminal"></i> Log Aktivitas Terakhir di PC ini</h3>
                 <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Memantau secara langsung proses Cetak Token, Aktivasi, dll yang sedang berjalan.</p>
-                <div class="log-box" id="liveLogBox">
+                <div id="statsContainer" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;"></div><div class="log-box" id="liveLogBox">
                     <div style="color: #64748b; text-align: center; margin-top: 20px;">Memuat log...</div>
                 </div>
             </div>
@@ -225,5 +225,6 @@ function doPost(e) {
     <script src="app.js?v=3"></script>
 </body>
 </html>
+
 
 
