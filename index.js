@@ -130,17 +130,27 @@ setInterval(async () => {
                 return;
             }
             
-            // Lakukan tindakan ringan ke AP2T untuk mereset timer idle PLN
-            await page.evaluate(() => {
-                // Coba refresh header
-                const topPnl = document.querySelector('.x-panel-header');
-                if (topPnl) {
-                   topPnl.click();
+            const isAlive = await page.evaluate(async () => {
+                try {
+                    // Coba ambil Menu.aspx untuk menjaga session (AJAX Fetch)
+                    const res = await fetch('/ap2t/Menu.aspx', { cache: 'no-cache' });
+                    if (res.status >= 500) {
+                        return { ok: false, status: res.status, text: 'Server Error ' + res.status };
+                    }
+                    return { ok: true };
+                } catch(e) {
+                    return { ok: false, error: e.message };
                 }
             });
-            console.log('Heartbeat dikirim ke AP2T');
+            
+            if (isAlive.ok) {
+                console.log('Heartbeat berhasil dikirim ke AP2T');
+            } else {
+                console.log('Heartbeat mendeteksi AP2T gangguan:', isAlive.text || isAlive.error);
+                try { broadcastMessage(`⚠️ *PING GANGGUAN:* Server AP2T terdeteksi tidak merespon dengan baik atau sedang gangguan.\nInfo: ${isAlive.text || isAlive.error}`); } catch(e){}
+            }
         } catch(e) {
-            console.log('Heartbeat error:', e.message);
+            console.log('Heartbeat puppeteer error:', e.message);
         }
     }
 }, 300000); // 5 menit
