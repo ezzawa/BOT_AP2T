@@ -63,18 +63,19 @@ async function saveAdminPassword() {
 }
 
 function switchTab(tabId) {
-    if (document.getElementById('tab-' + tabId).style.display === 'none') {
-        return; // Prevent user from clicking hidden tabs manually via console
+    const tabEl = document.getElementById('tab-' + tabId);
+    if (!tabEl || tabEl.style.display === 'none') {
+        return; // Prevent clicking hidden admin tabs
     }
     document.querySelectorAll('.sidebar li').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     
-    document.getElementById('tab-' + tabId).classList.add('active');
+    tabEl.classList.add('active');
     document.getElementById(tabId).classList.add('active');
     
     let title = "Dashboard";
     if (tabId === 'livelog') title = "Live Log (Status Proses)";
-    if (tabId === 'config') { title = "Pengaturan Config"; loadEnv(); }
+    if (tabId === 'config') { title = "Pengaturan Config"; loadEnv(); loadActiveAccount(); }
     if (tabId === 'akun') { title = "Manajemen Akun AP2T"; loadProfiles(); }
     if (tabId === 'users') { title = "Fleet Monitor & Users"; loadUsers(); loadFleet(); }
     if (tabId === 'panduan') title = "Panduan Setup Bot";
@@ -205,11 +206,12 @@ async function loadProfiles() {
     try {
         const res = await fetch('/api/profiles');
         const profiles = await res.json();
+        currentProfiles = profiles;
         const activeRes = await fetch('/api/profiles/active');
         const activeData = await activeRes.json();
         const activeName = activeData.active;
         
-        const tbody = document.querySelector('#akun tbody');
+        const tbody = document.querySelector('#profilesTable tbody');
         tbody.innerHTML = '';
         
         for (const [nama, data] of Object.entries(profiles)) {
@@ -235,6 +237,51 @@ async function loadProfiles() {
     } catch (e) {
         console.error("Gagal load profil", e);
     }
+}
+
+async function loadActiveAccount() {
+    try {
+        const activeRes = await fetch('/api/profiles/active');
+        const activeData = await activeRes.json();
+        const activeName = activeData.active;
+        
+        const nameEl = document.getElementById('activeProfileName');
+        const ap2tEl = document.getElementById('activeAp2tUser');
+        const webEl = document.getElementById('activeWebUser');
+        if (!nameEl) return;
+        
+        if (!activeName) {
+            nameEl.textContent = 'Tidak ada profil aktif';
+            nameEl.style.color = 'var(--danger)';
+            ap2tEl.textContent = '-';
+            webEl.textContent = '-';
+            return;
+        }
+        
+        const profilesRes = await fetch('/api/profiles');
+        const profiles = await profilesRes.json();
+        const p = profiles[activeName];
+        
+        nameEl.textContent = activeName;
+        nameEl.style.color = 'var(--accent)';
+        ap2tEl.textContent = p ? (p.ap2t ? p.ap2t.username : p.ap2t_user || '-') : '-';
+        webEl.textContent = p ? (p.webmail ? p.webmail.username : p.web_user || '-') : '-';
+    } catch(e) {
+        const nameEl = document.getElementById('activeProfileName');
+        if (nameEl) nameEl.textContent = 'Gagal memuat data';
+    }
+}
+
+function resetProfileForm() {
+    document.getElementById('profName').value = '';
+    document.getElementById('profName').readOnly = false;
+    document.getElementById('profName').style.backgroundColor = '';
+    document.getElementById('profName').style.color = '';
+    document.getElementById('profName').style.cursor = '';
+    document.getElementById('profAp2tUser').value = '';
+    document.getElementById('profAp2tPass').value = '';
+    document.getElementById('profWebUser').value = '';
+    document.getElementById('profWebPass').value = '';
 }
 
 async function setProfileActive(nama) {
