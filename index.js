@@ -4263,16 +4263,31 @@ async function getIdpelFromNomet(nomet, chatId) {
         const inputs = Array.from(document.querySelectorAll('.x-form-text'));
         let combo = inputs.find(i => i.id === 'filter_combo_nomet_auto');
         if (!combo) {
-            combo = inputs.find(i => i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama');
+            combo = inputs.find(i => i.value && (i.value.toLowerCase().includes('pelanggan') || i.value.toLowerCase().includes('meter') || i.value.toLowerCase().includes('nama')));
         }
-        if (!combo) return null;
         
-        const comboIdx = inputs.indexOf(combo);
-        if (comboIdx >= 0 && comboIdx + 1 < inputs.length) {
-            const targetInput = inputs[comboIdx + 1];
-            targetInput.id = 'filter_input_nomet_auto';
-            return targetInput.id;
+        if (combo) {
+            const comboIdx = inputs.indexOf(combo);
+            if (comboIdx >= 0 && comboIdx + 1 < inputs.length) {
+                const targetInput = inputs[comboIdx + 1];
+                targetInput.id = 'filter_input_nomet_auto';
+                return targetInput.id;
+            }
         }
+        
+        // Fallback Ekstrem 1: Ambil input teks kosong pertama yang bukan readonly
+        const emptyInputs = inputs.filter(i => !i.readOnly && !i.disabled && (!i.value || i.value.trim() === ''));
+        if (emptyInputs.length > 0) {
+            emptyInputs[0].id = 'filter_input_nomet_auto';
+            return emptyInputs[0].id;
+        }
+        
+        // Fallback Ekstrem 2: Ambil input text ke-2 jika ada
+        if (inputs.length > 1) {
+            inputs[1].id = 'filter_input_nomet_auto';
+            return inputs[1].id;
+        }
+
         return null;
     });
 
@@ -4472,20 +4487,36 @@ async function processCariPelanggan(target, chatId) {
         // 2. Isi Input
         const filterInputId = await infoFrame.evaluate(() => {
             const inputs = Array.from(document.querySelectorAll('.x-form-text'));
+            
             let combo = inputs.find(i => i.id === 'filter_combo_nomet');
             if (!combo) {
                 // ExtJS DOM mungkin di-rebuild saat dropdown diganti, cari ulang by value
-                combo = inputs.find(i => i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama');
+                combo = inputs.find(i => i.value && (i.value.toLowerCase().includes('pelanggan') || i.value.toLowerCase().includes('meter') || i.value.toLowerCase().includes('nama')));
             }
-            if (!combo) return null;
             
-            const comboIdx = inputs.indexOf(combo);
-            // Kolom input selalu elemen form-text selanjutnya setelah combo di ExtJS
-            if (comboIdx >= 0 && comboIdx + 1 < inputs.length) {
-                const targetInput = inputs[comboIdx + 1];
-                targetInput.id = 'filter_input_nomet';
-                return targetInput.id;
+            if (combo) {
+                const comboIdx = inputs.indexOf(combo);
+                // Kolom input selalu elemen form-text selanjutnya setelah combo di ExtJS
+                if (comboIdx >= 0 && comboIdx + 1 < inputs.length) {
+                    const targetInput = inputs[comboIdx + 1];
+                    targetInput.id = 'filter_input_nomet';
+                    return targetInput.id;
+                }
             }
+            
+            // Fallback Ekstrem 1: Ambil input teks kosong pertama yang bukan readonly
+            const emptyInputs = inputs.filter(i => !i.readOnly && !i.disabled && (!i.value || i.value.trim() === ''));
+            if (emptyInputs.length > 0) {
+                emptyInputs[0].id = 'filter_input_nomet';
+                return emptyInputs[0].id;
+            }
+            
+            // Fallback Ekstrem 2: Ambil input text ke-2 jika ada
+            if (inputs.length > 1) {
+                inputs[1].id = 'filter_input_nomet';
+                return inputs[1].id;
+            }
+
             return null;
         });
 
