@@ -1548,7 +1548,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
 }
 
 async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
-    if (isLoggingIn) {
+    if (isLoggingIn && retryLevel === 0) {
         if (chatId) bot.sendMessage(chatId, `⏳ Bot sedang sibuk (sedang login). Mohon tunggu...`);
         return false;
     }
@@ -2678,9 +2678,7 @@ bot.onText(/\/login_ap2t/, async (msg) => {
     const chatId = msg.chat.id;
     if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Sedang proses login...`);
     commandQueue.push(async () => {
-        isLoggingIn = true;
-        try { await startSmartLogin(chatId, msg.from); }
-        finally { isLoggingIn = false; }
+        await startSmartLogin(chatId, msg.from);
     });
     if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
 });
