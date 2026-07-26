@@ -119,45 +119,100 @@ async function broadcastPhoto(photoPath, caption, excludeChatId = null) {
 }
 
 
-// --- SISTEM HEARTBEAT (ANTI-LOGOUT) ---
+// --- SISTEM HEARTBEAT (ANTI-LOGOUT) + AUTO RE-LOGIN ---
 setInterval(async () => {
     if (isLoggedIn && page && !page.isClosed()) {
         try {
-            // Cek URL saat ini dan pastikan UI dasbor masih ada
             const currentUrl = page.url().toLowerCase();
-            
             const isDashboard = await page.evaluate(() => {
                 return !!(document.querySelector('.x-tree-panel') || document.querySelector('#app-nav') || document.querySelector('.x-panel-header'));
             }).catch(() => false);
 
-            if (currentUrl.includes('login.aspx') || currentUrl.includes('/login') || (!isDashboard && !currentUrl.includes('beranda') && !currentUrl.includes('menu') && !currentUrl.includes('default'))) {
+            const isSessionLive = await page.evaluate(() => {
+                // Cek apakah menu navigasi utama AP2T masih ada
+                const menuItems = Array.from(document.querySelectorAll('.x-tree-node-anchor, .x-tree-node-text'));
+                return menuItems.some(el => el.textContent.includes('PELAYANAN PELANGGAN') || el.textContent.includes('INFO PELANGGAN'));
+            }).catch(() => false);
+
+            const isLogoutPage = currentUrl.includes('login.aspx') || currentUrl.includes('/login');
+
+            if (isLogoutPage || (!isDashboard && !currentUrl.includes('beranda') && !currentUrl.includes('menu') && !currentUrl.includes('default')) || !isSessionLive) {
+                console.log('[HEARTBEAT] Sesi AP2T tidak valid! Mencoba re-login otomatis...');
                 isLoggedIn = false;
                 const ssOut = await page.screenshot().catch(() => null);
-                if (ssOut) {
-                    await broadcastPhoto(ssOut, `❌ *INFORMASI: Sesi AP2T Ter-Logout / Terputus*\nSistem AP2T PLN tidak lagi menampilkan halaman dasbor. Bot memerlukan login ulang.`);
-                } else {
-                    broadcastMessage(`❌ *INFORMASI: Sesi AP2T Ter-Logout / Terputus*\nSistem AP2T PLN tidak lagi menampilkan halaman dasbor. Bot memerlukan login ulang.`);
+                const msg = `⚠️ *SESI AP2T TERPUTUS!*\nBot mendeteksi logout / sesi habis.\n🔄 Sedang melakukan re-login otomatis...`;
+                if (ssOut) await broadcastPhoto(ssOut, msg).catch(() => {});
+                else broadcastMessage(msg);
+
+                // Auto re-login
+                try {
+                    const ok = await login('main', null);
+                    if (ok) {
+                        isLoggedIn = true;
+                        currentAccount = 'main';
+                        broadcastMessage(`✅ *Re-login Berhasil!*\nBot sudah aktif kembali dan siap menerima perintah.`);
+                        console.log('[HEARTBEAT] Re-login berhasil.');
+                    } else {
+                        broadcastMessage(`❌ *Re-login Gagal!*\nSilakan jalankan /login_ap2t secara manual.`);
+                        console.log('[HEARTBEAT] Re-login gagal.');
+                    }
+                } catch (loginErr) {
+                    broadcastMessage(`❌ *Re-login Error:* ${loginErr.message}\nSilakan jalankan /login_ap2t secara manual.`);
+                    console.error('[HEARTBEAT] Error re-login:', loginErr.message);
                 }
                 return;
             }
-            
-            // Lakukan tindakan ringan ke AP2T untuk mereset timer idle PLN
+
+            // Kirim sinyal ringan agar timer idle AP2T tidak habis
             await page.evaluate(() => {
-                // Coba refresh header
                 const topPnl = document.querySelector('.x-panel-header');
-                if (topPnl) {
-                   topPnl.click();
-                }
+                if (topPnl) topPnl.click();
             });
-            console.log('Heartbeat dikirim ke AP2T');
+            console.log('[HEARTBEAT] Sesi AP2T aktif, sinyal dikirim.');
         } catch(e) {
-            console.log('Heartbeat error:', e.message);
+            console.log('[HEARTBEAT] Error:', e.message);
         }
     }
-}, 300000); // 5 menit
+}, 180000); // Setiap 3 menit
 
-// Jalankan Web GUI Server lokal
-// require('./server.js'); dipindah ke bawah
+// ===== FUNGSI CEK & AUTO RE-LOGIN SEBELUM PERINTAH =====
+// Fungsi ini memverifikasi sesi AP2T masih aktif dengan mengecek
+// keberadaan menu navigasi utama di DOM secara nyata.
+async function checkAndReloginIfNeeded(chatId) {
+    // Jika browser/page sudah tidak ada, langsung login
+    if (!isLoggedIn || !browser || !page || page.isClosed()) {
+        if (chatId) bot.sendMessage(chatId, `🔄 Sesi AP2T tidak aktif, melakukan login otomatis...`);
+        const ok = await login('main', chatId);
+        if (!ok) throw new Error('Gagal login otomatis ke AP2T. Coba /login_ap2t secara manual.');
+        isLoggedIn = true;
+        currentAccount = 'main';
+        return;
+    }
+
+    // Verifikasi sesi NYATA: cek apakah menu AP2T benar-benar terlihat
+    let isSessionLive = false;
+    try {
+        isSessionLive = await page.evaluate(() => {
+            const menuItems = Array.from(document.querySelectorAll('.x-tree-node-anchor, .x-tree-node-text'));
+            return menuItems.some(el =>
+                el.textContent.includes('PELAYANAN PELANGGAN') ||
+                el.textContent.includes('INFO PELANGGAN')
+            );
+        });
+    } catch(e) {
+        isSessionLive = false;
+    }
+
+    if (!isSessionLive) {
+        isLoggedIn = false;
+        if (chatId) bot.sendMessage(chatId, `⚠️ *Sesi AP2T terputus / habis!*\n🔄 Melakukan re-login otomatis...`, { parse_mode: 'Markdown' });
+        const ok = await login('main', chatId);
+        if (!ok) throw new Error('Gagal re-login otomatis. Coba /login_ap2t secara manual.');
+        isLoggedIn = true;
+        currentAccount = 'main';
+        if (chatId) bot.sendMessage(chatId, `✅ Re-login berhasil! Melanjutkan perintah...`);
+    }
+}
 
 // ===== AUTO-RESUME STATE MANAGEMENT =====
 const STATE_FILE = path.join(__dirname, 'ct_state.json');
@@ -877,7 +932,20 @@ async function handleOwaSessionReset(chatId) {
 
           let elemHandle = null;
           let retries = 0;
-          while (retries < 24) { // 2 menit
+          const maxRetries = 60; // 5 menit (60 x 5 detik)
+          while (retries < maxRetries) {
+            // Refresh inbox webmail setiap 3 loop (setiap 15 detik) agar email baru langsung terdeteksi
+            if (retries % 3 === 0) {
+                await mailPage.evaluate(() => {
+                    const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                    const refreshBtn = btns.find(b => {
+                        const title = (b.getAttribute('title') || b.getAttribute('aria-label') || '').toLowerCase();
+                        return title.includes('refresh') || title.includes('segarkan') || title.includes('check for new messages');
+                    });
+                    if (refreshBtn) refreshBtn.click();
+                }).catch(() => {});
+            }
+
             const nodeHours = new Date().getHours();
             const nodeMins = new Date().getMinutes();
             const found = await mailPage.evaluate((nH, nM) => {
@@ -1004,7 +1072,10 @@ async function handleOwaSessionReset(chatId) {
             }
 
             retries++;
-            if (retries % 6 === 0) bot.sendMessage(chatId, `⏳ Masih menunggu email terbaru masuk... (${retries * 5} / 120 detik)`);
+            const sisaDetik1 = (maxRetries - retries) * 5;
+            const menit1 = Math.floor(sisaDetik1 / 60);
+            const detik1 = sisaDetik1 % 60;
+            if (retries % 6 === 0) bot.sendMessage(chatId, `⏳ Menunggu email *Reset Session*... Sisa waktu: *${menit1}m ${detik1}s*\n_(Bot refresh inbox setiap 15 detik)_`, { parse_mode: 'Markdown' });
             await new Promise(r => setTimeout(r, 5000));
         }
 
@@ -1033,7 +1104,7 @@ async function handleOwaSessionReset(chatId) {
         } else {
             // TIMEOUT: Tembak screenshot Webmail dan batalkan
             const ssBuffer = await mailPage.screenshot();
-            await bot.sendPhoto(chatId, ssBuffer, { caption: `❌ *TIDAK ADA EMAIL BARU*\nSudah menunggu 2 menit namun email *Reset Session* belum masuk dari pusat. Proses dibatalkan agar tidak berulang.`, parse_mode: 'Markdown' });
+            await bot.sendPhoto(chatId, ssBuffer, { caption: `❌ *TIDAK ADA EMAIL BARU*\nSudah menunggu *5 menit* namun email *Reset Session* belum masuk dari pusat.\n\n💡 Kemungkinan penyebab:\n1. Email dari pusat AP2T terlambat dikirim\n2. Inbox webmail penuh\n3. Koneksi jaringan lambat\n\n🔄 Silakan coba ulangi perintah beberapa menit lagi.`, parse_mode: 'Markdown' });
             throw new Error('ABORT_NO_EMAIL');
         }
 
@@ -1186,7 +1257,20 @@ async function handleOwaMacReset(chatId, isManual = false) {
 
           let elemHandle = null;
           let retries = 0;
-          while (retries < 24) { // 2 menit
+          const maxRetries = 60; // 5 menit (60 x 5 detik)
+          while (retries < maxRetries) {
+            // Refresh inbox webmail setiap 3 loop (setiap 15 detik)
+            if (retries % 3 === 0) {
+                await mailPage.evaluate(() => {
+                    const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                    const refreshBtn = btns.find(b => {
+                        const title = (b.getAttribute('title') || b.getAttribute('aria-label') || '').toLowerCase();
+                        return title.includes('refresh') || title.includes('segarkan') || title.includes('check for new messages');
+                    });
+                    if (refreshBtn) refreshBtn.click();
+                }).catch(() => {});
+            }
+
             const nodeHours = new Date().getHours();
             const nodeMins = new Date().getMinutes();
             const found = await mailPage.evaluate((nH, nM) => {
@@ -1313,7 +1397,10 @@ async function handleOwaMacReset(chatId, isManual = false) {
             }
 
             retries++;
-            if (retries % 6 === 0) bot.sendMessage(chatId, `⏳ Masih menunggu email terbaru masuk... (${retries * 5} / 120 detik)`);
+            const sisaDetik2 = (maxRetries - retries) * 5;
+            const menit2 = Math.floor(sisaDetik2 / 60);
+            const detik2 = sisaDetik2 % 60;
+            if (retries % 6 === 0) bot.sendMessage(chatId, `⏳ Menunggu email *Reset MAC*... Sisa waktu: *${menit2}m ${detik2}s*\n_(Bot refresh inbox setiap 15 detik)_`, { parse_mode: 'Markdown' });
             await new Promise(r => setTimeout(r, 5000));
         }
 
@@ -1342,7 +1429,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
         } else {
             // TIMEOUT: Tembak screenshot Webmail dan batalkan
             const ssBuffer = await mailPage.screenshot();
-            await bot.sendPhoto(chatId, ssBuffer, { caption: `❌ *TIDAK ADA EMAIL BARU*\nSudah menunggu 2 menit namun email *Reset MAC* belum masuk dari pusat. Proses dibatalkan agar tidak berulang.`, parse_mode: 'Markdown' });
+            await bot.sendPhoto(chatId, ssBuffer, { caption: `❌ *TIDAK ADA EMAIL BARU*\nSudah menunggu *5 menit* namun email *Reset MAC* belum masuk dari pusat.\n\n💡 Kemungkinan penyebab:\n1. Email dari pusat AP2T terlambat dikirim\n2. Inbox webmail penuh\n3. Koneksi jaringan lambat\n\n🔄 Silakan coba ulangi perintah beberapa menit lagi.`, parse_mode: 'Markdown' });
             throw new Error('ABORT_NO_EMAIL');
         }
 
@@ -1924,7 +2011,19 @@ async function startSmartLogin(chatId, userInfo = null) {
                 } catch(e){}
                 namaUser = "Profil " + activeProfileName;
             } else if (userInfo) {
-                namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
+                // Cari nama panggilan dari users.json
+                try {
+                    const usersData = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'users.json'), 'utf8'));
+                    const userId = userInfo.id || userInfo;
+                    const userEntry = usersData.users && usersData.users.find(u => String(u.id) === String(userId));
+                    if (userEntry && userEntry.nama) {
+                        namaUser = userEntry.nama;
+                    } else {
+                        namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
+                    }
+                } catch(e) {
+                    namaUser = userInfo.nama || userInfo.first_name || String(userInfo.id);
+                }
             }
 
             const msgText = `✅ *INFORMASI:* ${namaUser} telah berhasil Login ke sistem AP2T secara otomatis.\n\n💡 _Ketik /status untuk melihat posisi terakhir layar AP2T sebelum melanjutkan perintah._`;
@@ -3130,14 +3229,31 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             currentAccount = 'main';
         }
 
+        let inputNomet = null;
         // DETEKSI 11 DIGIT (NOMOR METER)
         if (idpel.length === 11) {
-            const realIdpel = await getIdpelFromNomet(idpel, chatId);
-            if (!realIdpel) {
-                return bot.sendMessage(chatId, `❌ Gagal menemukan ID Pelanggan untuk Nomor Meter ${idpel}. Silakan masukkan ID Pelanggan secara manual.`);
+            inputNomet = idpel;
+            
+            let stateList = loadCTState();
+            let foundIdpel = null;
+            for (let storedIdpel in stateList) {
+                if (stateList[storedIdpel].nomet === inputNomet && stateList[storedIdpel].step === 'DONE') {
+                    foundIdpel = storedIdpel;
+                    break;
+                }
             }
-            bot.sendMessage(chatId, `✅ Berhasil mendapatkan ID Pelanggan: *${realIdpel}*. Melanjutkan proses CT...`, { parse_mode: 'Markdown' });
-            idpel = realIdpel;
+            
+            if (foundIdpel) {
+                bot.sendMessage(chatId, `✅ Berhasil menemukan riwayat ID Pelanggan: *${foundIdpel}* dari Nomor Meter ${inputNomet}.`, { parse_mode: 'Markdown' });
+                idpel = foundIdpel;
+            } else {
+                const realIdpel = await getIdpelFromNomet(idpel, chatId);
+                if (!realIdpel) {
+                    return bot.sendMessage(chatId, `❌ Gagal menemukan ID Pelanggan untuk Nomor Meter ${idpel}. Silakan masukkan ID Pelanggan secara manual.`);
+                }
+                bot.sendMessage(chatId, `✅ Berhasil mendapatkan ID Pelanggan: *${realIdpel}*. Melanjutkan proses CT...`, { parse_mode: 'Markdown' });
+                idpel = realIdpel;
+            }
         }
 
         let currentState = getCTState(idpel) || { step: 'START', noAgenda: null, nogan: null };
@@ -3148,6 +3264,29 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 bot.sendMessage(chatId, `ℹ️ Terdeteksi input No Gangguan yang berbeda (*${nogan}*) dari sebelumnya (*${currentState.nogan}*).\nMemulai ulang pembuatan CT dari awal...`, { parse_mode: 'Markdown' });
                 clearCTState(idpel);
                 currentState = { step: 'START', noAgenda: null, nogan: null };
+            } else if (currentState.step === 'DONE') {
+                // Hitung berapa hari lalu token dibuat
+                const now = Date.now();
+                const tokenAge = currentState.timestamp ? (now - currentState.timestamp) : 0;
+                const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+                if (tokenAge > THIRTY_DAYS_MS) {
+                    // Lebih dari 30 hari: izinkan buat CT baru
+                    const hariLalu = Math.floor(tokenAge / (24 * 60 * 60 * 1000));
+                    bot.sendMessage(chatId, `♻️ Riwayat CT ditemukan namun sudah *${hariLalu} hari* lalu (melewati batas 30 hari).\nMemulai pembuatan CT baru...`, { parse_mode: 'Markdown' });
+                    clearCTState(idpel);
+                    currentState = { step: 'START', noAgenda: null, nogan: null };
+                } else {
+                    // Masih dalam 30 hari: kirim token lama + peringatan
+                    const hariLalu = tokenAge < 86400000
+                        ? `${Math.floor(tokenAge / 3600000)} jam`
+                        : `${Math.floor(tokenAge / (24 * 60 * 60 * 1000))} hari`;
+                    bot.sendMessage(chatId,
+                        `✅ *TOKEN SUDAH TERSEDIA (Riwayat ${hariLalu} lalu)*\n\`${currentState.tokenCT}\`\n\n👤 NAMA: ${currentState.namaCT}\n💳 IDPEL: ${idpel}\n⚡ TARIF/DAYA: ${currentState.tarifCT}/${currentState.dayaCT}\n\n⚠️ _ID Pelanggan dan No Gangguan ini pernah dibuatkan CT ${hariLalu} lalu. Tidak dapat membuat CT baru dengan No Gangguan yang sama.\nMohon masukkan *No Gangguan yang berbeda* jika ingin membuat CT baru._`,
+                        { parse_mode: 'Markdown' }
+                    );
+                    return;
+                }
             } else {
                 bot.sendMessage(chatId, `ℹ️ Memori kerja terdeteksi (IDPEL dan NOGAN sama)!\nMelompat langsung ke tahap **Monitoring Token**...`, { parse_mode: 'Markdown' });
                 currentState.step = 'MONITORING';
@@ -4032,9 +4171,17 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 }
             }
 
-            // Bersihkan memori (state) CT untuk IDPEL ini karena sudah selesai sukses
-            // Sehingga pembuatan CT selanjutnya untuk IDPEL yang sama akan dimulai dari awal lagi
-            clearCTState(idpel);
+            // Simpan state sukses (jangan dibersihkan), sehingga bisa dikirim ulang jika IDPEL dan NOGAN sama
+            updateCTState(idpel, {
+                step: 'DONE',
+                tokenCT: tokenCT,
+                namaCT: namaCT,
+                tarifCT: tarifCT,
+                dayaCT: dayaCT,
+                nogan: nogan,
+                nomet: inputNomet || currentState.nomet,
+                timestamp: Date.now()
+            });
         } else {
             bot.sendMessage(chatId, `⚠️ Waktu habis. Status belum '3' atau Token CLEAR TAMPER belum muncul di tabel.`);
         }
@@ -4147,7 +4294,9 @@ async function getIdpelFromNomet(nomet, chatId) {
         if (searchBtn) searchBtn.click();
     });
     
-    bot.sendMessage(chatId, `⏳ Sedang mencari ID Pelanggan (Maksimal 50 detik)...`);
+    bot.sendMessage(chatId, `⏳ Menunggu 30 detik agar pencarian ID Pelanggan selesai dengan sempurna...`);
+    await new Promise(r => setTimeout(r, 30000));
+    bot.sendMessage(chatId, `⏳ Sedang memeriksa hasil pencarian (Maksimal 50 detik)...`);
     
     // Handle popup "Master Nedisys"
     const checkNedisys = async (frame) => {
@@ -4859,12 +5008,7 @@ bot.onText(/\/ambil_token(?:\s+(.+))?/, async (msg, match) => {
         activeChatId = chatId;
         let statusMsg = await bot.sendMessage(chatId, `⏳ Mengambil token untuk ${target}...`);
         try {
-            if (!isLoggedIn || !browser || !page || page.isClosed()) {
-                const ok = await login('main', chatId);
-                if (!ok) throw new Error("Gagal login ke AP2T otomatis.");
-                isLoggedIn = true;
-                currentAccount = 'main';
-            }
+            await checkAndReloginIfNeeded(chatId);
 
             await clickMenu(page, ['PELAYANAN PELANGGAN', 'Monitoring', 'Monitoring Permohonan Token']);
             const monitorFrame = await searchMonitoringToken(page, target, chatId);
@@ -4921,12 +5065,7 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
         activeChatId = chatId;
         let statusMsg = await bot.sendMessage(chatId, `⏳ Mengambil data transaksi pada baris ke-${rowNum} untuk dicetak...`);
         try {
-            if (!isLoggedIn || !browser || !page || page.isClosed()) {
-                const ok = await login('main', chatId);
-                if (!ok) throw new Error("Gagal login ke AP2T otomatis.");
-                isLoggedIn = true;
-                currentAccount = 'main';
-            }
+            await checkAndReloginIfNeeded(chatId);
 
             await clickMenu(page, ['PELAYANAN PELANGGAN', 'Monitoring', 'Monitoring Permohonan Token']);
             const monitorFrame = await searchMonitoringToken(page, target, chatId);
@@ -5182,12 +5321,7 @@ bot.onText(/\/cek_token(?:\s+(.+))?/, async (msg, match) => {
         activeChatId = chatId;
         let statusMsg = await bot.sendMessage(chatId, `⏳ Membuka Monitoring Permohonan Token untuk ${target}...`);
         try {
-            if (!isLoggedIn || !browser || !page || page.isClosed()) {
-                const ok = await login('main', chatId);
-                if (!ok) throw new Error("Gagal login ke AP2T otomatis.");
-                isLoggedIn = true;
-                currentAccount = 'main';
-            }
+            await checkAndReloginIfNeeded(chatId);
 
             await clickMenu(page, ['PELAYANAN PELANGGAN', 'Monitoring', 'Monitoring Permohonan Token']);
             const monitorFrame = await searchMonitoringToken(page, target, chatId);
@@ -5640,13 +5774,7 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
 });
 
 async function processAktivasiOnly(noAgenda, chatId, pembuat) {
-    if (!isLoggedIn || !browser || !page || page.isClosed()) {
-        bot.sendMessage(chatId, `🔄 Browser belum siap atau belum login, login otomatis...`);
-        const ok = await login('main', chatId);
-        if (!ok) throw new Error("Gagal login ke AP2T otomatis.");
-        isLoggedIn = true;
-        currentAccount = 'main';
-    }
+    await checkAndReloginIfNeeded(chatId);
     
     try {
         bot.sendMessage(chatId, `🚀 Navigasi ke Menu Aktivasi No Meter...`);
@@ -5865,15 +5993,14 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
                     const ssBuffer = await page.screenshot({ encoding: 'buffer' });
                     await bot.sendPhoto(chatId, ssBuffer, { caption: "Screenshot Keberhasilan" }, { filename: "success.png", contentType: 'image/png' });
                 } catch(ex) {}
-                if (monitorFrame) {
-                    bot.sendMessage(chatId, `📸 Mengambil hasil pencarian Monitoring untuk No Agenda ${noAgenda}...`);
-                    try {
-                        const ssBuffer = await page.screenshot({ encoding: 'buffer' });
-                        await bot.sendPhoto(chatId, ssBuffer, { caption: `Hasil pencarian Monitoring Token untuk No Agenda ${noAgenda}.` }, { filename: "monitoring.png", contentType: 'image/png' });
-                    } catch(ex) {
-                        console.error("Gagal screenshot monitoring", ex);
-                    }
-                }
+                // Otomatis arahkan ke /cetak_token agar mencari dan mencetak hasil akhir token berdasarkan No Agenda
+                bot.sendMessage(chatId, `🔄 Meneruskan ke proses Cetak Token untuk No Agenda ${noAgenda}...`);
+                bot.emit('message', {
+                    chat: { id: chatId },
+                    from: typeof userInfo === 'object' ? userInfo : { id: chatId },
+                    text: `/cetak_token ${noAgenda}`,
+                    message_id: Date.now()
+                });
             } else {
                 bot.sendMessage(chatId, `❌ Tombol SIMPAN tidak merespon/tidak ditemukan.`);
             }
