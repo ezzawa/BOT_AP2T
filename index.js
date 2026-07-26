@@ -186,7 +186,7 @@ async function checkAndReloginIfNeeded(chatId) {
         if (!ok) throw new Error('Gagal login otomatis ke AP2T. Coba /login_ap2t secara manual.');
         isLoggedIn = true;
         currentAccount = 'main';
-        return;
+        return true;
     }
 
     // Verifikasi sesi NYATA: cek apakah menu AP2T benar-benar terlihat
@@ -211,7 +211,9 @@ async function checkAndReloginIfNeeded(chatId) {
         isLoggedIn = true;
         currentAccount = 'main';
         if (chatId) bot.sendMessage(chatId, `✅ Re-login berhasil! Melanjutkan perintah...`);
+        return true;
     }
+    return true;
 }
 
 // ===== AUTO-RESUME STATE MANAGEMENT =====
@@ -1096,7 +1098,7 @@ async function handleOwaSessionReset(chatId) {
                 const buttons = Array.from(document.querySelectorAll('button, span, div, a, .ms-Button'));
                 const okBtn = buttons.find(b => {
                     const txt = (b.textContent || '').trim().toUpperCase();
-                    return txt === 'OK' && b.offsetParent !== null;
+                    return txt === 'OK' && b.getBoundingClientRect().width > 0;
                 });
                 if (okBtn) okBtn.click();
             }).catch(() => {});
@@ -1421,7 +1423,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
                 const buttons = Array.from(document.querySelectorAll('button, span, div, a, .ms-Button'));
                 const okBtn = buttons.find(b => {
                     const txt = (b.textContent || '').trim().toUpperCase();
-                    return txt === 'OK' && b.offsetParent !== null;
+                    return txt === 'OK' && b.getBoundingClientRect().width > 0;
                 });
                 if (okBtn) okBtn.click();
             }).catch(() => {});
@@ -1792,7 +1794,7 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
             const inputIds = await page.evaluate(() => {
                 const win = document.querySelector('.x-window');
                 const inputs = Array.from((win || document).querySelectorAll('input[type="text"], input[type="email"], input.x-form-text'));
-                let visibleInputs = inputs.filter(i => i.offsetParent !== null && !i.disabled && i.id);
+                let visibleInputs = inputs.filter(i => i.getBoundingClientRect().width > 0 && !i.disabled && i.id);
                 
                 // Coba cari berdasarkan Label agar akurat
                 const labels = Array.from((win || document).querySelectorAll('label'));
@@ -3099,7 +3101,7 @@ async function closePopups(page) {
             // Hapus jendela ExtJS
             const windows = Array.from(document.querySelectorAll('.x-window, .x-window-dlg'));
             for (const win of windows) {
-                if (win.style.display !== 'none' && win.style.visibility !== 'hidden' && win.offsetParent !== null) {
+                if (win.style.display !== 'none' && win.style.visibility !== 'hidden' && win.getBoundingClientRect().width > 0) {
                     const txt = win.textContent.toLowerCase();
                     if (txt.includes('pesta siap bongkar') || txt.includes('informasi') || txt.includes('peringatan') || txt.includes('error')) {
                         win.remove(); // Hapus jendela dari DOM
@@ -3114,7 +3116,7 @@ async function closePopups(page) {
             // Coba klik tombol X jika masih ada sisa (sebagai cadangan)
             const xButtons = Array.from(document.querySelectorAll('.x-tool-close, .x-tool-close-over, .x-window-close'));
             xButtons.forEach(btn => { 
-                if (btn.offsetParent !== null) {
+                if (btn.getBoundingClientRect().width > 0) {
                     try { btn.click(); } catch(e){}
                 } 
             });
@@ -3141,7 +3143,7 @@ async function clickMenu(page, menuPath) {
 
         const clicked = await page.evaluate((name) => {
             const elements = Array.from(document.querySelectorAll('.x-tree-node-anchor, .x-tree-node-text, span, a'));
-            const target = elements.find(el => el.textContent.trim() === name && el.offsetParent !== null);
+            const target = elements.find(el => el.textContent.trim() === name && el.getBoundingClientRect().width > 0);
 
             if (target) {
                 const node = target.closest('.x-tree-node-el');
@@ -3193,7 +3195,7 @@ async function clickMenu(page, menuPath) {
 async function setFieldValue(page, labelText, value, isDropdown = false) {
     const success = await page.evaluate(async (label, val, drop) => {
         const labels = Array.from(document.querySelectorAll('label, span, td, .x-form-item-label'));
-        const targetLabel = labels.find(el => el.textContent.trim().includes(label) && el.offsetParent !== null);
+        const targetLabel = labels.find(el => el.textContent.trim().includes(label) && el.getBoundingClientRect().width > 0);
         if (!targetLabel) return { success: false, msg: `Label ${label} tidak ditemukan` };
 
         // Cari input di parent atau sibling
@@ -3346,7 +3348,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             for (const f of frames) {
                 try {
                     const btns = Array.from(f.contentDocument.querySelectorAll('button, .x-btn-text'));
-                    const clearBtn = btns.find(b => b.textContent.trim() === 'Clear' && b.offsetParent !== null);
+                    const clearBtn = btns.find(b => b.textContent.trim() === 'Clear' && b.getBoundingClientRect().width > 0);
                     if (clearBtn) {
                         clearBtn.click();
                         return;
@@ -3355,7 +3357,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             }
             // Jika di main page
             const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-            const clearBtn = btns.find(b => b.textContent.trim() === 'Clear' && b.offsetParent !== null);
+            const clearBtn = btns.find(b => b.textContent.trim() === 'Clear' && b.getBoundingClientRect().width > 0);
             if (clearBtn) clearBtn.click();
         });
         await new Promise(r => setTimeout(r, 2000));
@@ -3364,20 +3366,20 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         bot.sendMessage(chatId, `📝 Mencari kolom Id Pelanggan di semua tingkatan halaman...`);
 
         let targetFrame = null;
-        const allFrames = page.frames();
-
-        for (const frame of allFrames) {
-            try {
-                const found = await frame.evaluate(() => {
+        for (let attempt = 0; attempt < 120; attempt++) {
+            const allFrames = page.frames();
+            for (const frame of allFrames) {
+                try {
+                    const found = await frame.evaluate(() => {
                     const labels = Array.from(document.querySelectorAll('label, span, td, .x-form-item-label'));
-                    const targetLabel = labels.find(l => l.textContent.trim().includes('Id Pelanggan') && l.offsetParent !== null);
+                    const targetLabel = labels.find(l => l.textContent.trim().includes('Id Pelanggan') && l.getBoundingClientRect().width > 0);
 
                     if (targetLabel) {
                         let container = targetLabel.closest('.x-form-item') || targetLabel.parentElement;
                         let input = container.querySelector('input[type="text"]');
                         if (!input) {
                             const allInputs = Array.from(document.querySelectorAll('input[type="text"]'));
-                            input = allInputs.find(i => i.offsetParent !== null && Math.abs(i.getBoundingClientRect().top - targetLabel.getBoundingClientRect().top) < 30);
+                            input = allInputs.find(i => i.getBoundingClientRect().width > 0 && Math.abs(i.getBoundingClientRect().top - targetLabel.getBoundingClientRect().top) < 30);
                         }
 
                         if (input) {
@@ -3395,8 +3397,37 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 }
             } catch (e) { }
         }
+        if (targetFrame) break;
+        await new Promise(r => setTimeout(r, 500));
+    }
 
-        if (targetFrame) {
+    if (targetFrame) {
+            bot.sendMessage(chatId, `⏳ Menunggu data Unit terisi otomatis oleh sistem AP2T...`);
+            for (let waitUnit = 0; waitUnit < 240; waitUnit++) {
+                const unitIsFilled = await targetFrame.evaluate(() => {
+                    const labels = Array.from(document.querySelectorAll('label, span, td, .x-form-item-label'));
+                    const unitUpLabel = labels.find(l => l.textContent.trim().includes('Unit UP'));
+                    if (unitUpLabel) {
+                        let container = unitUpLabel.closest('.x-form-item') || unitUpLabel.closest('tr') || unitUpLabel.parentElement;
+                        let inputs = Array.from(container.querySelectorAll('input'));
+                        if (inputs.length === 0) {
+                            const allInputs = Array.from(document.querySelectorAll('input'));
+                            inputs = allInputs.filter(i => i.getBoundingClientRect().width > 0 && Math.abs(i.getBoundingClientRect().top - unitUpLabel.getBoundingClientRect().top) < 35);
+                        }
+                        for (const i of inputs) {
+                            const val = i.value ? i.value.trim().toUpperCase() : '';
+                            if (val && val !== '' && val !== 'UP' && val !== 'UPI' && val !== 'AP' && !val.includes('PILIH')) {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }).catch(() => false);
+                
+                if (unitIsFilled) break;
+                await new Promise(r => setTimeout(r, 500));
+            }
+
             bot.sendMessage(chatId, `📝 Mengisi Id Pelanggan: ${idpel}...`);
             await targetFrame.click('#final_target_idpel', { clickCount: 3 });
             await page.keyboard.down('Control');
@@ -3438,13 +3469,13 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             const checkPopup = async () => {
                 return await page.evaluate(() => {
                     const mb = document.querySelector('.ext-mb-text');
-                    if (mb && mb.offsetParent !== null && mb.textContent.trim().length > 0) {
+                    if (mb && mb.getBoundingClientRect().width > 0 && mb.textContent.trim().length > 0) {
                         const txt = mb.textContent.trim();
                         if (!txt.toLowerCase().includes('load data') && !txt.toLowerCase().includes('mohon tunggu') && !txt.toLowerCase().includes('loading')) {
                             return txt;
                         }
                     }
-                    const wins = Array.from(document.querySelectorAll('.x-window')).filter(w => w.offsetParent !== null);
+                    const wins = Array.from(document.querySelectorAll('.x-window')).filter(w => w.getBoundingClientRect().width > 0);
                     for(let w of wins) {
                         if(w.textContent.includes('Pemberitahuan') || w.textContent.includes('tidak valid') || w.textContent.includes('Error')) {
                             const body = w.querySelector('.x-window-mc') || w;
@@ -3456,13 +3487,13 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                     return null;
                 }).catch(()=>null) || await targetFrame.evaluate(() => {
                     const mb = document.querySelector('.ext-mb-text');
-                    if (mb && mb.offsetParent !== null && mb.textContent.trim().length > 0) {
+                    if (mb && mb.getBoundingClientRect().width > 0 && mb.textContent.trim().length > 0) {
                         const txt = mb.textContent.trim();
                         if (!txt.toLowerCase().includes('load data') && !txt.toLowerCase().includes('mohon tunggu') && !txt.toLowerCase().includes('loading')) {
                             return txt;
                         }
                     }
-                    const wins = Array.from(document.querySelectorAll('.x-window')).filter(w => w.offsetParent !== null);
+                    const wins = Array.from(document.querySelectorAll('.x-window')).filter(w => w.getBoundingClientRect().width > 0);
                     for(let w of wins) {
                         if(w.textContent.includes('Pemberitahuan') || w.textContent.includes('tidak valid') || w.textContent.includes('Error')) {
                             const body = w.querySelector('.x-window-mc') || w;
@@ -3506,7 +3537,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 bot.sendMessage(chatId, `⚠️ Menangkap pesan error dari sistem AP2T...`);
                 const ss = await page.screenshot({ fullPage: true }).catch(() => null);
                 if (ss) await bot.sendPhoto(chatId, ss, { caption: `⚠️ *GAGAL BIKIN CT*\nID Pelanggan tidak dapat diproses (Beda ULP / Error Sistem).\n\nPesan AP2T: _${popupMsg}_`, parse_mode: 'Markdown' });
-                throw new Error(`Dibatalkan oleh sistem AP2T: ${popupMsg}`);
+                throw new Error(`REJECT_AP2T: Dibatalkan oleh sistem AP2T: ${popupMsg}`);
             }
 
             // CEK TARIF PASCABAYAR
@@ -3526,7 +3557,9 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 const tarifParts = tarifDaya.split('/');
                 const tarif = tarifParts[0].trim().toUpperCase();
                 if (!tarif.endsWith('T')) {
-                    throw new Error(`⚠️ *KWH PASCABAYAR TERDETEKSI!*\nTarif Pelanggan: \`${tarifDaya}\`\nTarif tidak memiliki akhiran 'T', sehingga CT tidak dapat dibuat untuk KWH Pascabayar.`);
+                    const msgTxt = `⚠️ *KWH PASCABAYAR TERDETEKSI!*\nTarif Pelanggan: \`${tarifDaya}\`\nTarif tidak memiliki akhiran 'T', sehingga CT tidak dapat dibuat untuk KWH Pascabayar.`;
+                    bot.sendMessage(chatId, msgTxt, { parse_mode: 'Markdown' }).catch(()=>null);
+                    throw new Error(`REJECT_AP2T: ${msgTxt}`);
                 }
             }
         } else {
@@ -3562,23 +3595,38 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             
             // Ketik untuk memfilter dengan perlahan
             await targetFrame.type(`#${id}`, targetVal, { delay: 100 });
-            await new Promise(r => setTimeout(r, 2000)); // Tunggu daftar hasil filter muncul
 
             // Cari dan klik elemen dropdown yang teksnya cocok via DOM Events
-            const targetClicked = await targetFrame.evaluate((tVal) => {
-                const items = Array.from(document.querySelectorAll('.x-combo-list-item, .x-boundlist-item'));
-                // Gunakan includes agar lebih tahan banting terhadap spasi berlebih
-                const target = items.find(i => i.textContent.toUpperCase().includes(tVal.toUpperCase()) && i.offsetParent !== null);
-                if (target) {
-                    target.scrollIntoView({ block: 'center' });
-                    // ExtJS ComboBox mendeteksi event mousedown untuk memilih item
-                    target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-                    target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-                    target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-                    return true;
+            let targetClicked = false;
+            for (let i = 0; i < 120; i++) {
+                targetClicked = await targetFrame.evaluate((tVal) => {
+                    const items = Array.from(document.querySelectorAll('.x-combo-list-item, .x-boundlist-item'));
+                    // Gunakan includes agar lebih tahan banting terhadap spasi berlebih
+                    const target = items.find(item => item.textContent.toUpperCase().includes(tVal.toUpperCase()) && item.getBoundingClientRect().width > 0);
+                    if (target) {
+                        target.scrollIntoView({ block: 'center' });
+                        // ExtJS ComboBox mendeteksi event mousedown untuk memilih item
+                        target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                        target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                        target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                        return true;
+                    }
+                    return false;
+                }, targetVal);
+                
+                if (targetClicked) break;
+                
+                // Trik: Jika sudah menunggu 5 detik (10 iterasi) dan belum muncul (stuck di "Load..."), 
+                // lakukan backspace lalu ketik ulang karakter terakhir untuk memancing trigger filter ExtJS
+                if (i === 10 || i === 30 || i === 60) {
+                    await targetFrame.click(`#${id}`);
+                    await page.keyboard.press('Backspace');
+                    await new Promise(r => setTimeout(r, 500));
+                    await targetFrame.type(`#${id}`, targetVal.slice(-1), { delay: 100 });
                 }
-                return false;
-            }, targetVal);
+                
+                await new Promise(r => setTimeout(r, 500));
+            }
 
             if (!targetClicked) throw new Error(`Opsi "${targetVal}" tidak terdeteksi di dropdown ${labelName}. Menghentikan proses.`);
 
@@ -3620,7 +3668,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         bot.sendMessage(chatId, `💾 Menyimpan Pengaduan...`);
         await targetFrame.evaluate(() => {
             const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-            const saveBtn = btns.find(b => b.textContent.trim() === 'Save' && b.offsetParent !== null);
+            const saveBtn = btns.find(b => b.textContent.trim() === 'Save' && b.getBoundingClientRect().width > 0);
             if (saveBtn) {
                 saveBtn.focus();
                 saveBtn.click();
@@ -3633,16 +3681,21 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         const checkSavePopupTextOnly = () => {
             let msg = null;
             const mb = document.querySelector('.ext-mb-text');
-            if (mb && mb.offsetParent !== null && mb.textContent.trim().length > 0) {
-                msg = mb.textContent.trim();
+            if (mb && mb.getBoundingClientRect().width > 0 && mb.textContent.trim().length > 0) {
+                let text = mb.textContent.trim();
+                if (!text.toLowerCase().includes('proses simpan') && !text.toLowerCase().includes('please wait')) {
+                    msg = text;
+                }
             } else {
-                const wins = Array.from(document.querySelectorAll('.x-window')).filter(w => w.offsetParent !== null);
+                const wins = Array.from(document.querySelectorAll('.x-window')).filter(w => w.getBoundingClientRect().width > 0);
                 for(let w of wins) {
                     if (w.textContent.includes('Pemberitahuan') || w.textContent.includes('Error') || w.textContent.includes('tidak valid') || w.textContent.includes('Berhasil')) {
                         const body = w.querySelector('.x-window-mc') || w;
                         let text = body.textContent.replace(/OK|Yes|No|Cancel/gi, '').trim();
                         text = text.replace('Pemberitahuan', '').trim();
-                        if (text.length > 3) msg = text;
+                        if (text.length > 3 && !text.toLowerCase().includes('proses simpan') && !text.toLowerCase().includes('please wait')) {
+                            msg = text;
+                        }
                     }
                 }
             }
@@ -3650,7 +3703,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         };
         
         let savePopupMsg = null;
-        for (let i = 0; i < 30; i++) { // Polling max 15 detik
+        for (let i = 0; i < 60; i++) { // Polling max 30 detik
             await new Promise(r => setTimeout(r, 500));
             savePopupMsg = await page.evaluate(checkSavePopupTextOnly).catch(()=>null) || await targetFrame.evaluate(checkSavePopupTextOnly).catch(()=>null);
             if (savePopupMsg) break;
@@ -3660,26 +3713,29 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         const postSaveSS = await page.screenshot({ fullPage: true }).catch(() => null);
         if (postSaveSS) await bot.sendPhoto(chatId, postSaveSS, { caption: "Status Form setelah Save (Ada Popup)" });
 
-        // SEKARANG KLIK OK
+        // SEKARANG KLIK OK (Walaupun sukses atau error, kita harus klik OK dulu agar popup hilang)
         if (savePopupMsg) {
             const clickOk = () => {
                 const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                const okBtn = btns.find(b => (b.textContent.trim() === 'OK' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
+                const okBtn = btns.find(b => (b.textContent.trim() === 'OK' || b.textContent.trim() === 'Yes') && b.getBoundingClientRect().width > 0);
                 if (okBtn) {
                     okBtn.click();
                 } else {
                     const closeBtn = document.querySelector('.x-tool-close');
-                    if (closeBtn && closeBtn.offsetParent !== null) closeBtn.click();
+                    if (closeBtn && closeBtn.getBoundingClientRect().width > 0) closeBtn.click();
                 }
             };
             await page.evaluate(clickOk).catch(()=>null);
             await targetFrame.evaluate(clickOk).catch(()=>null);
         }
         
+        // JIKA PENYIMPANAN DITOLAK KARENA ERROR / TIDAK VALID
         if (savePopupMsg && (savePopupMsg.toLowerCase().includes('tidak valid') || savePopupMsg.toLowerCase().includes('error'))) {
-            bot.sendMessage(chatId, `⚠️ *GAGAL BIKIN CT*\nPenolakan sistem AP2T saat menyimpan data.\n\nPesan AP2T: _${savePopupMsg}_`, { parse_mode: 'Markdown' });
-            throw new Error(`Penyimpanan ditolak oleh AP2T: ${savePopupMsg}`);
+            bot.sendMessage(chatId, `⚡ ⚠️ *GAGAL BIKIN CT*\nPenolakan sistem AP2T saat menyimpan data.\n\nPesan AP2T: _${savePopupMsg}_`, { parse_mode: 'Markdown' });
+            throw new Error(`REJECT_AP2T: Penyimpanan ditolak oleh AP2T: ${savePopupMsg}`);
         }
+        
+
         
         await new Promise(r => setTimeout(r, 1500));
 
@@ -3691,7 +3747,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 const inputs = Array.from(document.querySelectorAll('input'));
                 const target = inputs.find(inp => {
                     const val = inp.value ? inp.value.trim() : '';
-                    return val !== idpelStr && val.length >= 12 && val.startsWith('17') && /^\d+$/.test(val) && inp.offsetParent !== null;
+                    return val !== idpelStr && val.length >= 12 && val.startsWith('17') && /^\d+$/.test(val) && inp.getBoundingClientRect().width > 0;
                 });
                 if (target) {
                     target.focus();
@@ -3742,7 +3798,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             if (isAktivasi) {
                 // Pastikan ada input pencarian di frame ini
                 const hasInput = await frame.evaluate(() => {
-                    return Array.from(document.querySelectorAll('input')).some(i => i.offsetParent !== null);
+                    return Array.from(document.querySelectorAll('input')).some(i => i.getBoundingClientRect().width > 0);
                 });
                 if (hasInput) {
                     aktivasiFrame = frame;
@@ -3757,7 +3813,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         const inputIdentified = await aktivasiFrame.evaluate((val) => {
             // Cara 1: Cari label
             const labels = Array.from(document.querySelectorAll('label, span'));
-            const label = labels.find(l => l.textContent.includes('No Agenda') && l.offsetParent !== null);
+            const label = labels.find(l => l.textContent.includes('No Agenda') && l.getBoundingClientRect().width > 0);
             let target = null;
             if (label) {
                 target = label.closest('.x-form-item')?.querySelector('input') || label.parentElement.querySelector('input');
@@ -3766,7 +3822,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             // Cara 2: Cari input pertama yang kosong dan visible
             if (!target) {
                 const allInputs = Array.from(document.querySelectorAll('input'));
-                target = allInputs.find(i => i.offsetParent !== null && i.type === 'text' && i.id.includes('ext-comp'));
+                target = allInputs.find(i => i.getBoundingClientRect().width > 0 && i.type === 'text' && i.id.includes('ext-comp'));
             }
 
             if (target) {
@@ -3795,7 +3851,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             bot.sendMessage(chatId, `🔍 Mengeklik tombol Cari...`);
             await aktivasiFrame.evaluate(() => {
                 const btns = Array.from(document.querySelectorAll('button, .x-btn-text, .x-form-trigger'));
-                const findBtn = btns.find(b => (b.textContent.includes('Cari') || b.className.includes('search')) && b.offsetParent !== null);
+                const findBtn = btns.find(b => (b.textContent.includes('Cari') || b.className.includes('search')) && b.getBoundingClientRect().width > 0);
                 if (findBtn) findBtn.click();
             });
             
@@ -3807,7 +3863,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 
                 errorText = await aktivasiFrame.evaluate(() => {
                     const wins = Array.from(document.querySelectorAll('.x-window'));
-                    const errWin = wins.find(w => w.style.display !== 'none' && w.offsetParent !== null);
+                    const errWin = wins.find(w => w.style.display !== 'none' && w.getBoundingClientRect().width > 0);
                     if (errWin) return errWin.textContent;
                     return null;
                 });
@@ -3840,7 +3896,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             bot.sendMessage(chatId, `💾 Menyimpan Aktivasi...`);
             const saveSuccess = await aktivasiFrame.evaluate(() => {
                 const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.offsetParent !== null);
+                const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.getBoundingClientRect().width > 0);
                 if (saveBtn) {
                     saveBtn.click();
                     return true;
@@ -3857,14 +3913,14 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                     await new Promise(r => setTimeout(r, 500));
                     yaClicked = await page.evaluate(() => {
                         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                        const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
+                        const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.getBoundingClientRect().width > 0);
                         if (yaBtn) { yaBtn.click(); return true; }
                         return false;
                     });
                     if (!yaClicked) {
                         yaClicked = await aktivasiFrame.evaluate(() => {
                             const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                            const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
+                            const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.getBoundingClientRect().width > 0);
                             if (yaBtn) { yaBtn.click(); return true; }
                             return false;
                         });
@@ -3882,14 +3938,14 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                     await new Promise(r => setTimeout(r, 500));
                     okClicked = await page.evaluate(() => {
                         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                        const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
+                        const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.getBoundingClientRect().width > 0);
                         if (okBtn) { okBtn.click(); return true; }
                         return false;
                     });
                     if (!okClicked) {
                         okClicked = await aktivasiFrame.evaluate(() => {
                             const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                            const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.offsetParent !== null);
+                            const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.getBoundingClientRect().width > 0);
                             if (okBtn) { okBtn.click(); return true; }
                             return false;
                         });
@@ -3904,7 +3960,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 
                 const simpanDisabled = await aktivasiFrame.evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                    const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.offsetParent !== null);
+                    const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.getBoundingClientRect().width > 0);
                     
                     if (saveBtn) {
                         if (saveBtn.disabled || saveBtn.parentElement.className.includes('disabled') || saveBtn.className.includes('disabled')) {
@@ -3956,7 +4012,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             try {
                 const found = await frame.evaluate(() => {
                     return !!Array.from(document.querySelectorAll('*')).find(el =>
-                        el.innerText && el.innerText.includes('Jenis Permohonan') && el.offsetParent !== null
+                        el.innerText && el.innerText.includes('Jenis Permohonan') && el.getBoundingClientRect().width > 0
                     );
                 });
                 if (found) {
@@ -3974,7 +4030,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             const allElements = Array.from(document.querySelectorAll('*'));
             const label = allElements.find(el =>
                 el.innerText && el.innerText.trim().includes('Jenis Permohonan') &&
-                el.offsetParent !== null && el.children.length === 0
+                el.getBoundingClientRect().width > 0 && el.children.length === 0
             );
 
             if (label) {
@@ -3984,7 +4040,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                     const iRect = i.getBoundingClientRect();
                     return iRect.left > rect.left &&
                         Math.abs(iRect.top - rect.top) < 15 &&
-                        i.offsetParent !== null;
+                        i.getBoundingClientRect().width > 0;
                 });
                 inputs.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
 
@@ -4025,7 +4081,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             // Klik Tombol Filter
             await monitorFrame.evaluate(() => {
                 const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                const filterBtn = btns.find(b => b.textContent.trim() === 'Filter' && b.offsetParent !== null);
+                const filterBtn = btns.find(b => b.textContent.trim() === 'Filter' && b.getBoundingClientRect().width > 0);
                 if (filterBtn) filterBtn.click();
             });
 
@@ -4046,7 +4102,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             // Klik Filter di frame yang benar
             await monitorFrame.evaluate(() => {
                 const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                const filterBtn = btns.find(b => b.textContent.trim() === 'Filter' && b.offsetParent !== null);
+                const filterBtn = btns.find(b => b.textContent.trim() === 'Filter' && b.getBoundingClientRect().width > 0);
                 if (filterBtn) filterBtn.click();
             });
 
@@ -4081,7 +4137,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                             if (typeof Ext !== 'undefined' && Ext.ComponentMgr) {
                                 Ext.ComponentMgr.all.each(function(cmp) {
                                     if (cmp.isXType && cmp.isXType('grid')) {
-                                        if (cmp.el && cmp.el.dom && cmp.el.dom.offsetParent !== null) {
+                                        if (cmp.el && cmp.el.dom && cmp.el.dom.getBoundingClientRect().width > 0) {
                                             const store = cmp.getStore();
                                             if (store) {
                                                 for (let i = 0; i < store.getCount(); i++) {
@@ -4215,6 +4271,13 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         } // End of MONITORING block
 
     } catch (e) {
+        if (e.message && e.message.startsWith("REJECT_AP2T:")) {
+            // Ini adalah penolakan normal dari sistem, BUKAN crash.
+            // Pesan Telegram sudah dikirimkan di blok masing-masing sebelum throw.
+            // Biarkan tab terbuka agar user bisa memeriksa form secara manual
+            return;
+        }
+
         console.error("CT Error:", e);
         
         try {
@@ -4255,15 +4318,19 @@ async function getIdpelFromNomet(nomet, chatId) {
     for (let i = 0; i < 2; i++) { await closePopups(page); await new Promise(r => setTimeout(r, 500)); }
 
     let infoFrame = null;
-    for (const frame of page.frames()) {
-        const isInfo = await frame.evaluate(() => document.body.innerText.includes('Unit UPI') || document.body.innerText.includes('Main Result')).catch(()=>false);
-        if (isInfo) { infoFrame = frame; break; }
+    for (let i = 0; i < 120; i++) {
+        for (const frame of page.frames()) {
+            const isInfo = await frame.evaluate(() => document.body.innerText.includes('Unit UPI') || document.body.innerText.includes('Main Result')).catch(()=>false);
+            if (isInfo) { infoFrame = frame; break; }
+        }
+        if (infoFrame) break;
+        await new Promise(r => setTimeout(r, 500));
     }
     if (!infoFrame) infoFrame = page;
 
     // 1. Ubah Dropdown
     const filterComboId = await infoFrame.evaluate(() => {
-        const inputs = Array.from(document.querySelectorAll('.x-form-text'));
+        const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
         const combo = inputs.find(i => i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama');
         if (combo) {
             combo.id = 'filter_combo_nomet_auto';
@@ -4285,7 +4352,7 @@ async function getIdpelFromNomet(nomet, chatId) {
         
         // Klik opsi "Nomor Meter" dari menu yang muncul
         await infoFrame.evaluate(() => {
-            const items = Array.from(document.querySelectorAll('.x-combo-list-item'));
+            const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
             const targetItem = items.find(i => i.textContent.toUpperCase().includes('NOMOR METER'));
             if (targetItem) targetItem.click();
         });
@@ -4294,7 +4361,7 @@ async function getIdpelFromNomet(nomet, chatId) {
 
     // 2. Isi target input dengan nomet
     const filterInputId = await infoFrame.evaluate(() => {
-        const inputs = Array.from(document.querySelectorAll('.x-form-text'));
+        const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
         let combo = inputs.find(i => i.id === 'filter_combo_nomet_auto');
         if (!combo) {
             combo = inputs.find(i => i.value && (i.value.toLowerCase().includes('pelanggan') || i.value.toLowerCase().includes('meter') || i.value.toLowerCase().includes('nama')));
@@ -4336,22 +4403,36 @@ async function getIdpelFromNomet(nomet, chatId) {
     await infoFrame.type(`#${filterInputId}`, nomet, { delay: 50 });
     await new Promise(r => setTimeout(r, 500));
 
+    // Bersihkan grid sebelum mencari agar tidak salah ambil data lama
+    await infoFrame.evaluate(() => {
+        try {
+            if (typeof Ext !== 'undefined' && Ext.ComponentMgr) {
+                Ext.ComponentMgr.all.each(function(cmp) {
+                    if (cmp.isXType && cmp.isXType('grid')) {
+                        if (cmp.el && cmp.el.dom && cmp.el.dom.getBoundingClientRect().width > 0) {
+                            const store = cmp.getStore();
+                            if (store) store.removeAll();
+                        }
+                    }
+                });
+            }
+        } catch(e) {}
+    });
+
     // Klik Search
     await infoFrame.evaluate(() => {
         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-        const searchBtn = btns.find(b => b.textContent.includes('Search') && b.offsetParent !== null);
+        const searchBtn = btns.find(b => b.textContent.includes('Search') && b.getBoundingClientRect().width > 0);
         if (searchBtn) searchBtn.click();
     });
     
-    bot.sendMessage(chatId, `⏳ Menunggu 30 detik agar pencarian ID Pelanggan selesai dengan sempurna...`);
-    await new Promise(r => setTimeout(r, 30000));
-    bot.sendMessage(chatId, `⏳ Sedang memeriksa hasil pencarian (Maksimal 50 detik)...`);
+    bot.sendMessage(chatId, `⏳ Sedang mencari ID Pelanggan (Maksimal 60 detik)...`);
     
     // Handle popup "Master Nedisys"
     const checkNedisys = async (frame) => {
         return await frame.evaluate(() => {
             const wins = Array.from(document.querySelectorAll('.x-window'));
-            const nedisys = wins.find(w => w.textContent.includes('Master Nedisys') && w.offsetParent !== null);
+            const nedisys = wins.find(w => w.textContent.includes('Master Nedisys') && w.getBoundingClientRect().width > 0);
             if (nedisys) {
                 let extractedIdpel = null;
                 const labels = Array.from(nedisys.querySelectorAll('label'));
@@ -4376,7 +4457,7 @@ async function getIdpelFromNomet(nomet, chatId) {
 
     let resultIdpel = null;
     
-    for (let attempt = 0; attempt < 50; attempt++) {
+    for (let attempt = 0; attempt < 60; attempt++) {
         await new Promise(r => setTimeout(r, 1000));
         
         let nedisysData = await checkNedisys(infoFrame);
@@ -4406,7 +4487,7 @@ async function getIdpelFromNomet(nomet, chatId) {
                 if (typeof Ext !== 'undefined' && Ext.ComponentMgr) {
                     Ext.ComponentMgr.all.each(function(cmp) {
                         if (cmp.isXType && cmp.isXType('grid')) {
-                            if (cmp.el && cmp.el.dom && cmp.el.dom.offsetParent !== null) {
+                            if (cmp.el && cmp.el.dom && cmp.el.dom.getBoundingClientRect().width > 0) {
                                 const store = cmp.getStore();
                                 if (store && store.getCount() > 0) {
                                     const cm = cmp.getColumnModel();
@@ -4489,7 +4570,7 @@ async function processCariPelanggan(target, chatId) {
 
         // 1. Ubah Dropdown
         const filterComboId = await infoFrame.evaluate(() => {
-            const inputs = Array.from(document.querySelectorAll('.x-form-text'));
+            const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
             const combo = inputs.find(i => i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama');
             if (combo) {
                 combo.id = 'filter_combo_nomet';
@@ -4511,7 +4592,7 @@ async function processCariPelanggan(target, chatId) {
             
             // Klik opsi "Id Pelanggan" atau "Nomor Meter" dari menu yang muncul
             await infoFrame.evaluate((fType) => {
-                const items = Array.from(document.querySelectorAll('.x-combo-list-item'));
+                const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
                 const targetItem = items.find(i => i.textContent.toUpperCase().includes(fType.toUpperCase()));
                 if (targetItem) targetItem.click();
             }, dropdownText);
@@ -4520,7 +4601,7 @@ async function processCariPelanggan(target, chatId) {
 
         // 2. Isi Input
         const filterInputId = await infoFrame.evaluate(() => {
-            const inputs = Array.from(document.querySelectorAll('.x-form-text'));
+            const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
             
             let combo = inputs.find(i => i.id === 'filter_combo_nomet');
             if (!combo) {
@@ -4563,27 +4644,43 @@ async function processCariPelanggan(target, chatId) {
         await page.keyboard.press('Enter');
         await new Promise(r => setTimeout(r, 1000));
 
+        // Bersihkan grid sebelum mencari
+        await infoFrame.evaluate(() => {
+            try {
+                if (typeof Ext !== 'undefined' && Ext.ComponentMgr) {
+                    Ext.ComponentMgr.all.each(function(cmp) {
+                        if (cmp.isXType && cmp.isXType('grid')) {
+                            if (cmp.el && cmp.el.dom && cmp.el.dom.getBoundingClientRect().width > 0) {
+                                const store = cmp.getStore();
+                                if (store) store.removeAll();
+                            }
+                        }
+                    });
+                }
+            } catch(e) {}
+        });
+
         // 3. Klik Search
         bot.sendMessage(chatId, `[*] Mencari data pelanggan...`);
         await infoFrame.evaluate(() => {
             const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-            const searchBtn = btns.find(b => b.textContent.trim() === 'Search' && b.offsetParent !== null);
+            const searchBtn = btns.find(b => b.textContent.trim() === 'Search' && b.getBoundingClientRect().width > 0);
             if (searchBtn) searchBtn.click();
         });
 
         
-        // 4. Tunggu hasil dengan Polling (maksimal 30 detik)
+        // 4. Tunggu hasil dengan Polling (maksimal 60 detik)
         bot.sendMessage(chatId, `⏳ Menunggu loading data pelanggan...`);
         let gridLoaded = false;
         let notFoundFast = false;
         
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 60; i++) {
             await new Promise(r => setTimeout(r, 1000));
             
             // Cek popup "Data tidak ditemukan"
             const nf = await infoFrame.evaluate(() => {
                 const wins = Array.from(document.querySelectorAll('.x-window'));
-                const infoWin = wins.find(w => w.textContent.includes('Data tidak ditemukan') && w.offsetParent !== null);
+                const infoWin = wins.find(w => w.textContent.includes('Data tidak ditemukan') && w.getBoundingClientRect().width > 0);
                 if (infoWin) {
                     const btn = infoWin.querySelector('.x-btn-text');
                     if (btn) btn.click();
@@ -4596,20 +4693,21 @@ async function processCariPelanggan(target, chatId) {
             // Tunggu mask loading hilang (jika ada)
             const isMasked = await infoFrame.evaluate(() => {
                 const mask = document.querySelector('.ext-el-mask-msg');
-                return mask && mask.offsetParent !== null && mask.textContent.toLowerCase().includes('wait a few');
+                return mask && mask.getBoundingClientRect().width > 0 && mask.textContent.toLowerCase().includes('wait a few');
             });
             if (isMasked) continue; // Skip jika masih loading
 
             // Cek apakah tabel sudah berisi baris data
             const gl = await infoFrame.evaluate(() => {
-                const gridView = document.querySelector('.x-grid3');
+                const grids = Array.from(document.querySelectorAll('.x-grid3')).filter(g => g.getBoundingClientRect().width > 0);
+                const gridView = grids[0];
                 if (gridView) {
                     const row = gridView.querySelector('.x-grid3-row');
                     if (row) return true;
                 }
                 // Fallback pencarian manual di td
                 const tds = Array.from(document.querySelectorAll('td'));
-                if (tds.some(td => td.textContent.trim().length > 3 && td.textContent.trim() !== 'Id Pelanggan' && td.offsetParent !== null)) {
+                if (tds.some(td => td.textContent.trim().length > 3 && td.textContent.trim() !== 'Id Pelanggan' && td.getBoundingClientRect().width > 0)) {
                     // Pastikan kita melihat data selain header
                     const tableCells = Array.from(document.querySelectorAll('.x-grid3-cell-inner'));
                     if (tableCells.length > 2) return true;
@@ -4622,7 +4720,7 @@ async function processCariPelanggan(target, chatId) {
         // Cek popup "Data tidak ditemukan" (untuk jaga-jaga kalau lolos dari polling)
         const notFound = await infoFrame.evaluate(() => {
             const wins = Array.from(document.querySelectorAll('.x-window'));
-            const infoWin = wins.find(w => w.textContent.includes('Data tidak ditemukan') && w.offsetParent !== null);
+            const infoWin = wins.find(w => w.textContent.includes('Data tidak ditemukan') && w.getBoundingClientRect().width > 0);
             if (infoWin) {
                 const btn = infoWin.querySelector('.x-btn-text');
                 if (btn) btn.click();
@@ -4641,7 +4739,7 @@ async function processCariPelanggan(target, chatId) {
         const checkNedisys2 = async (frame) => {
             return await frame.evaluate(() => {
                 const wins = Array.from(document.querySelectorAll('.x-window'));
-                const nedisys = wins.find(w => w.textContent.includes('Master Nedisys') && w.offsetParent !== null);
+                const nedisys = wins.find(w => w.textContent.includes('Master Nedisys') && w.getBoundingClientRect().width > 0);
                 if (nedisys) {
                     let extractedIdpel = null;
                     const labels = Array.from(nedisys.querySelectorAll('label'));
@@ -4681,7 +4779,7 @@ async function processCariPelanggan(target, chatId) {
                 
                 // Ubah Dropdown ke 'Id Pelanggan'
                 await infoFrame.evaluate(() => {
-                    const inputs = Array.from(document.querySelectorAll('.x-form-text'));
+                    const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
                     const combo = inputs.find(i => i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama' || i.id === 'filter_combo_nomet');
                     if (combo) combo.id = 'filter_combo_nomet_retry';
                 });
@@ -4695,7 +4793,7 @@ async function processCariPelanggan(target, chatId) {
                 
                 // Isi target input
                 await infoFrame.evaluate(() => {
-                    const inputs = Array.from(document.querySelectorAll('.x-form-text'));
+                    const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
                     const combo = inputs.find(i => i.id === 'filter_combo_nomet_retry');
                     if (combo) {
                         const comboIdx = inputs.indexOf(combo);
@@ -4714,7 +4812,7 @@ async function processCariPelanggan(target, chatId) {
                 // Klik Search lagi
                 await infoFrame.evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                    const searchBtn = btns.find(b => b.textContent.includes('Search') && b.offsetParent !== null);
+                    const searchBtn = btns.find(b => b.textContent.includes('Search') && b.getBoundingClientRect().width > 0);
                     if (searchBtn) searchBtn.click();
                 });
                 await new Promise(r => setTimeout(r, 2000));
@@ -4722,7 +4820,8 @@ async function processCariPelanggan(target, chatId) {
         }
         // 5. Ekstrak Hasil dari Grid secara dinamis
         const result = await infoFrame.evaluate(() => {
-            const gridView = document.querySelector('.x-grid3');
+            const grids = Array.from(document.querySelectorAll('.x-grid3')).filter(g => g.getBoundingClientRect().width > 0);
+            const gridView = grids[0];
             if (!gridView) return null;
 
             const headers = Array.from(gridView.querySelectorAll('.x-grid3-hd-inner')).map(h => h.textContent.trim().toUpperCase());
@@ -4804,14 +4903,14 @@ async function searchMonitoringToken(page, target, chatId) {
     }
 
     let monitorFrame = null;
-    // Tunggu sampai iframe dengan 'Jenis Permohonan' muncul (max 15 detik)
-    for (let wait = 0; wait < 15; wait++) {
+    // Tunggu sampai iframe dengan 'Jenis Permohonan' muncul (max 60 detik)
+    for (let wait = 0; wait < 60; wait++) {
         const frames = page.frames();
         for (const frame of frames) {
             try {
                 const found = await frame.evaluate(() => {
                     return !!Array.from(document.querySelectorAll('*')).find(el =>
-                        el.innerText && el.innerText.includes('Jenis Permohonan') && el.offsetParent !== null
+                        el.innerText && el.innerText.includes('Jenis Permohonan') && el.getBoundingClientRect().width > 0
                     );
                 });
                 if (found) { monitorFrame = frame; break; }
@@ -4836,7 +4935,7 @@ async function searchMonitoringToken(page, target, chatId) {
         const allElements = Array.from(document.querySelectorAll('*'));
         const label = allElements.find(el =>
             el.innerText && el.innerText.trim().includes('Jenis Permohonan') &&
-            el.offsetParent !== null && el.children.length === 0
+            el.getBoundingClientRect().width > 0 && el.children.length === 0
         );
 
         if (label) {
@@ -4845,7 +4944,7 @@ async function searchMonitoringToken(page, target, chatId) {
                 const iRect = i.getBoundingClientRect();
                 return iRect.left > rect.left &&
                     Math.abs(iRect.top - rect.top) < 15 &&
-                    i.offsetParent !== null;
+                    i.getBoundingClientRect().width > 0;
             });
             inputs.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
 
@@ -4922,11 +5021,35 @@ async function searchMonitoringToken(page, target, chatId) {
 
         await monitorFrame.evaluate(() => {
             const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-            const filterBtn = btns.find(b => b.textContent.trim() === 'Filter' && b.offsetParent !== null);
+            const filterBtn = btns.find(b => b.textContent.trim() === 'Filter' && b.getBoundingClientRect().width > 0);
             if (filterBtn) filterBtn.click();
         });
         
-        await new Promise(r => setTimeout(r, 1500));
+        if (chatId) bot.sendMessage(chatId, `⏳ Menunggu hasil filter data...`);
+        for (let w = 0; w < 120; w++) { // Max 60 detik
+            await new Promise(r => setTimeout(r, 500));
+            const isLoading = await page.evaluate(() => {
+                const mb = document.querySelector('.ext-mb-text');
+                if (mb && mb.getBoundingClientRect().width > 0 && (mb.textContent.toLowerCase().includes('load data') || mb.textContent.toLowerCase().includes('please wait'))) {
+                    return true;
+                }
+                const wins = Array.from(document.querySelectorAll('.x-window')).filter(win => win.getBoundingClientRect().width > 0);
+                for (let win of wins) {
+                    if (win.textContent.toLowerCase().includes('load data') || win.textContent.toLowerCase().includes('please wait')) return true;
+                }
+                // Cek mask loading pada grid
+                const masks = Array.from(document.querySelectorAll('.ext-el-mask-msg')).filter(m => m.getBoundingClientRect().width > 0);
+                if (masks.length > 0) return true;
+                
+                return false;
+            }).catch(() => false);
+            
+            if (!isLoading) {
+                await new Promise(r => setTimeout(r, 1500)); // Ekstra jeda stabilisasi
+                break;
+            }
+        }
+        
         return monitorFrame;
     } else {
         throw new Error(`Gagal mendeteksi field Monitoring: ${visualResult}`);
@@ -5215,7 +5338,7 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
                 // Klik tombol Cetak
                 await monitorFrame.evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                    const cetak = btns.find(b => b.textContent.toLowerCase().includes('cetak') && b.offsetParent !== null);
+                    const cetak = btns.find(b => b.textContent.toLowerCase().includes('cetak') && b.getBoundingClientRect().width > 0);
                     if (cetak) cetak.click();
                 });
 
@@ -5853,7 +5976,8 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
         }
 
         let aktivasiFrame = null;
-        for (const frame of page.frames()) {
+        for (let i = 0; i < 120; i++) {
+            for (const frame of page.frames()) {
             const isAktivasi = await frame.evaluate(() => {
                 return document.body.innerText.includes('Pencarian') ||
                     document.body.innerText.includes('No Agenda') ||
@@ -5861,27 +5985,28 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
             });
             if (isAktivasi) {
                 const hasInput = await frame.evaluate(() => {
-                    return Array.from(document.querySelectorAll('input')).some(i => i.offsetParent !== null);
+                    return Array.from(document.querySelectorAll('input')).some(i => i.getBoundingClientRect().width > 0);
                 });
-                if (hasInput) {
                     aktivasiFrame = frame;
                     break;
                 }
             }
+            if (aktivasiFrame) break;
+            await new Promise(r => setTimeout(r, 500));
         }
         if (!aktivasiFrame) aktivasiFrame = page;
 
         bot.sendMessage(chatId, `🔍 Memasukkan No Agenda di Aktivasi...`);
         const inputIdentified = await aktivasiFrame.evaluate((val) => {
             const labels = Array.from(document.querySelectorAll('label, span'));
-            const label = labels.find(l => l.textContent.includes('No Agenda') && l.offsetParent !== null);
+            const label = labels.find(l => l.textContent.includes('No Agenda') && l.getBoundingClientRect().width > 0);
             let target = null;
             if (label) {
                 target = label.closest('.x-form-item')?.querySelector('input') || label.parentElement.querySelector('input');
             }
             if (!target) {
                 const allInputs = Array.from(document.querySelectorAll('input'));
-                target = allInputs.find(i => i.offsetParent !== null && i.type === 'text' && i.id.includes('ext-comp'));
+                target = allInputs.find(i => i.getBoundingClientRect().width > 0 && i.type === 'text' && i.id.includes('ext-comp'));
             }
             if (target) {
                 target.style.border = "5px solid red";
@@ -5920,7 +6045,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
             bot.sendMessage(chatId, `🔍 Mengeklik tombol Cari...`);
             await aktivasiFrame.evaluate(() => {
                 const btns = Array.from(document.querySelectorAll('button, .x-btn-text, .x-form-trigger'));
-                const findBtn = btns.find(b => (b.textContent.includes('Cari') || b.className.includes('search')) && b.offsetParent !== null);
+                const findBtn = btns.find(b => (b.textContent.includes('Cari') || b.className.includes('search')) && b.getBoundingClientRect().width > 0);
                 if (findBtn) findBtn.click();
             });
             
@@ -5932,7 +6057,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                 
                 errorText = await aktivasiFrame.evaluate(() => {
                     const wins = Array.from(document.querySelectorAll('.x-window'));
-                    const errWin = wins.find(w => w.style.display !== 'none' && w.offsetParent !== null);
+                    const errWin = wins.find(w => w.style.display !== 'none' && w.getBoundingClientRect().width > 0);
                     if (errWin) return errWin.textContent;
                     return null;
                 });
@@ -5964,7 +6089,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
             bot.sendMessage(chatId, `💾 Menyimpan Aktivasi...`);
             const saveSuccess = await aktivasiFrame.evaluate(() => {
                 const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.offsetParent !== null);
+                const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.getBoundingClientRect().width > 0);
                 if (saveBtn) {
                     saveBtn.click();
                     return true;
@@ -5981,14 +6106,14 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                     await new Promise(r => setTimeout(r, 500));
                     yaClicked = await page.evaluate(() => {
                         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                        const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
+                        const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.getBoundingClientRect().width > 0);
                         if (yaBtn) { yaBtn.click(); return true; }
                         return false;
                     });
                     if (!yaClicked) {
                         yaClicked = await aktivasiFrame.evaluate(() => {
                             const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                            const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.offsetParent !== null);
+                            const yaBtn = btns.find(b => (b.textContent.trim() === 'Ya' || b.textContent.trim() === 'Yes') && b.getBoundingClientRect().width > 0);
                             if (yaBtn) { yaBtn.click(); return true; }
                             return false;
                         });
@@ -6006,14 +6131,14 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                     await new Promise(r => setTimeout(r, 500));
                     okClicked = await page.evaluate(() => {
                         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                        const okBtn = btns.find(b => (b.textContent.trim() === 'OK') && b.offsetParent !== null);
+                        const okBtn = btns.find(b => (b.textContent.trim() === 'OK') && b.getBoundingClientRect().width > 0);
                         if (okBtn) { okBtn.click(); return true; }
                         return false;
                     });
                     if (!okClicked) {
                         okClicked = await aktivasiFrame.evaluate(() => {
                             const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                            const okBtn = btns.find(b => (b.textContent.trim() === 'OK') && b.offsetParent !== null);
+                            const okBtn = btns.find(b => (b.textContent.trim() === 'OK') && b.getBoundingClientRect().width > 0);
                             if (okBtn) { okBtn.click(); return true; }
                             return false;
                         });
@@ -6030,7 +6155,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                 
                 const simpanDisabled = await aktivasiFrame.evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
-                    const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.offsetParent !== null);
+                    const saveBtn = btns.find(b => b.textContent.trim().toUpperCase() === 'SIMPAN' && b.getBoundingClientRect().width > 0);
                     
                     if (saveBtn) {
                         // Jika tombol ada, cek apakah class-nya mendandakan disabled
@@ -6060,11 +6185,15 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
                 } catch(ex) {}
                 // Otomatis arahkan ke /cetak_token agar mencari dan mencetak hasil akhir token berdasarkan No Agenda
                 bot.sendMessage(chatId, `🔄 Meneruskan ke proses Cetak Token untuk No Agenda ${noAgenda}...`);
-                bot.emit('message', {
-                    chat: { id: chatId },
-                    from: typeof userInfo === 'object' ? userInfo : { id: chatId },
-                    text: `/cetak_token ${noAgenda}`,
-                    message_id: Date.now()
+                bot.processUpdate({
+                    update_id: Date.now(),
+                    message: {
+                        message_id: Date.now(),
+                        from: typeof userInfo === 'object' ? userInfo : { id: chatId },
+                        chat: { id: chatId },
+                        date: Math.floor(Date.now() / 1000),
+                        text: `/cetak_token ${noAgenda}`
+                    }
                 });
             } else {
                 bot.sendMessage(chatId, `❌ Tombol SIMPAN tidak merespon/tidak ditemukan.`);
