@@ -179,11 +179,26 @@ setInterval(async () => {
 // Fungsi ini memverifikasi sesi AP2T masih aktif dengan mengecek
 // keberadaan menu navigasi utama di DOM secara nyata.
 async function checkAndReloginIfNeeded(chatId) {
+    const wipeQueue = () => {
+        if (commandQueue.length > 0) {
+            if (chatId) bot.sendMessage(chatId, `⚠️ Antrean terpaksa dibatalkan karena bot gagal memulihkan sesi AP2T.`);
+            for (const item of commandQueue) {
+                if (item && item.chatId) {
+                    bot.sendMessage(item.chatId, `⚠️ Maaf, antrean perintah ${item.commandName || 'Anda'} dibatalkan karena bot sedang mengalami kendala Sesi AP2T (Butuh Reset Session). Silakan ulangi nanti.`).catch(()=>null);
+                }
+            }
+            commandQueue = []; // Kosongkan antrean
+        }
+    };
+
     // Jika browser/page sudah tidak ada, langsung login
     if (!isLoggedIn || !browser || !page || page.isClosed()) {
         if (chatId) bot.sendMessage(chatId, `🔄 Sesi AP2T tidak aktif, melakukan login otomatis...`);
         const ok = await login('main', chatId, true);
-        if (!ok) throw new Error('Gagal login otomatis ke AP2T. Coba /login_ap2t secara manual.');
+        if (!ok) {
+            wipeQueue();
+            throw new Error('Gagal login otomatis ke AP2T. Coba /login_ap2t secara manual.');
+        }
         isLoggedIn = true;
         currentAccount = 'main';
         return true;
@@ -207,7 +222,10 @@ async function checkAndReloginIfNeeded(chatId) {
         isLoggedIn = false;
         if (chatId) bot.sendMessage(chatId, `⚠️ *Sesi AP2T terputus / habis!*\n🔄 Melakukan re-login otomatis...`, { parse_mode: 'Markdown' });
         const ok = await login('main', chatId, true);
-        if (!ok) throw new Error('Gagal re-login otomatis. Coba /login_ap2t secara manual.');
+        if (!ok) {
+            wipeQueue();
+            throw new Error('Gagal re-login otomatis. Coba /login_ap2t secara manual.');
+        }
         isLoggedIn = true;
         currentAccount = 'main';
         if (chatId) bot.sendMessage(chatId, `✅ Re-login berhasil! Melanjutkan perintah...`);
@@ -630,6 +648,7 @@ let activeChatId = null;
 // Antrean eksekusi global
 let commandQueue = [];
 let isProcessingCT = false;
+let lastActivityTime = Date.now();
 let isPaused = false; // Flag untuk pause
 let lastGlobalDialogMsg = "";
 let pendingInputState = {};
@@ -652,13 +671,18 @@ async function processQueue() {
     if (isProcessingCT || commandQueue.length === 0) return;
     isProcessingCT = true;
 
-    const task = commandQueue.shift();
+    const queueItem = commandQueue.shift();
     try {
-        await task();
+        if (typeof queueItem === 'function') {
+            await queueItem();
+        } else if (queueItem && typeof queueItem.task === 'function') {
+            await queueItem.task();
+        }
     } catch (err) {
         console.error("Queue process error:", err);
     } finally {
         isProcessingCT = false;
+        lastActivityTime = Date.now();
         // Lanjut ke antrean berikutnya jika ada
         if (commandQueue.length > 0) {
             processQueue();
@@ -2679,20 +2703,20 @@ bot.onText(/\/status/, async (msg) => {
 bot.onText(/\/login_ap2t/, async (msg) => {
     const chatId = msg.chat.id;
     if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Sedang proses login...`);
-    commandQueue.push(async () => {
+    commandQueue.push({ chatId: typeof chatId !== 'undefined' ? chatId : (typeof msg !== 'undefined' && msg ? msg.chat.id : null), commandName: (typeof msg !== 'undefined' && msg && msg.text ? msg.text : 'Perintah'), task: async () => {
         await startSmartLogin(chatId, msg.from);
-    });
+    } });
     if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
 });
 
 bot.onText(/\/login_webmail/, async (msg) => {
     const chatId = msg.chat.id;
     if (isLoggingIn) return bot.sendMessage(chatId, `⏳ Bot sedang sibuk (sedang login). Mohon tunggu...`);
-    commandQueue.push(async () => {
+    commandQueue.push({ chatId: typeof chatId !== 'undefined' ? chatId : (typeof msg !== 'undefined' && msg ? msg.chat.id : null), commandName: (typeof msg !== 'undefined' && msg && msg.text ? msg.text : 'Perintah'), task: async () => {
         isLoggingIn = true;
         try { await testWebmailLogin(chatId, msg.from); }
         finally { isLoggingIn = false; }
-    });
+    } });
     if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
 });
 
@@ -2726,7 +2750,7 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
     bot.sendMessage(chatId, `[*] Perintah CT diterima. Sedang memproses...`);
     console.log("[DEBUG] CT RECEIVED");
 
-    commandQueue.push(async () => {
+    commandQueue.push({ chatId: typeof chatId !== 'undefined' ? chatId : (typeof msg !== 'undefined' && msg ? msg.chat.id : null), commandName: (typeof msg !== 'undefined' && msg && msg.text ? msg.text : 'Perintah'), task: async () => {
         try {
             await processCT(idpel, nogan, chatId, msg.from);
             recordStat('cetak_token', 'success', getActiveProfileName(), msg.from);
@@ -2734,7 +2758,7 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan fatal CT: ${err.message}`);
             recordStat('cetak_token', 'fail', getActiveProfileName(), msg.from);
         }
-    });
+    } });
     
     if (!isProcessingCT) {
         processQueue();
@@ -3043,7 +3067,7 @@ bot.onText(/\/cek_akun_aktif/, async (msg) => {
 
 bot.onText(/\/logout/, async (msg) => {
     const chatId = msg.chat.id;
-    commandQueue.push(async () => {
+    commandQueue.push({ chatId: typeof chatId !== 'undefined' ? chatId : (typeof msg !== 'undefined' && msg ? msg.chat.id : null), commandName: (typeof msg !== 'undefined' && msg && msg.text ? msg.text : 'Perintah'), task: async () => {
         if (!isLoggedIn) return bot.sendMessage(chatId, `❌ Belum login.`);
         try {
             if (page && !page.isClosed()) { await page.close().catch(() => { }); page = null; }
@@ -3051,7 +3075,7 @@ bot.onText(/\/logout/, async (msg) => {
             bot.sendMessage(chatId, `✅ Logout & tab AP2T ditutup.`);
             broadcastMessage(`❌ *INFORMASI:* Sesi AP2T telah logout dan koneksi ditutup.`);
         } catch (e) { bot.sendMessage(chatId, `❌ Gagal logout: ${e.message}`); }
-    });
+    } });
     if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
 });
 
@@ -3176,7 +3200,7 @@ async function clickMenu(page, menuPath) {
             let waitTime = 0;
             while (waitTime < 10000) {
                 const isLoading = await page.evaluate(() => {
-                    const txt = document.body.innerText;
+                    const txt = document.body ? document.body.innerText : '';
                     return txt.includes('Loading') || !!document.querySelector('.ext-el-mask-msg');
                 });
                 if (!isLoading) break;
@@ -3331,7 +3355,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         await clickMenu(page, ['PELAYANAN PELANGGAN', 'Rekening', 'Permohonan', 'Pengaduan Pelanggan']);
 
         bot.sendMessage(chatId, `⏳ Menunggu halaman Pengaduan Pelanggan terbuka...`);
-        await page.waitForFunction(() => !document.body.innerText.includes('Loading Pengaduan Pelanggan'), { timeout: 30000 });
+        await page.waitForFunction(() => !document.body || !document.body.innerText.includes('Loading Pengaduan Pelanggan'), { timeout: 30000 });
         await new Promise(r => setTimeout(r, 1500));
 
         // Bersihkan popup Informasi Pesta Siap Bongkar yang sering muncul setelah halaman dimuat
@@ -3791,8 +3815,9 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         let aktivasiFrame = null;
         for (const frame of page.frames()) {
             const isAktivasi = await frame.evaluate(() => {
-                return document.body.innerText.includes('Pencarian') ||
-                    document.body.innerText.includes('No Agenda') ||
+                const txt = document.body ? document.body.innerText : '';
+                return txt.includes('Pencarian') ||
+                    txt.includes('No Agenda') ||
                     document.querySelector('input[id*="ext-comp"]') !== null;
             });
             if (isAktivasi) {
@@ -4320,7 +4345,7 @@ async function getIdpelFromNomet(nomet, chatId) {
     let infoFrame = null;
     for (let i = 0; i < 120; i++) {
         for (const frame of page.frames()) {
-            const isInfo = await frame.evaluate(() => document.body.innerText.includes('Unit UPI') || document.body.innerText.includes('Main Result')).catch(()=>false);
+            const isInfo = await frame.evaluate(() => { const txt = document.body ? document.body.innerText : ''; return txt.includes('Unit UPI') || txt.includes('Main Result'); }).catch(()=>false);
             if (isInfo) { infoFrame = frame; break; }
         }
         if (infoFrame) break;
@@ -4328,79 +4353,101 @@ async function getIdpelFromNomet(nomet, chatId) {
     }
     if (!infoFrame) infoFrame = page;
 
-    // 1. Ubah Dropdown
-    const filterComboId = await infoFrame.evaluate(() => {
-        const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
-        const combo = inputs.find(i => i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama');
+    // 1. Cari Dropdown secara Visual
+    const visualResult = await infoFrame.evaluate(() => {
+        const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
+            i.getBoundingClientRect().width > 0 && 
+            !i.closest('.x-hide-display') && 
+            !i.closest('.x-hide-offsets')
+        );
+        
+        const combo = allInputs.find(i => i.value && (i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama'));
+        
         if (combo) {
-            combo.id = 'filter_combo_nomet_auto';
-            return combo.id;
+            const rect = combo.getBoundingClientRect();
+            const inputsOnSameLine = allInputs.filter(i => {
+                const iRect = i.getBoundingClientRect();
+                return Math.abs(iRect.top - rect.top) < 15 && iRect.left >= rect.left;
+            });
+            
+            inputsOnSameLine.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+            
+            if (inputsOnSameLine.length >= 2) {
+                inputsOnSameLine[0].id = 'filter_combo_nomet_auto_visual';
+                inputsOnSameLine[1].id = 'filter_input_nomet_auto_visual';
+                
+                inputsOnSameLine[0].style.border = '3px solid red';
+                inputsOnSameLine[1].style.border = '3px solid blue';
+                return 'OK';
+            }
+            return 'ONLY_FOUND_' + inputsOnSameLine.length;
         }
-        return null;
+        return 'COMBO_NOT_FOUND';
     });
 
-    if (filterComboId) {
-        // Klik trigger combo agar ExtJS merender list item
-        await infoFrame.evaluate(() => {
-            const input = document.getElementById('filter_combo_nomet_auto');
-            if (input && input.parentElement) {
-                const trigger = input.parentElement.querySelector('.x-form-trigger');
-                if (trigger) trigger.click();
-            }
-        });
-        await new Promise(r => setTimeout(r, 1000));
-        
-        // Klik opsi "Nomor Meter" dari menu yang muncul
-        await infoFrame.evaluate(() => {
-            const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
-            const targetItem = items.find(i => i.textContent.toUpperCase().includes('NOMOR METER'));
-            if (targetItem) targetItem.click();
-        });
-        await new Promise(r => setTimeout(r, 1000));
+    if (visualResult !== 'OK') {
+        bot.sendMessage(chatId, `❌ Gagal menemukan kolom dropdown di halaman Info Pelanggan (Visual: ${visualResult}).`);
+        return null;
     }
 
-    // 2. Isi target input dengan nomet
-    const filterInputId = await infoFrame.evaluate(() => {
-        const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
-        let combo = inputs.find(i => i.id === 'filter_combo_nomet_auto');
-        if (!combo) {
-            combo = inputs.find(i => i.value && (i.value.toLowerCase().includes('pelanggan') || i.value.toLowerCase().includes('meter') || i.value.toLowerCase().includes('nama')));
+    // 2. Klik dan Ubah Dropdown ke Nomor Meter
+    await infoFrame.evaluate(() => {
+        const input = document.getElementById('filter_combo_nomet_auto_visual');
+        if (input && input.parentElement) {
+            const trigger = input.parentElement.querySelector('.x-form-trigger');
+            if (trigger) trigger.click();
         }
-        
+    });
+    await new Promise(r => setTimeout(r, 1000));
+    
+    await infoFrame.evaluate(() => {
+        const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
+        const targetItem = items.find(i => i.textContent.toUpperCase().includes('NOMOR METER'));
+        if (targetItem) targetItem.click();
+    });
+    await new Promise(r => setTimeout(r, 1000));
+
+    // 3. Cari ulang input secara visual karena ExtJS bisa mereset DOM
+    const finalInputId = await infoFrame.evaluate(() => {
+        const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
+            i.getBoundingClientRect().width > 0 && 
+            !i.closest('.x-hide-display') && 
+            !i.closest('.x-hide-offsets')
+        );
+        const combo = allInputs.find(i => i.value && (i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama'));
         if (combo) {
-            const comboIdx = inputs.indexOf(combo);
-            if (comboIdx >= 0 && comboIdx + 1 < inputs.length) {
-                const targetInput = inputs[comboIdx + 1];
-                targetInput.id = 'filter_input_nomet_auto';
-                return targetInput.id;
+            const rect = combo.getBoundingClientRect();
+            const inputsOnSameLine = allInputs.filter(i => {
+                const iRect = i.getBoundingClientRect();
+                return Math.abs(iRect.top - rect.top) < 15 && iRect.left >= rect.left;
+            });
+            inputsOnSameLine.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+            
+            if (inputsOnSameLine.length >= 2) {
+                inputsOnSameLine[1].id = 'filter_input_nomet_auto_visual_final';
+                inputsOnSameLine[1].style.border = '3px solid blue';
+                return inputsOnSameLine[1].id;
             }
         }
         
-        // Fallback Ekstrem 1: Ambil input teks kosong pertama yang bukan readonly
-        const emptyInputs = inputs.filter(i => !i.readOnly && !i.disabled && (!i.value || i.value.trim() === ''));
+        const emptyInputs = allInputs.filter(i => !i.readOnly && !i.disabled && (!i.value || i.value.trim() === ''));
         if (emptyInputs.length > 0) {
-            emptyInputs[0].id = 'filter_input_nomet_auto';
+            emptyInputs[0].id = 'filter_input_nomet_auto_visual_final';
+            emptyInputs[0].style.border = '3px solid blue';
             return emptyInputs[0].id;
         }
-        
-        // Fallback Ekstrem 2: Ambil input text ke-2 jika ada
-        if (inputs.length > 1) {
-            inputs[1].id = 'filter_input_nomet_auto';
-            return inputs[1].id;
-        }
-
         return null;
     });
 
-    if (!filterInputId) {
-        bot.sendMessage(chatId, `❌ Gagal menemukan kolom input di halaman Info Pelanggan.`);
+    if (!finalInputId) {
+        bot.sendMessage(chatId, `❌ Gagal mengunci ulang kolom input setelah memilih Nomor Meter.`);
         return null;
     }
 
-    await infoFrame.click(`#${filterInputId}`, { clickCount: 3 }).catch(() => null);
+    await infoFrame.click(`#${finalInputId}`, { clickCount: 3 }).catch(() => null);
     await new Promise(r => setTimeout(r, 500));
     await page.keyboard.press('Backspace');
-    await infoFrame.type(`#${filterInputId}`, nomet, { delay: 50 });
+    await infoFrame.type(`#${finalInputId}`, nomet, { delay: 50 });
     await new Promise(r => setTimeout(r, 500));
 
     // Bersihkan grid sebelum mencari agar tidak salah ambil data lama
@@ -4548,7 +4595,8 @@ async function processCariPelanggan(target, chatId) {
         for (const frame of frames) {
             try {
                 const isInfo = await frame.evaluate(() => {
-                    return document.body.innerText.includes('Unit UPI') || document.body.innerText.includes('Main Result');
+                    const txt = document.body ? document.body.innerText : '';
+                    return txt.includes('Unit UPI') || txt.includes('Main Result');
                 });
                 if (isInfo) {
                     infoFrame = frame;
@@ -4568,76 +4616,97 @@ async function processCariPelanggan(target, chatId) {
         const isNomet = target.length === 11;
         const dropdownText = isNomet ? 'Nomor Meter' : 'Id Pelanggan';
 
-        // 1. Ubah Dropdown
-        const filterComboId = await infoFrame.evaluate(() => {
-            const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
-            const combo = inputs.find(i => i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama');
+        // 1. Cari Dropdown secara Visual (seperti fitur CT)
+        const visualResult = await infoFrame.evaluate(() => {
+            const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
+                i.getBoundingClientRect().width > 0 && 
+                !i.closest('.x-hide-display') && 
+                !i.closest('.x-hide-offsets')
+            );
+            
+            // Cari combo yang isinya Id Pelanggan atau Nomor Meter
+            const combo = allInputs.find(i => i.value && (i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama'));
+            
             if (combo) {
-                combo.id = 'filter_combo_nomet';
-                return combo.id;
+                const rect = combo.getBoundingClientRect();
+                const inputsOnSameLine = allInputs.filter(i => {
+                    const iRect = i.getBoundingClientRect();
+                    // Toleransi Y (top) 15px, dan harus ada di sebelah kanannya atau elemen itu sendiri
+                    return Math.abs(iRect.top - rect.top) < 15 && iRect.left >= rect.left;
+                });
+                
+                inputsOnSameLine.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+                
+                if (inputsOnSameLine.length >= 2) {
+                    inputsOnSameLine[0].id = 'filter_combo_nomet_visual';
+                    inputsOnSameLine[1].id = 'filter_input_nomet_visual';
+                    
+                    // Beri kotak merah & biru
+                    inputsOnSameLine[0].style.border = '3px solid red';
+                    inputsOnSameLine[1].style.border = '3px solid blue';
+                    return 'OK';
+                }
+                return 'ONLY_FOUND_' + inputsOnSameLine.length;
             }
-            return null;
+            return 'COMBO_NOT_FOUND';
         });
 
-        if (filterComboId) {
-            // Klik trigger combo agar ExtJS merender list item
-            await infoFrame.evaluate(() => {
-                const input = document.getElementById('filter_combo_nomet');
-                if (input && input.parentElement) {
-                    const trigger = input.parentElement.querySelector('.x-form-trigger');
-                    if (trigger) trigger.click();
-                }
-            });
-            await new Promise(r => setTimeout(r, 1000)); // Tunggu list terbuka
-            
-            // Klik opsi "Id Pelanggan" atau "Nomor Meter" dari menu yang muncul
-            await infoFrame.evaluate((fType) => {
-                const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
-                const targetItem = items.find(i => i.textContent.toUpperCase().includes(fType.toUpperCase()));
-                if (targetItem) targetItem.click();
-            }, dropdownText);
-            await new Promise(r => setTimeout(r, 1000));
+        if (visualResult !== 'OK') {
+            throw new Error(`Kolom input tidak ditemukan secara visual (Result: ${visualResult}). Kemungkinan halaman AP2T lambat memuat form.`);
         }
 
-        // 2. Isi Input
-        const filterInputId = await infoFrame.evaluate(() => {
-            const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
-            
-            let combo = inputs.find(i => i.id === 'filter_combo_nomet');
-            if (!combo) {
-                // ExtJS DOM mungkin di-rebuild saat dropdown diganti, cari ulang by value
-                combo = inputs.find(i => i.value && (i.value.toLowerCase().includes('pelanggan') || i.value.toLowerCase().includes('meter') || i.value.toLowerCase().includes('nama')));
+        // 2. Klik dan Ubah Dropdown
+        await infoFrame.evaluate(() => {
+            const input = document.getElementById('filter_combo_nomet_visual');
+            if (input && input.parentElement) {
+                const trigger = input.parentElement.querySelector('.x-form-trigger');
+                if (trigger) trigger.click();
             }
-            
+        });
+        await new Promise(r => setTimeout(r, 1000));
+        
+        await infoFrame.evaluate((fType) => {
+            const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
+            const targetItem = items.find(i => i.textContent.toUpperCase().includes(fType.toUpperCase()));
+            if (targetItem) targetItem.click();
+        }, dropdownText);
+        await new Promise(r => setTimeout(r, 1000));
+
+        // 3. ExtJS bisa me-refresh DOM saat dropdown diganti, kita ulang pencarian input secara visual
+        const finalInputId = await infoFrame.evaluate(() => {
+            const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
+                i.getBoundingClientRect().width > 0 && 
+                !i.closest('.x-hide-display') && 
+                !i.closest('.x-hide-offsets')
+            );
+            const combo = allInputs.find(i => i.value && (i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama'));
             if (combo) {
-                const comboIdx = inputs.indexOf(combo);
-                // Kolom input selalu elemen form-text selanjutnya setelah combo di ExtJS
-                if (comboIdx >= 0 && comboIdx + 1 < inputs.length) {
-                    const targetInput = inputs[comboIdx + 1];
-                    targetInput.id = 'filter_input_nomet';
-                    return targetInput.id;
+                const rect = combo.getBoundingClientRect();
+                const inputsOnSameLine = allInputs.filter(i => {
+                    const iRect = i.getBoundingClientRect();
+                    return Math.abs(iRect.top - rect.top) < 15 && iRect.left >= rect.left;
+                });
+                inputsOnSameLine.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+                
+                if (inputsOnSameLine.length >= 2) {
+                    inputsOnSameLine[1].id = 'filter_input_nomet_visual_final';
+                    inputsOnSameLine[1].style.border = '3px solid blue'; // Berikan border biru lagi
+                    return inputsOnSameLine[1].id;
                 }
             }
-            
-            // Fallback Ekstrem 1: Ambil input teks kosong pertama yang bukan readonly
-            const emptyInputs = inputs.filter(i => !i.readOnly && !i.disabled && (!i.value || i.value.trim() === ''));
+            // Fallback Ekstrem: Jika ExtJS menghapus label dropdown-nya, kita cari input kosong pertama
+            const emptyInputs = allInputs.filter(i => !i.readOnly && !i.disabled && (!i.value || i.value.trim() === ''));
             if (emptyInputs.length > 0) {
-                emptyInputs[0].id = 'filter_input_nomet';
+                emptyInputs[0].id = 'filter_input_nomet_visual_final';
+                emptyInputs[0].style.border = '3px solid blue';
                 return emptyInputs[0].id;
             }
-            
-            // Fallback Ekstrem 2: Ambil input text ke-2 jika ada
-            if (inputs.length > 1) {
-                inputs[1].id = 'filter_input_nomet';
-                return inputs[1].id;
-            }
-
             return null;
         });
 
-        if (!filterInputId) throw new Error("Kolom input tidak ditemukan.");
+        if (!finalInputId) throw new Error("Gagal mengunci ulang kolom input setelah memilih dropdown.");
 
-        await infoFrame.click(`#${filterInputId}`, { clickCount: 3 }).catch(() => null);
+        await infoFrame.click(`#${finalInputId}`, { clickCount: 3 }).catch(() => null);
         await new Promise(r => setTimeout(r, 500));
         await page.keyboard.press('Backspace');
         await page.keyboard.type(target, { delay: 100 });
@@ -4886,7 +4955,7 @@ async function searchMonitoringToken(page, target, chatId) {
         let loadingWait = 0;
         while (loadingWait < 20000) {
             const isLoading = await page.evaluate(() => {
-                const text = document.body.innerText;
+                const text = document.body ? document.body.innerText : '';
                 return text.includes('Loading Monitoring Permohonan Token') || 
                        !!document.querySelector('.ext-el-mask-msg');
             });
@@ -5192,7 +5261,7 @@ bot.onText(/\/ambil_token(?:\s+(.+))?/, async (msg, match) => {
     }
     const target = match[1].trim();
 
-    commandQueue.push(async () => {
+    commandQueue.push({ chatId: typeof chatId !== 'undefined' ? chatId : (typeof msg !== 'undefined' && msg ? msg.chat.id : null), commandName: (typeof msg !== 'undefined' && msg && msg.text ? msg.text : 'Perintah'), task: async () => {
         activeChatId = chatId;
         let statusMsg = await bot.sendMessage(chatId, `⏳ Mengambil token untuk ${target}...`);
         try {
@@ -5230,7 +5299,7 @@ bot.onText(/\/ambil_token(?:\s+(.+))?/, async (msg, match) => {
         } catch (e) {
             await bot.editMessageText(`❌ Error ambil_token: ${e.message}`, { chat_id: chatId, message_id: statusMsg.message_id });
         }
-    });
+    } });
 
     if (!isProcessingCT) {
         processQueue();
@@ -5249,7 +5318,7 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
     }
     const rowIndex = rowNum - 1; // 0-indexed for DOM
 
-    commandQueue.push(async () => {
+    commandQueue.push({ chatId: typeof chatId !== 'undefined' ? chatId : (typeof msg !== 'undefined' && msg ? msg.chat.id : null), commandName: (typeof msg !== 'undefined' && msg && msg.text ? msg.text : 'Perintah'), task: async () => {
         activeChatId = chatId;
         let statusMsg = await bot.sendMessage(chatId, `⏳ Mengambil data transaksi pada baris ke-${rowNum} untuk dicetak...`);
         try {
@@ -5488,7 +5557,7 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
         } catch (e) {
             await bot.editMessageText(`❌ Error cetak_token: ${e.message}`, { chat_id: chatId, message_id: statusMsg.message_id });
         }
-    });
+    } });
 
     if (!isProcessingCT) {
         processQueue();
@@ -5505,7 +5574,7 @@ bot.onText(/\/cek_token(?:\s+(.+))?/, async (msg, match) => {
     }
     const target = match[1].trim();
     
-    commandQueue.push(async () => {
+    commandQueue.push({ chatId: typeof chatId !== 'undefined' ? chatId : (typeof msg !== 'undefined' && msg ? msg.chat.id : null), commandName: (typeof msg !== 'undefined' && msg && msg.text ? msg.text : 'Perintah'), task: async () => {
         activeChatId = chatId;
         let statusMsg = await bot.sendMessage(chatId, `⏳ Membuka Monitoring Permohonan Token untuk ${target}...`);
         try {
@@ -5647,7 +5716,7 @@ bot.onText(/\/cek_token(?:\s+(.+))?/, async (msg, match) => {
                 message_id: statusMsg.message_id
             });
         }
-    });
+    } });
 
     if (!isProcessingCT) {
         processQueue();
@@ -5668,11 +5737,11 @@ bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
     if (target.length < 5) {
         return bot.sendMessage(chatId, `[!] Format salah. Gunakan: \n\`/cek_pelanggan <idpel_atau_nometer>\``, { parse_mode: 'Markdown' });
     }
-    commandQueue.push(async () => {
+    commandQueue.push({ chatId: typeof chatId !== 'undefined' ? chatId : (typeof msg !== 'undefined' && msg ? msg.chat.id : null), commandName: (typeof msg !== 'undefined' && msg && msg.text ? msg.text : 'Perintah'), task: async () => {
         activeChatId = chatId;
         await bot.sendMessage(chatId, `[*] Memproses /cek_pelanggan untuk: ${target}`).catch(console.error);
         await processCariPelanggan(target, chatId);
-    });
+    } });
 
     if (!isProcessingCT) {
         processQueue();
@@ -5944,7 +6013,7 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
 
     bot.sendMessage(chatId, `[*] Perintah Aktivasi No Meter manual diterima.\nNo Agenda: ${noAgenda}\nSedang memproses...`);
 
-    commandQueue.push(async () => {
+    commandQueue.push({ chatId: typeof chatId !== 'undefined' ? chatId : (typeof msg !== 'undefined' && msg ? msg.chat.id : null), commandName: (typeof msg !== 'undefined' && msg && msg.text ? msg.text : 'Perintah'), task: async () => {
         try {
             await processAktivasiOnly(noAgenda, chatId, msg.from.first_name);
             recordStat('aktivasi_no_meter', 'success', getActiveProfileName(), msg.from);
@@ -5952,7 +6021,7 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
             bot.sendMessage(chatId, `❌ Terjadi kesalahan Aktivasi: ${err.message}`);
             recordStat('aktivasi_no_meter', 'fail', getActiveProfileName(), msg.from);
         }
-    });
+    } });
     
     if (!isProcessingCT) {
         processQueue();
@@ -5979,8 +6048,9 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
         for (let i = 0; i < 120; i++) {
             for (const frame of page.frames()) {
             const isAktivasi = await frame.evaluate(() => {
-                return document.body.innerText.includes('Pencarian') ||
-                    document.body.innerText.includes('No Agenda') ||
+                const txt = document.body ? document.body.innerText : '';
+                return txt.includes('Pencarian') ||
+                    txt.includes('No Agenda') ||
                     document.querySelector('input[id*="ext-comp"]') !== null;
             });
             if (isAktivasi) {
@@ -6287,3 +6357,47 @@ bot.onText(/\/statistik/, async (msg) => {
         bot.sendMessage(adminChatId, 'PERHATIAN: BOT AP2T BARU SAJA RESTART!\n\nBot baru saja menyala kembali. Kemungkinan penyebab: mati lampu, internet putus, atau error.\n\nWaktu: ' + new Date().toLocaleString('id-ID', {timeZone: 'Asia/Jakarta'}) + '\nTotal Restart: ' + restartCount + '\n\nGunakan /status untuk mengecek kondisi AP2T.', { parse_mode: 'Markdown' }).catch(()=>{});
     }
 })();
+
+// ===== HEARTBEAT AUTO REFRESH (SETIAP 5 MENIT INACTIVITY) =====
+// Timer mengecek setiap 30 detik
+setInterval(async () => {
+    // Jangan jalankan jika bot tidak memiliki sesi AP2T aktif atau halaman sudah ditutup
+    if (!isLoggedIn || !browser || !page || page.isClosed()) return;
+    
+    // Jangan jalankan jika ada command yang sedang diproses
+    if (isProcessingCT || commandQueue.length > 0 || isLoggingIn) {
+        return;
+    }
+    
+    // Cek apakah sudah 5 menit sejak aktivitas terakhir
+    if (Date.now() - lastActivityTime < 5 * 60 * 1000) {
+        return; 
+    }
+    
+    try {
+        console.log("Menjalankan Auto Refresh Heartbeat untuk menjaga sesi AP2T...");
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+        await new Promise(r => setTimeout(r, 5000));
+        
+        // Reset waktu aktivitas setelah melakukan refresh agar menunggu 5 menit lagi
+        lastActivityTime = Date.now();
+        
+        // Cek URL setelah refresh
+        const currentUrl = page.url().toLowerCase();
+        
+        // Jika terlempar ke halaman login, maka coba login ulang dengan mode auto
+        if (currentUrl.includes('login') || currentUrl.includes('logout')) {
+            console.log("Sesi terputus saat heartbeat. Melakukan auto-relogin...");
+            const ok = await login('main', null, true); // true = isAutoLogin
+            if (ok) {
+                isLoggedIn = true;
+                currentAccount = 'main';
+                if (adminChatId) bot.sendMessage(adminChatId, `🔄 *Sistem Auto-Relogin (Heartbeat)*\nSesi AP2T sempat terputus karena idle, namun bot telah berhasil login kembali secara otomatis.`, { parse_mode: 'Markdown' }).catch(()=>{});
+            } else {
+                isLoggedIn = false;
+            }
+        }
+    } catch (e) {
+        console.error("Gagal menjalankan heartbeat:", e.message);
+    }
+}, 30 * 1000); // Cek setiap 30 detik
