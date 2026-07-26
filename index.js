@@ -146,7 +146,7 @@ setInterval(async () => {
 
                 // Auto re-login
                 try {
-                    const ok = await login('main', null);
+                    const ok = await login('main', null, true);
                     if (ok) {
                         isLoggedIn = true;
                         currentAccount = 'main';
@@ -182,7 +182,7 @@ async function checkAndReloginIfNeeded(chatId) {
     // Jika browser/page sudah tidak ada, langsung login
     if (!isLoggedIn || !browser || !page || page.isClosed()) {
         if (chatId) bot.sendMessage(chatId, `🔄 Sesi AP2T tidak aktif, melakukan login otomatis...`);
-        const ok = await login('main', chatId);
+        const ok = await login('main', chatId, true);
         if (!ok) throw new Error('Gagal login otomatis ke AP2T. Coba /login_ap2t secara manual.');
         isLoggedIn = true;
         currentAccount = 'main';
@@ -206,7 +206,7 @@ async function checkAndReloginIfNeeded(chatId) {
     if (!isSessionLive) {
         isLoggedIn = false;
         if (chatId) bot.sendMessage(chatId, `⚠️ *Sesi AP2T terputus / habis!*\n🔄 Melakukan re-login otomatis...`, { parse_mode: 'Markdown' });
-        const ok = await login('main', chatId);
+        const ok = await login('main', chatId, true);
         if (!ok) throw new Error('Gagal re-login otomatis. Coba /login_ap2t secara manual.');
         isLoggedIn = true;
         currentAccount = 'main';
@@ -1547,8 +1547,14 @@ async function handleOwaMacReset(chatId, isManual = false) {
     }
 }
 
-async function login(accountType, chatId, retryLevel = 0) {
+async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
+    if (isLoggingIn) {
+        if (chatId) bot.sendMessage(chatId, `⏳ Bot sedang sibuk (sedang login). Mohon tunggu...`);
+        return false;
+    }
+    
     try {
+        isLoggingIn = true;
         bot.sendMessage(chatId, `⏳ Membuka halaman login AP2T...`);
         await initBrowser(chatId, 'https://ap2t.pln.co.id/ap2t/Login.aspx');
         if (!page.url().toLowerCase().includes('ap2t')) await page.goto('https://ap2t.pln.co.id/ap2t/Login.aspx', { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -1585,7 +1591,8 @@ async function login(accountType, chatId, retryLevel = 0) {
         await page.evaluate((s) => { document.querySelector(s).value = ''; }, SELECTORS.usernameInput);
         await page.evaluate((s) => { document.querySelector(s).value = ''; }, SELECTORS.passwordInput);
         await page.type(SELECTORS.usernameInput, username, { delay: 50 });
-        await page.type(SELECTORS.passwordInput, password, { delay: 50 });
+        await page.type(SELECTORS.passwordInput, password, { delay: 100 });
+        await new Promise(r => setTimeout(r, 1000)); // Beri jeda lebih lama agar field password terisi sempurna
 
         // ===== BACA KODE ENKRIPSI OTOMATIS =====
         let kodeEnkripsi = '';
@@ -1690,7 +1697,7 @@ async function login(accountType, chatId, retryLevel = 0) {
             });
             await new Promise(r => setTimeout(r, 1000));
             // Force fetch a new code by clearing any local cache if I had one, or just re-running login
-            return await login(accountType, chatId);
+            return await login(accountType, chatId, isAutoLogin);
         }
 
         // >> TAMBAHAN LOGIC SALAH PASSWORD
@@ -1736,19 +1743,26 @@ async function login(accountType, chatId, retryLevel = 0) {
                 await new Promise(r => setTimeout(r, 1000));
 
                 // Coba login ulang
-                return await login(accountType, chatId);
+                return await login(accountType, chatId, isAutoLogin, retryLevel + 1);
             } else {
                 bot.removeListener('message', manualHandler);
-                bot.sendMessage(chatId, `❌ Waktu habis (3 menit). Proses login dibatalkan.`);
+                if (chatId) bot.sendMessage(chatId, `❌ Waktu habis (3 menit). Proses login dibatalkan.`);
                 return false;
             }
         }
 
         // >> TAMBAHAN LOGIC RESET SESSION
         if (content.includes('User ID yang sama sedang digunakan di tempat lain')) {
+            if (isAutoLogin) {
+                const msgErr = `⚠️ *Peringatan (Auto-Relogin Dibatalkan)*\nSesi terputus dan butuh Reset Session (User ID digunakan). Silakan ketik /login_ap2t secara manual jika ingin meresetnya.`;
+                if (chatId) bot.sendMessage(chatId, msgErr, { parse_mode: 'Markdown' });
+                else broadcastMessage(msgErr);
+                return false;
+            }
+            
             const ssSess = await page.screenshot();
-            await bot.sendPhoto(chatId, ssSess, { caption: `📸 Gagal login AP2T: Sesi Nyangkut` });
-            bot.sendMessage(chatId, `ℹ️ Sesi nyangkut (User ID sedang digunakan). Melakukan Reset Session otomatis...`);
+            if (chatId) await bot.sendPhoto(chatId, ssSess, { caption: `📸 Gagal login AP2T: Sesi Nyangkut` });
+            if (chatId) bot.sendMessage(chatId, `ℹ️ Sesi nyangkut (User ID sedang digunakan). Melakukan Reset Session otomatis...`);
 
             // Klik OK di popup
             await page.evaluate(() => {
@@ -1828,11 +1842,18 @@ async function login(accountType, chatId, retryLevel = 0) {
             await handleOwaSessionReset(chatId);
 
             bot.sendMessage(chatId, `ℹ️ Login ulang setelah reset session...`);
-            return await login(accountType, chatId);
+            return await login(accountType, chatId, isAutoLogin);
         }
         // << AKHIR LOGIC RESET SESSION
 
         if (content.includes('Mohon maaf User ID AP2T hanya diijinkan dari 2 MAC Address') || content.includes('dikirimkan ke email')) {
+            if (isAutoLogin) {
+                const msgErr = `⚠️ *Peringatan (Auto-Relogin Dibatalkan)*\nSesi terputus dan butuh Reset MAC Address. Silakan ketik /login_ap2t secara manual jika ingin meresetnya.`;
+                if (chatId) bot.sendMessage(chatId, msgErr, { parse_mode: 'Markdown' });
+                else broadcastMessage(msgErr);
+                return false;
+            }
+            
             const ssMac = await page.screenshot();
             await bot.sendPhoto(chatId, ssMac, { caption: 'Gagal login AP2T: Limit MAC Address' });
             
@@ -1852,7 +1873,7 @@ async function login(accountType, chatId, retryLevel = 0) {
             bot.sendMessage(chatId, '\u26A0\uFE0F Limit MAC Address terdeteksi. Otomatis reset via OWA...');
             await handleOwaMacReset(chatId);
             bot.sendMessage(chatId, '\uD83D\uDD04 Login ulang setelah reset...');
-            return await login(accountType, chatId, retryLevel + 1);
+            return await login(accountType, chatId, isAutoLogin, retryLevel + 1);
         }
 
         // Cek generic ExtJS popup (seperti ORA-12170 atau error tak terduga)
@@ -1897,6 +1918,8 @@ async function login(accountType, chatId, retryLevel = 0) {
         bot.sendMessage(chatId, `❌ **GAGAL MENGAKSES AP2T**\nTerjadi kesalahan koneksi atau server AP2T sedang down/gangguan.\n\nError: \`${error.message}\``, { parse_mode: 'Markdown' });
         browser = null; page = null;
         return false;
+    } finally {
+        isLoggingIn = false;
     }
 }
 
@@ -2675,16 +2698,13 @@ bot.onText(/\/login_webmail/, async (msg) => {
 
 bot.onText(/\/reset_akun/, async (msg) => {
     const chatId = msg.chat.id;
-    commandQueue.push(async () => {
-        bot.sendMessage(chatId, `[*] Mereset semua koneksi...`);
-        try {
-            if (page && !page.isClosed()) { await page.close().catch(() => { }); page = null; }
-            isLoggedIn = false;
-            currentAccount = 'none';
-            bot.sendMessage(chatId, `✅ Koneksi berhasil direset. Silakan login kembali.`);
-        } catch (e) { bot.sendMessage(chatId, `❌ Gagal mereset: ${e.message}`); }
-    });
-    if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
+    bot.sendMessage(chatId, `[*] Mereset semua koneksi (Bypass Antrean)...`);
+    try {
+        if (page && !page.isClosed()) { await page.close().catch(() => { }); page = null; }
+        isLoggedIn = false;
+        currentAccount = 'none';
+        bot.sendMessage(chatId, `✅ Koneksi berhasil direset. Silakan login kembali.`);
+    } catch (e) { bot.sendMessage(chatId, `❌ Gagal mereset: ${e.message}`); }
 });
 
 bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
@@ -3037,20 +3057,17 @@ bot.onText(/\/logout/, async (msg) => {
 
 bot.onText(/\/stop_bot/, async (msg) => {
     const chatId = msg.chat.id;
-    commandQueue.push(async () => {
-        bot.sendMessage(chatId, `⏳ Mematikan bot dan menutup browser...`);
-        try {
-            if (browser) {
-                await browser.close().catch(() => {});
-            }
-            await bot.sendMessage(chatId, `✅ Bot telah dimatikan dari Telegram.`);
-            broadcastMessage(`⚠️ Peringatan: Bot AP2T dimatikan oleh sistem.`);
-            setTimeout(() => process.exit(0), 1500);
-        } catch(e) {
-            bot.sendMessage(chatId, `❌ Gagal mematikan bot: ${e.message}`);
+    bot.sendMessage(chatId, `⏳ Mematikan bot dan menutup browser (Bypass Antrean)...`);
+    try {
+        if (browser) {
+            await browser.close().catch(() => {});
         }
-    });
-    if (!isProcessingCT) { processQueue(); } else { bot.sendMessage(chatId, "⏳ Permintaan masuk antrean..."); }
+        await bot.sendMessage(chatId, `✅ Bot telah dimatikan dari Telegram.`);
+        broadcastMessage(`⚠️ Peringatan: Bot AP2T dimatikan oleh sistem.`);
+        setTimeout(() => process.exit(0), 1500);
+    } catch(e) {
+        bot.sendMessage(chatId, `❌ Gagal mematikan bot: ${e.message}`);
+    }
 });
 
 bot.onText(/\/update_user_ap2t/, async (msg) => {
@@ -3222,7 +3239,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
     try {
         if (!isLoggedIn) {
             console.log('[DEBUG] Calling login...');
-            const ok = await login('main', chatId);
+            const ok = await login('main', chatId, true);
             console.log('[DEBUG] login returned:', ok);
             if (!ok) return;
             isLoggedIn = true;
@@ -4201,12 +4218,31 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
     } catch (e) {
         console.error("CT Error:", e);
-        bot.sendMessage(chatId, `❌ Terjadi error saat proses CT: ${e.message}\n\n*Catatan:* Browser SENGAJA DIBIARKAN TERBUKA agar Anda bisa mengecek layar PC untuk melihat pesan error aslinya. Tutup tab secara manual di PC jika sudah selesai.`, { parse_mode: 'Markdown' });
+        
+        try {
+            if (page && !page.isClosed()) {
+                const errPath = require('path').join(__dirname, `error_ct_${Date.now()}.png`);
+                await page.screenshot({ path: errPath });
+                await bot.sendPhoto(chatId, errPath, { caption: `❌ Terjadi error saat proses CT:\n\`${e.message}\`\n\n📸 Tangkapan layar saat error terjadi:`, parse_mode: 'Markdown' });
+                require('fs').unlinkSync(errPath);
+            } else {
+                bot.sendMessage(chatId, `❌ Terjadi error saat proses CT (Browser tertutup): ${e.message}`, { parse_mode: 'Markdown' });
+            }
+        } catch(ssErr) {
+            bot.sendMessage(chatId, `❌ Terjadi error saat proses CT: ${e.message}\n\n_(Gagal mengambil screenshot: ${ssErr.message})_`, { parse_mode: 'Markdown' });
+        }
 
-        // Jika error karena logout, coba login ulang sekali
-        if (e.message.includes('not found') || e.message.includes('disconnected')) {
-            bot.sendMessage(chatId, `🔄 Sesi terputus, mencoba memulihkan...`);
-            isLoggedIn = false;
+        // Cek apakah terlogout, jika ya maka relogin otomatis
+        bot.sendMessage(chatId, `🔄 Memeriksa status sesi browser paska error...`);
+        try {
+            const isHealthy = await checkAndReloginIfNeeded(chatId);
+            if (!isHealthy) {
+                bot.sendMessage(chatId, `⚠️ Gagal memulihkan sesi AP2T secara otomatis. Silakan periksa manual atau gunakan /login_ap2t.`);
+            } else {
+                bot.sendMessage(chatId, `ℹ️ Sesi AP2T masih aktif/berhasil dipulihkan. Silakan ulangi perintah CT Anda jika diperlukan.`);
+            }
+        } catch (checkErr) {
+            bot.sendMessage(chatId, `❌ Gagal memeriksa sesi: ${checkErr.message}`);
         }
     }
 }
