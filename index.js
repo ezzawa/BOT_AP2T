@@ -2361,6 +2361,7 @@ bot.onText(/\/hapus_user/, (msg) => {
         let nama = typeof u === 'object' ? u.nama : u;
         return [{ text: `❌ Hapus: ${nama} (${id})`, callback_data: `deluser_${id}` }];
     });
+    inlineKeyboard.push([{ text: `🚫 Batal`, callback_data: `deluser_cancel` }]);
     
     bot.sendMessage(msg.chat.id, "Pilih user yang ingin dihapus aksesnya dari PC ini:", {
         reply_markup: { inline_keyboard: inlineKeyboard }
@@ -2665,6 +2666,9 @@ bot.on('callback_query', async (query) => {
         bot.sendMessage(chatId, "Kirimkan perintah dengan format:\n`/cek_token <no_meter_atau_idpel>`", { parse_mode: 'Markdown' });
     } else if (data === 'cmd_logout') {
         bot.sendMessage(chatId, "Kirimkan perintah /logout untuk keluar dari sesi AP2T saat ini.");
+    } else if (data === 'deluser_cancel') {
+        bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+        bot.sendMessage(chatId, "✅ Proses hapus user dibatalkan.");
     } else if (data.startsWith('deluser_')) {
         if (chatId.toString() !== adminChatId) return bot.sendMessage(chatId, "⛔ Akses ditolak.");
         const delId = data.replace('deluser_', '');
