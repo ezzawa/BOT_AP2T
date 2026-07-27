@@ -1976,7 +1976,7 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
         return false;
     } catch (error) {
         console.error(`Login error [${accountType}]:`, error.message);
-        bot.sendMessage(chatId, `❌ **GAGAL MENGAKSES AP2T**\nTerjadi kesalahan koneksi atau server AP2T sedang down/gangguan.\n\nError: \`${error.message}\``, { parse_mode: 'Markdown' });
+        if (chatId) bot.sendMessage(chatId, `❌ **GAGAL MENGAKSES AP2T**\nTerjadi kesalahan koneksi atau server AP2T sedang down/gangguan.\n\nError: \`${error.message}\``, { parse_mode: 'Markdown' });
         browser = null; page = null;
         return false;
     } finally {
@@ -2489,7 +2489,7 @@ bot.on('callback_query', async (query) => {
         keyboard = [
             [{text: '🤖 Buat CT Otomatis', callback_data: 'cmd_ct'}],
             [{text: '🔌 Aktivasi Meter', callback_data: 'cmd_aktivasi_no_meter'}],
-            [{text: '📊 Monitor Token', callback_data: 'cmd_cek_token'}, {text: '🖨️ Cetak Token', callback_data: 'cmd_cetak_token'}],
+            [{text: '📊 Cek Token', callback_data: 'cmd_cek_token'}, {text: '🖨️ Cetak Token', callback_data: 'cmd_cetak_token'}],
             [{text: '🎟️ Ambil Token 20 Digit', callback_data: 'cmd_ambil_token'}],
             [{text: '🔍 Cek Pelanggan', callback_data: 'cmd_cek_pelanggan'}],
             [{text: '🔙 Kembali', callback_data: 'nav_main'}]
@@ -2566,6 +2566,18 @@ bot.on('callback_query', async (query) => {
         if (chatId.toString() !== adminChatId) return;
         bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
         executeUpdateBot({ chat: { id: chatId } });
+        return;
+    } else if (data === 'cmd_reset_session') {
+        bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+        bot.emit('message', {chat: {id: chatId}, text: '/reset_session'});
+        return;
+    } else if (data === 'cmd_reset_mac_address') {
+        bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+        bot.emit('message', {chat: {id: chatId}, text: '/reset_mac_address'});
+        return;
+    } else if (data === 'cmd_reset_ct') {
+        bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
+        bot.emit('message', {chat: {id: chatId}, text: '/reset_ct'});
         return;
     } else if (data === 'cmd_batal_action') {
         bot.deleteMessage(chatId, query.message.message_id).catch(()=>{});
@@ -2802,7 +2814,7 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`).then(m => { const qObj = commandQueue[commandQueue.length - 1]; if (qObj) qObj.queueMsgId = m.message_id; }).catch(()=>{});
     }
 });
 
@@ -3011,7 +3023,7 @@ bot.onText(/\/pakai_profil(?:\s+(.+))?/, async (msg, match) => {
         const textBtn = isActive ? `\u2705 ${n} (Aktif)` : `\u274C ${n}`;
         keyboard.push([{ text: textBtn, callback_data: `cmd_pakai_profil_${n}` }]);
     });
-    keyboard.push([{ text: '❌ Batal', callback_data: 'cmd_pakai_profil_batal' }]);
+    keyboard.push([{ text: '❌ Batal', callback_data: `cmd_pakai_profil_batal` }]);
 
     bot.sendMessage(chatId, `👥 **Pilih Profil:**`, {
         reply_markup: { inline_keyboard: keyboard },
@@ -5023,6 +5035,11 @@ async function searchMonitoringToken(page, target, chatId) {
         filterType = 'PER IDPEL';
     }
 
+    const isLogoutPage = page.url().toLowerCase().includes('login');
+    if (isLogoutPage || !isLoggedIn) {
+        throw new Error('SESSION_EXPIRED');
+    }
+
     if (chatId) {
         let loadingWait = 0;
         while (loadingWait < 20000) {
@@ -5371,6 +5388,10 @@ bot.onText(/\/ambil_token(?:\s+(.+))?/, async (msg, match) => {
                 await bot.editMessageText(`❌ Status CLEAR TAMPER, tapi token 20 digit tidak ditemukan di tabel.`, { chat_id: chatId, message_id: statusMsg.message_id });
             }
         } catch (e) {
+            if (e.message === 'SESSION_EXPIRED') {
+                await bot.editMessageText(`⚠️ Perintah /ambil_token dibatalkan karena sesi AP2T terputus di tengah jalan. Silakan ulangi perintah ini.`, { chat_id: chatId, message_id: statusMsg.message_id });
+                return;
+            }
             await bot.editMessageText(`❌ Error ambil_token: ${e.message}`, { chat_id: chatId, message_id: statusMsg.message_id });
         }
     } });
@@ -5378,7 +5399,7 @@ bot.onText(/\/ambil_token(?:\s+(.+))?/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`).then(m => { const qObj = commandQueue[commandQueue.length - 1]; if (qObj) qObj.queueMsgId = m.message_id; }).catch(()=>{});
     }
 });
 
@@ -5629,6 +5650,10 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
             }
 
         } catch (e) {
+            if (e.message === 'SESSION_EXPIRED') {
+                await bot.editMessageText(`⚠️ Perintah /cetak_token dibatalkan karena sesi AP2T terputus di tengah jalan. Silakan ulangi perintah ini.`, { chat_id: chatId, message_id: statusMsg.message_id });
+                return;
+            }
             await bot.editMessageText(`❌ Error cetak_token: ${e.message}`, { chat_id: chatId, message_id: statusMsg.message_id });
         }
     } });
@@ -5636,7 +5661,7 @@ bot.onText(/\/cetak_token (.+)/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`).then(m => { const qObj = commandQueue[commandQueue.length - 1]; if (qObj) qObj.queueMsgId = m.message_id; }).catch(()=>{});
     }
 });
 
@@ -5785,6 +5810,10 @@ bot.onText(/\/cek_token(?:\s+(.+))?/, async (msg, match) => {
             }
 
         } catch (e) {
+            if (e.message === 'SESSION_EXPIRED') {
+                await bot.editMessageText(`⚠️ Perintah /cek_token dibatalkan karena sesi AP2T terputus di tengah jalan. Silakan ulangi perintah ini.`, { chat_id: chatId, message_id: statusMsg.message_id });
+                return;
+            }
             await bot.editMessageText(`❌ Error cek_token: ${e.message}`, {
                 chat_id: chatId,
                 message_id: statusMsg.message_id
@@ -5795,7 +5824,7 @@ bot.onText(/\/cek_token(?:\s+(.+))?/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`).then(m => { const qObj = commandQueue[commandQueue.length - 1]; if (qObj) qObj.queueMsgId = m.message_id; }).catch(()=>{});
     }
 });
 
@@ -5820,7 +5849,7 @@ bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `ℹ️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, `️ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`).then(m => { const qObj = commandQueue[commandQueue.length - 1]; if (qObj) qObj.queueMsgId = m.message_id; }).catch(()=>{});
     }
 });
 
@@ -5834,7 +5863,7 @@ const standardCommands = [
     
     { command: 'cetak_token', description: '\ud83d\udda8\ufe0f Cetak Token PDF' },
     { command: 'ambil_token', description: '\ud83c\udf9f\ufe0f Ambil Token 20 Digit' },
-    { command: 'cek_token', description: '\ud83d\udcca Monitoring Token Excel' },
+    { command: 'cek_token', description: '\ud83d\udcca Cek Token' },
     { command: 'aktivasi_no_meter', description: '\ud83d\udd0c Aktivasi No Meter' },
     { command: 'cek_pelanggan', description: '\ud83d\udd0d Cek Data Pelanggan' },
     { command: 'cek_akun_aktif', description: '\u2705 Cek Akun Aktif' },
@@ -6100,7 +6129,7 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
     if (!isProcessingCT) {
         processQueue();
     } else {
-        bot.sendMessage(chatId, `⏳ Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`);
+        bot.sendMessage(chatId, ` Menunggu antrean... Saat ini ada ${commandQueue.length} permintaan.`).then(m => { const qObj = commandQueue[commandQueue.length - 1]; if (qObj) qObj.queueMsgId = m.message_id; }).catch(()=>{});
     }
 });
 
