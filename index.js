@@ -703,7 +703,7 @@ function killChromeAndClean() {
 
 // ===== FUNGSI: Baca Kode Enkripsi dari Token.exe =====
 async function getEncryptionCodeFromApp(chatId) {
-    bot.sendMessage(chatId, `🔐 Membuka AP2T ENKRIPSI untuk membaca kode otomatis...`);
+    if (chatId) bot.sendMessage(chatId, `🔐 Membuka AP2T ENKRIPSI untuk membaca kode otomatis...`).catch(()=>{});
 
     // Matikan Token.exe jika sudah running (mencegah .NET error "key already added")
     try { execSync('taskkill /F /IM Token.exe /T', { stdio: 'ignore', windowsHide: true }); } catch (e) { }
@@ -1582,7 +1582,7 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
     
     try {
         isLoggingIn = true;
-        bot.sendMessage(chatId, `⏳ Membuka halaman login AP2T...`);
+        if (chatId) bot.sendMessage(chatId, `⏳ Membuka halaman login AP2T...`).catch(()=>{});
         await initBrowser(chatId, 'https://ap2t.pln.co.id/ap2t/Login.aspx');
         if (!page.url().toLowerCase().includes('ap2t')) await page.goto('https://ap2t.pln.co.id/ap2t/Login.aspx', { waitUntil: 'domcontentloaded', timeout: 30000 });
 
@@ -1590,13 +1590,13 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
         await new Promise(r => setTimeout(r, 3000));
         const dashboardUrlCheck = page.url().toLowerCase();
         if (dashboardUrlCheck.includes('beranda') || dashboardUrlCheck.includes('menu') || dashboardUrlCheck.includes('default')) {
-            bot.sendMessage(chatId, `✅ Sesi sebelumnya masih aktif! Anda sudah berada di dalam sistem AP2T.`);
+            if (chatId) bot.sendMessage(chatId, `✅ Sesi sebelumnya masih aktif! Anda sudah berada di dalam sistem AP2T.`).catch(()=>{});
             return 'already_logged_in';
         }
 
         const { username, password } = credentials[accountType];
         if (!username || !password) {
-            bot.sendMessage(chatId, `⚠️ Kredensial [${accountType}] kosong di .env`);
+            if (chatId) bot.sendMessage(chatId, `⚠️ Kredensial [${accountType}] kosong di .env`).catch(()=>{});
             return false;
         }
 
@@ -1606,14 +1606,14 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
         } catch (e) {
             const cur = page.url().toLowerCase();
             if (cur.includes('beranda') || cur.includes('menu') || cur.includes('default')) {
-                bot.sendMessage(chatId, `ℹ️ Anda sudah login.`);
+                if (chatId) bot.sendMessage(chatId, `ℹ️ Anda sudah login.`).catch(()=>{});
                 return 'already_logged_in';
             }
-            bot.sendMessage(chatId, `⚠️ Halaman login tidak merespon dengan benar. Login dibatalkan.`);
+            if (chatId) bot.sendMessage(chatId, `⚠️ Halaman login tidak merespon dengan benar. Login dibatalkan.`).catch(()=>{});
             return false;
         }
 
-        bot.sendMessage(chatId, `⏳ Mengisi User ID dan Password...`);
+        if (chatId) bot.sendMessage(chatId, `⏳ Mengisi User ID dan Password...`).catch(()=>{});
 
         await page.evaluate((s) => { document.querySelector(s).value = ''; }, SELECTORS.usernameInput);
         await page.evaluate((s) => { document.querySelector(s).value = ''; }, SELECTORS.passwordInput);
@@ -1625,10 +1625,10 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
         let kodeEnkripsi = '';
         try {
             kodeEnkripsi = await getEncryptionCodeFromApp(chatId);
-            // bot.sendMessage(chatId, `🔑 Kode enkripsi: \`${kodeEnkripsi}\``, { parse_mode: 'Markdown' });
+            // if (chatId) bot.sendMessage(chatId, `🔑 Kode enkripsi: \`${kodeEnkripsi}\``, { parse_mode: 'Markdown' });
         } catch (encErr) {
             console.error('Auto enkripsi gagal:', encErr.message);
-            bot.sendMessage(chatId, `⚠️ Auto-baca gagal (${encErr.message}).\nSilakan kirim kode enkripsi manual (timeout 90 detik):`);
+            if (chatId) bot.sendMessage(chatId, `⚠️ Auto-baca gagal (${encErr.message}).\nSilakan kirim kode enkripsi manual (timeout 90 detik):`).catch(()=>{});
 
             let waitingManual = true;
             const manualHandler = (msg) => {
@@ -1646,14 +1646,14 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
             }
             bot.removeListener('message', manualHandler);
             if (!kodeEnkripsi) {
-                bot.sendMessage(chatId, `⏰ Timeout. Login dibatalkan.`);
+                if (chatId) bot.sendMessage(chatId, `⏰ Timeout. Login dibatalkan.`).catch(()=>{});
                 return false;
             }
         }
 
         // Isi kode enkripsi — WAJIB pakai Ctrl+V (bukan ketik/set value)
         // Field AP2T punya event listener yang hanya trigger saat paste
-        bot.sendMessage(chatId, `⏳ Memasukkan kode enkripsi via Ctrl+V...`);
+        if (chatId) bot.sendMessage(chatId, `⏳ Memasukkan kode enkripsi via Ctrl+V...`).catch(()=>{});
 
         // 1. Set kode ke clipboard Windows dulu via PowerShell (gunakan base64 agar aman dari karakter khusus)
         try {
@@ -1678,6 +1678,20 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
         await page.keyboard.down('Control');
         await page.keyboard.press('v');
         await page.keyboard.up('Control');
+
+        // JS Injection Fallback: Berjaga-jaga jika OS Clipboard gagal (misal RDP terputus/locked)
+        await page.evaluate((sel, val) => {
+            const input = document.querySelector(sel);
+            if (input && !input.value) {
+                input.value = val;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                try {
+                    // Coba trigger ExtJS onPaste atau listener khusus lainnya
+                    input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter' }));
+                } catch(e) {}
+            }
+        }, SELECTORS.encryptionInput, kodeEnkripsi);
 
         // 4. Tunggu validasi selesai (checkbox Valid muncul)
         await new Promise(r => setTimeout(r, 2000));
@@ -3604,9 +3618,11 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 const tarifParts = tarifDaya.split('/');
                 const tarif = tarifParts[0].trim().toUpperCase();
                 if (!tarif.endsWith('T')) {
-                    const msgTxt = `⚠️ *KWH PASCABAYAR TERDETEKSI!*\nTarif Pelanggan: \`${tarifDaya}\`\nTarif tidak memiliki akhiran 'T', sehingga CT tidak dapat dibuat untuk KWH Pascabayar.`;
-                    bot.sendMessage(chatId, msgTxt, { parse_mode: 'Markdown' }).catch(()=>null);
-                    throw new Error(`REJECT_AP2T: ${msgTxt}`);
+                    const msgTxt = `⚠️ <b>KWH PASCABAYAR TERDETEKSI!</b>\nTarif Pelanggan: <code>${tarifDaya}</code>\nTarif tidak memiliki akhiran 'T', sehingga CT tidak dapat dibuat untuk KWH Pascabayar.`;
+                    await bot.sendMessage(chatId, msgTxt, { parse_mode: 'HTML' }).catch(err => {
+                        console.error("Gagal mengirim pesan Pascabayar:", err);
+                    });
+                    throw new Error(`REJECT_AP2T: Pascabayar Terdeteksi (${tarifDaya})`);
                 }
             }
         } else {
@@ -3789,7 +3805,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         // 7. Ambil Nomor Pengaduan (No Agenda) - VISUAL BLOCK
         bot.sendMessage(chatId, `🔍 Menyalin No Agenda (Visual Block)...`);
         noAgenda = null;
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 10; i++) {
             noAgenda = await targetFrame.evaluate((idpelStr) => {
                 const inputs = Array.from(document.querySelectorAll('input'));
                 const target = inputs.find(inp => {
@@ -3838,10 +3854,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         let aktivasiFrame = null;
         for (const frame of page.frames()) {
             const isAktivasi = await frame.evaluate(() => {
-                const txt = document.body ? document.body.innerText : '';
-                return txt.includes('Pencarian') ||
-                    txt.includes('No Agenda') ||
-                    document.querySelector('input[id*="ext-comp"]') !== null;
+                return !!Array.from(document.querySelectorAll('label, span')).find(l => l.textContent.trim().includes('No Agenda') && l.getBoundingClientRect().width > 0 && l.children.length === 0);
             });
             if (isAktivasi) {
                 // Pastikan ada input pencarian di frame ini
@@ -4073,7 +4086,9 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             try {
                 const found = await frame.evaluate(() => {
                     return !!Array.from(document.querySelectorAll('*')).find(el =>
-                        el.innerText && el.innerText.includes('Jenis Permohonan') && el.getBoundingClientRect().width > 0
+                        el.innerText && el.innerText.trim().includes('Jenis Permohonan') && 
+                        el.getBoundingClientRect().width > 0 && 
+                        el.children.length === 0
                     );
                 });
                 if (found) {
@@ -4117,9 +4132,12 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             return 'LABEL_NOT_FOUND';
         });
 
+        let searchValue = null;
+
         if (visualResult === 'OK') {
-            const searchType = isResuming ? 'ID PEL' : 'PER NOAGENDA';
-            const searchValue = isResuming ? idpel : (noAgenda || idpel);
+            const isUsingIdpel = isResuming || !noAgenda;
+            const searchType = isUsingIdpel ? 'PER IDPEL' : 'PER NOAGENDA';
+            searchValue = isUsingIdpel ? idpel : noAgenda;
 
             // Isi Dropdown Jenis Permohonan
             const dropdownEl = await monitorFrame.$('#final_dropdown_visual');
@@ -4156,7 +4174,11 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         bot.sendMessage(chatId, `🔄 Memantau Token... (Menunggu Status 3)`);
 
         let tokenCT = null;
+        let namaCT = '-';
+        let tarifCT = '-';
+        let dayaCT = '-';
         let retries = 0;
+        let lastReportedStatus = null;
         const maxRetries = 60; // Max 300 detik (5 menit)
 
         while (retries < maxRetries) {
@@ -4177,19 +4199,37 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 let tarif = '-';
                 let daya = '-';
 
-                const rows = Array.from(document.querySelectorAll('tr, .x-grid3-row'));
-                // Cari baris yang memuat No Agenda ini
+                // Hanya ambil baris data, abaikan header
+                const rows = Array.from(document.querySelectorAll('.x-grid3-row'));
+                const gridHeader = document.querySelector('.x-grid3-header') || document.querySelector('thead');
+                let nIdx = -1, tIdx = -1, dIdx = -1;
+                
+                if (gridHeader) {
+                    const hdCells = Array.from(gridHeader.querySelectorAll('td, th, .x-grid3-hd'));
+                    hdCells.forEach((hd, idx) => {
+                        const txt = hd.textContent.toUpperCase().replace(/\s/g, '');
+                        if (txt.includes('NAMA')) nIdx = idx;
+                        if (txt.includes('TARIF')) tIdx = idx;
+                        if (txt.includes('DAYA')) dIdx = idx;
+                    });
+                }
+
+                // Cari baris yang memuat nilai pencarian ini
                 const myRow = rows.find(r => {
-                    const cells = Array.from(r.querySelectorAll('td'));
+                    const cells = Array.from(r.querySelectorAll('td, .x-grid3-cell'));
                     return cells.some(c => c.textContent.trim().replace(/\s/g, '') === currentAgenda);
                 });
 
                 if (myRow) {
-                    const cells = Array.from(myRow.querySelectorAll('td'));
-                    // Cari cell dengan status 0, 1, 2, atau 3
-                    const statusCell = cells.find(c => ['0', '1', '2', '3'].includes(c.textContent.trim()));
-                    if (statusCell) {
-                        currentStatus = statusCell.textContent.trim();
+                    const cells = Array.from(myRow.querySelectorAll('td, .x-grid3-cell'));
+                    
+                    // Cara paling aman mencari status (0, 1, 2, 3) di baris data
+                    const statusCells = cells.filter(c => {
+                        const val = c.textContent.trim();
+                        return val.length === 1 && ['0', '1', '2', '3'].includes(val);
+                    });
+                    if (statusCells.length > 0) {
+                        currentStatus = statusCells[statusCells.length - 1].textContent.trim();
                     }
 
                     if (currentStatus === '3') {
@@ -4201,29 +4241,16 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
                         if (tokenCell) {
                             token = tokenCell.textContent.trim().replace(/\s/g, '');
-
-                            // DOM Fallback ekstrak NAMA, TARIF, DAYA
-                            const gridHeader = document.querySelector('.x-grid3-header') || document.querySelector('thead');
-                            if (gridHeader) {
-                                const hdCells = Array.from(gridHeader.querySelectorAll('td, th, .x-grid3-hd'));
-                                let nIdx = -1, tIdx = -1, dIdx = -1;
-                                hdCells.forEach((hd, idx) => {
-                                    const txt = hd.textContent.toUpperCase();
-                                    if (txt.includes('NAMA')) nIdx = idx;
-                                    if (txt.includes('TARIF')) tIdx = idx;
-                                    if (txt.includes('DAYA')) dIdx = idx;
-                                });
-                                
-                                const trCells = Array.from(myRow.querySelectorAll('td, .x-grid3-cell'));
-                                if (nIdx >= 0 && trCells[nIdx]) nama = trCells[nIdx].textContent.trim();
-                                if (tIdx >= 0 && trCells[tIdx]) tarif = trCells[tIdx].textContent.trim();
-                                if (dIdx >= 0 && trCells[dIdx]) daya = trCells[dIdx].textContent.trim();
-                            }
                         }
+
+                        // DOM Ekstrak NAMA, TARIF, DAYA
+                        if (nIdx >= 0 && cells[nIdx]) nama = cells[nIdx].textContent.trim();
+                        if (tIdx >= 0 && cells[tIdx]) tarif = cells[tIdx].textContent.trim();
+                        if (dIdx >= 0 && cells[dIdx]) daya = cells[dIdx].textContent.trim();
                     }
                 }
                 return { status: currentStatus, token: token, nama: nama, tarif: tarif, daya: daya };
-            }, noAgenda);
+            }, searchValue);
 
             if (foundData && foundData.status && foundData.status !== lastReportedStatus) {
                 lastReportedStatus = foundData.status;
@@ -4649,40 +4676,50 @@ async function processCariPelanggan(target, chatId) {
         const isNomet = target.length === 11;
         const dropdownText = isNomet ? 'Nomor Meter' : 'Id Pelanggan';
 
-        // 1. Cari Dropdown secara Visual (seperti fitur CT)
-        const visualResult = await infoFrame.evaluate(() => {
-            const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
-                i.getBoundingClientRect().width > 0 && 
-                !i.closest('.x-hide-display') && 
-                !i.closest('.x-hide-offsets')
-            );
-            
-            // Cari combo yang isinya Id Pelanggan atau Nomor Meter
-            const combo = allInputs.find(i => i.value && (i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama'));
-            
-            if (combo) {
-                const rect = combo.getBoundingClientRect();
-                const inputsOnSameLine = allInputs.filter(i => {
-                    const iRect = i.getBoundingClientRect();
-                    // Toleransi Y (top) 15px, dan harus ada di sebelah kanannya atau elemen itu sendiri
-                    return Math.abs(iRect.top - rect.top) < 15 && iRect.left >= rect.left;
+        // 1. Cari Dropdown secara Visual (seperti fitur CT) dengan Retry Loop
+        let visualResult = 'COMBO_NOT_FOUND';
+        for (let wait = 0; wait < 15; wait++) {
+            visualResult = await infoFrame.evaluate(() => {
+                const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
+                    i.getBoundingClientRect().width > 0 && 
+                    !i.closest('.x-hide-display') && 
+                    !i.closest('.x-hide-offsets')
+                );
+                
+                // Cari combo yang isinya Id Pelanggan atau Nomor Meter (Lebih kebal)
+                const combo = allInputs.find(i => {
+                    if (!i.value) return false;
+                    const val = i.value.trim().toLowerCase();
+                    return val.includes('id pelanggan') || val.includes('nomor meter') || val.includes('nama');
                 });
                 
-                inputsOnSameLine.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-                
-                if (inputsOnSameLine.length >= 2) {
-                    inputsOnSameLine[0].id = 'filter_combo_nomet_visual';
-                    inputsOnSameLine[1].id = 'filter_input_nomet_visual';
+                if (combo) {
+                    const rect = combo.getBoundingClientRect();
+                    const inputsOnSameLine = allInputs.filter(i => {
+                        const iRect = i.getBoundingClientRect();
+                        // Toleransi Y (top) 15px, dan harus ada di sebelah kanannya atau elemen itu sendiri
+                        return Math.abs(iRect.top - rect.top) < 15 && iRect.left >= rect.left;
+                    });
                     
-                    // Beri kotak merah & biru
-                    inputsOnSameLine[0].style.border = '3px solid red';
-                    inputsOnSameLine[1].style.border = '3px solid blue';
-                    return 'OK';
+                    inputsOnSameLine.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+                    
+                    if (inputsOnSameLine.length >= 2) {
+                        inputsOnSameLine[0].id = 'filter_combo_nomet_visual';
+                        inputsOnSameLine[1].id = 'filter_input_nomet_visual';
+                        
+                        // Beri kotak merah & biru
+                        inputsOnSameLine[0].style.border = '3px solid red';
+                        inputsOnSameLine[1].style.border = '3px solid blue';
+                        return 'OK';
+                    }
+                    return 'ONLY_FOUND_' + inputsOnSameLine.length;
                 }
-                return 'ONLY_FOUND_' + inputsOnSameLine.length;
-            }
-            return 'COMBO_NOT_FOUND';
-        });
+                return 'COMBO_NOT_FOUND';
+            });
+
+            if (visualResult === 'OK') break;
+            await new Promise(r => setTimeout(r, 1000));
+        }
 
         if (visualResult !== 'OK') {
             throw new Error(`Kolom input tidak ditemukan secara visual (Result: ${visualResult}). Kemungkinan halaman AP2T lambat memuat form.`);
@@ -5005,14 +5042,16 @@ async function searchMonitoringToken(page, target, chatId) {
     }
 
     let monitorFrame = null;
-    // Tunggu sampai iframe dengan 'Jenis Permohonan' muncul (max 60 detik)
+    // Tunggu sampai iframe dengan label MURNI 'Jenis Permohonan' muncul (max 60 detik)
     for (let wait = 0; wait < 60; wait++) {
         const frames = page.frames();
         for (const frame of frames) {
             try {
                 const found = await frame.evaluate(() => {
                     return !!Array.from(document.querySelectorAll('*')).find(el =>
-                        el.innerText && el.innerText.includes('Jenis Permohonan') && el.getBoundingClientRect().width > 0
+                        el.innerText && el.innerText.trim().includes('Jenis Permohonan') && 
+                        el.getBoundingClientRect().width > 0 && 
+                        el.children.length === 0
                     );
                 });
                 if (found) { monitorFrame = frame; break; }
@@ -6081,10 +6120,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
         for (let i = 0; i < 120; i++) {
             for (const frame of page.frames()) {
             const isAktivasi = await frame.evaluate(() => {
-                const txt = document.body ? document.body.innerText : '';
-                return txt.includes('Pencarian') ||
-                    txt.includes('No Agenda') ||
-                    document.querySelector('input[id*="ext-comp"]') !== null;
+                return !!Array.from(document.querySelectorAll('label, span')).find(l => l.textContent.trim().includes('No Agenda') && l.getBoundingClientRect().width > 0 && l.children.length === 0);
             });
             if (isAktivasi) {
                 const hasInput = await frame.evaluate(() => {
@@ -6286,13 +6322,73 @@ else bot.sendMessage(chatId, `⚠️ Lewat waktu menunggu 'OK', namun proses aka
                     const ssBuffer = await page.screenshot({ encoding: 'buffer' });
                     await bot.sendPhoto(chatId, ssBuffer, { caption: "Screenshot Keberhasilan" }, { filename: "success.png", contentType: 'image/png' });
                 } catch(ex) {}
-                // Otomatis arahkan ke /cetak_token agar mencari dan mencetak hasil akhir token berdasarkan No Agenda
-                bot.sendMessage(chatId, `🔄 Meneruskan ke proses Cetak Token untuk No Agenda ${noAgenda}...`);
+                
+                bot.sendMessage(chatId, `🔄 Meneruskan ke Monitoring Permohonan Token untuk menunggu status 3...`);
+                await clickMenu(page, ['PELAYANAN PELANGGAN', 'Monitoring', 'Monitoring Permohonan Token']);
+                const monitorFrame = await searchMonitoringToken(page, noAgenda, chatId);
+                
+                if (monitorFrame) {
+                    bot.sendMessage(chatId, `🔄 Memantau Token... (Menunggu Status 3)`);
+                    let tokenCT = null;
+                    let retries = 0;
+                    let lastReportedStatus = null;
+                    const maxRetries = 60; // Max 300 detik (5 menit)
+                    while (retries < maxRetries) {
+                        await monitorFrame.evaluate(() => {
+                            const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                            const filterBtn = btns.find(b => b.textContent.trim() === 'Filter' && b.getBoundingClientRect().width > 0);
+                            if (filterBtn) filterBtn.click();
+                        });
+                        await new Promise(r => setTimeout(r, 5000));
+                        const foundData = await monitorFrame.evaluate((currentAgenda) => {
+                            let currentStatus = null;
+                            let token = null;
+                            const rows = Array.from(document.querySelectorAll('.x-grid3-row'));
+                            const myRow = rows.find(r => {
+                                const cells = Array.from(r.querySelectorAll('td, .x-grid3-cell'));
+                                return cells.some(c => c.textContent.trim().replace(/\s/g, '') === currentAgenda);
+                            });
+                            if (myRow) {
+                                const cells = Array.from(myRow.querySelectorAll('td, .x-grid3-cell'));
+                                const statusCells = cells.filter(c => {
+                                    const val = c.textContent.trim();
+                                    return val.length === 1 && ['0', '1', '2', '3'].includes(val);
+                                });
+                                if (statusCells.length > 0) {
+                                    currentStatus = statusCells[statusCells.length - 1].textContent.trim();
+                                }
+                                if (currentStatus === '3') {
+                                    const tokenCell = cells.find(c => {
+                                        const val = c.textContent.trim().replace(/\s/g, '');
+                                        return /^\d{20}$/.test(val) && val !== currentAgenda;
+                                    });
+                                    if (tokenCell) token = tokenCell.textContent.trim().replace(/\s/g, '');
+                                }
+                            }
+                            return { status: currentStatus, token: token };
+                        }, idpel);
+                        
+                        if (foundData && foundData.status && foundData.status !== lastReportedStatus) {
+                            lastReportedStatus = foundData.status;
+                            bot.sendMessage(chatId, `🔄 Status No Agenda saat ini berubah menjadi: *${lastReportedStatus}*`, { parse_mode: 'Markdown' });
+                        }
+                        if (foundData && foundData.token) {
+                            tokenCT = foundData.token;
+                            break;
+                        }
+                        retries++;
+                        if (retries % 6 === 0) bot.sendMessage(chatId, `⏳ Masih menunggu status menjadi '3' (Status saat ini: ${lastReportedStatus || 'Belum terdeteksi'})...`);
+                    }
+                    if (tokenCT) bot.sendMessage(chatId, `✅ Status sudah 3! Melanjutkan ke proses Cetak Token PDF...`);
+                    else bot.sendMessage(chatId, `⚠️ Waktu pantau habis (5 menit) tetapi status belum 3. Tetap mencoba cetak (meski kemungkinan gagal)...`);
+                }
+
+                // Arahkan ke /cetak_token
                 bot.processUpdate({
                     update_id: Date.now(),
                     message: {
                         message_id: Date.now(),
-                        from: typeof userInfo === 'object' ? userInfo : { id: chatId },
+                        from: typeof userInfo === 'object' ? userInfo : { id: chatId, first_name: pembuat },
                         chat: { id: chatId },
                         date: Math.floor(Date.now() / 1000),
                         text: `/cetak_token ${noAgenda}`
