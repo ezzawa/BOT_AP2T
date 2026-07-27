@@ -24,6 +24,7 @@ function waitForUserInteraction(messageId, timeoutMs = 300000) {
                 clearTimeout(timer);
                 bot.removeListener('callback_query', listener);
                 bot.answerCallbackQuery(query.id).catch(()=>{});
+                bot.deleteMessage(query.message.chat.id, query.message.message_id).catch(()=>{});
                 resolve(query.data);
             }
         };
@@ -1892,7 +1893,8 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
             await handleOwaSessionReset(chatId);
 
             bot.sendMessage(chatId, `ℹ️ Login ulang setelah reset session...`);
-            return await login(accountType, chatId, isAutoLogin);
+            isLoggingIn = false; // Lepas lock agar bisa relogin
+            return await login(accountType, chatId, isAutoLogin, retryLevel + 1);
         }
         // << AKHIR LOGIC RESET SESSION
 
@@ -5826,9 +5828,9 @@ bot.onText(/\/cek_pelanggan(?:\s+(.+))?/, async (msg, match) => {
 const standardCommands = [
     { command: 'start', description: '\ud83c\udfe0 Menu Utama' },
     { command: 'status', description: '\ud83d\udda5\ufe0f Cek Status Layar' },
-    { command: 'ct', description: '\ud83e\udd16 Buat CT Otomatis' },
     { command: 'login_ap2t', description: '\ud83d\udd11 Login AP2T' },
     { command: 'login_webmail', description: '\ud83d\udce7 Tes Login Webmail' },
+    { command: 'ct', description: '\ud83e\udd16 Buat CT Otomatis' },
     
     { command: 'cetak_token', description: '\ud83d\udda8\ufe0f Cetak Token PDF' },
     { command: 'ambil_token', description: '\ud83c\udf9f\ufe0f Ambil Token 20 Digit' },
