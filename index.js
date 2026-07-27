@@ -1781,9 +1781,18 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
         // >> TAMBAHAN LOGIC RESET SESSION
         if (content.includes('User ID yang sama sedang digunakan di tempat lain')) {
             if (isAutoLogin) {
-                const msgErr = `⚠️ *Peringatan (Auto-Relogin Dibatalkan)*\nSesi terputus dan butuh Reset Session (User ID digunakan). Silakan ketik /login_ap2t secara manual jika ingin meresetnya.`;
-                if (chatId) bot.sendMessage(chatId, msgErr, { parse_mode: 'Markdown' });
-                else broadcastMessage(msgErr);
+                const msgErr = `⚠️ *Peringatan (Auto-Relogin Dibatalkan)*\nSesi terputus dan butuh Reset Session (User ID digunakan).\nSilakan ketik /login_ap2t secara manual jika ingin meresetnya, atau ketik /status untuk melihat kondisi terkini.`;
+                if (chatId) {
+                    try {
+                        const ssBuffer = await page.screenshot();
+                        await bot.sendPhoto(chatId, ssBuffer, { caption: msgErr, parse_mode: 'Markdown' });
+                    } catch(e) {
+                        bot.sendMessage(chatId, msgErr, { parse_mode: 'Markdown' });
+                    }
+                } else broadcastMessage(msgErr);
+                
+                // Refresh halaman untuk membersihkan popup agar layar bersih
+                await page.reload({ waitUntil: 'networkidle2' }).catch(() => {});
                 return false;
             }
             
@@ -1875,9 +1884,18 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
 
         if (content.includes('Mohon maaf User ID AP2T hanya diijinkan dari 2 MAC Address') || content.includes('dikirimkan ke email')) {
             if (isAutoLogin) {
-                const msgErr = `⚠️ *Peringatan (Auto-Relogin Dibatalkan)*\nSesi terputus dan butuh Reset MAC Address. Silakan ketik /login_ap2t secara manual jika ingin meresetnya.`;
-                if (chatId) bot.sendMessage(chatId, msgErr, { parse_mode: 'Markdown' });
-                else broadcastMessage(msgErr);
+                const msgErr = `⚠️ *Peringatan (Auto-Relogin Dibatalkan)*\nSesi terputus dan butuh Reset MAC Address.\nSilakan ketik /login_ap2t secara manual jika ingin meresetnya, atau ketik /status untuk melihat kondisi terkini.`;
+                if (chatId) {
+                    try {
+                        const ssBuffer = await page.screenshot();
+                        await bot.sendPhoto(chatId, ssBuffer, { caption: msgErr, parse_mode: 'Markdown' });
+                    } catch(e) {
+                        bot.sendMessage(chatId, msgErr, { parse_mode: 'Markdown' });
+                    }
+                } else broadcastMessage(msgErr);
+                
+                // Refresh halaman untuk membersihkan popup agar layar bersih
+                await page.reload({ waitUntil: 'networkidle2' }).catch(() => {});
                 return false;
             }
             
@@ -3985,7 +4003,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 if (okClicked) bot.sendMessage(chatId, `✅ Konfirmasi 'OK' diklik.`);
 
                 // Verifikasi akhir: Beri jeda lalu coba klik SIMPAN lagi
-                await new Promise(r => setTimeout(r, 3000));
+                await new Promise(r => setTimeout(r, 2000));
                 bot.sendMessage(chatId, `🔍 Mencoba klik tombol SIMPAN kembali untuk verifikasi...`);
                 
                 const simpanDisabled = await aktivasiFrame.evaluate(() => {
@@ -3999,14 +4017,27 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                         saveBtn.click();
                         return false; 
                     }
-                    return true;
+                    return true; // Jika tidak ketemu, anggap disabled/hilang
                 });
                 
-                if (simpanDisabled) {
-                    bot.sendMessage(chatId, `🎉 **Aktivasi Berhasil Disimpan!**`);
-                } else {
-                    bot.sendMessage(chatId, `⚠️ Peringatan: Tombol SIMPAN ternyata MASIH BISA DIKLIK!`);
+                if (!simpanDisabled) {
+                    bot.sendMessage(chatId, `⚠️ Tombol SIMPAN ditekan lagi. Memeriksa popup...`);
+                    await new Promise(r => setTimeout(r, 2000));
+                    
+                    // Coba klik OK kalau ada popup
+                    await page.evaluate(() => {
+                        const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                        const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.getBoundingClientRect().width > 0);
+                        if (okBtn) okBtn.click();
+                    }).catch(()=>null);
+                    await aktivasiFrame.evaluate(() => {
+                        const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                        const okBtn = btns.find(b => b.textContent.trim() === 'OK' && b.getBoundingClientRect().width > 0);
+                        if (okBtn) okBtn.click();
+                    }).catch(()=>null);
                 }
+                
+                bot.sendMessage(chatId, `🎉 **Aktivasi Berhasil Disimpan!**`);
             } else {
                 bot.sendMessage(chatId, `⚠️ Tombol SIMPAN tidak merespon/tidak ditemukan.`);
             }
@@ -4138,90 +4169,68 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
             await new Promise(r => setTimeout(r, 5000));
 
-            // Scan tabel di frame yang benar — cari kolom CLEAR TAMPER dari baris status 3
+            // Scan tabel di frame yang benar — cari kolom CLEAR TAMPER dari baris berdasarkan No Agenda
             const foundData = await monitorFrame.evaluate((currentAgenda) => {
-                // Cari baris dengan STATUSAGENDA = 3
+                let currentStatus = null;
+                let token = null;
+                let nama = '-';
+                let tarif = '-';
+                let daya = '-';
+
                 const rows = Array.from(document.querySelectorAll('tr, .x-grid3-row'));
-                const row3 = rows.find(r => {
+                // Cari baris yang memuat No Agenda ini
+                const myRow = rows.find(r => {
                     const cells = Array.from(r.querySelectorAll('td'));
-                    return cells.some(c => c.textContent.trim() === '3');
+                    return cells.some(c => c.textContent.trim().replace(/\s/g, '') === currentAgenda);
                 });
 
-                if (row3) {
-                    // Cari angka 20 digit di baris tersebut yang BUKAN No Agenda
-                    const cells = Array.from(row3.querySelectorAll('td'));
-                    const tokenCell = cells.find(c => {
-                        const val = c.textContent.trim().replace(/\s/g, '');
-                        // Harus 20 digit dan tidak boleh sama dengan No Agenda yang kita cari
-                        return /^\d{20}$/.test(val) && val !== currentAgenda;
-                    });
-
-                    if (tokenCell) {
-                        const token = tokenCell.textContent.trim().replace(/\s/g, '');
-                        let nama = '-';
-                        let tarif = '-';
-                        let daya = '-';
-                        
-                        // Coba ekstrak NAMA, TARIF, DAYA menggunakan ExtJS API atau DOM fallback
-                        try {
-                            if (typeof Ext !== 'undefined' && Ext.ComponentMgr) {
-                                Ext.ComponentMgr.all.each(function(cmp) {
-                                    if (cmp.isXType && cmp.isXType('grid')) {
-                                        if (cmp.el && cmp.el.dom && cmp.el.dom.getBoundingClientRect().width > 0) {
-                                            const store = cmp.getStore();
-                                            if (store) {
-                                                for (let i = 0; i < store.getCount(); i++) {
-                                                    const rec = store.getAt(i);
-                                                    let hasToken = false;
-                                                    for (let key in rec.data) {
-                                                        if (String(rec.data[key]).replace(/\s/g, '') === token) hasToken = true;
-                                                    }
-                                                    if (hasToken) {
-                                                        const cm = cmp.getColumnModel();
-                                                        for (let j = 0; j < cm.getColumnCount(); j++) {
-                                                            const header = cm.getColumnHeader(j).toUpperCase();
-                                                            const dIndex = cm.getDataIndex(j);
-                                                            if (header.includes('NAMA')) nama = rec.data[dIndex] || nama;
-                                                            if (header.includes('TARIF')) tarif = rec.data[dIndex] || tarif;
-                                                            if (header.includes('DAYA')) daya = rec.data[dIndex] || daya;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                });
-                            }
-                            
-                            // DOM Fallback jika ExtJS gagal atau nilainya masih kosong
-                            if (nama === '-' || tarif === '-') {
-                                const gridHeader = document.querySelector('.x-grid3-header') || document.querySelector('thead');
-                                if (gridHeader) {
-                                    const hdCells = Array.from(gridHeader.querySelectorAll('td, th, .x-grid3-hd'));
-                                    let nIdx = -1, tIdx = -1, dIdx = -1;
-                                    hdCells.forEach((hd, idx) => {
-                                        const txt = hd.textContent.toUpperCase();
-                                        if (txt.includes('NAMA')) nIdx = idx;
-                                        if (txt.includes('TARIF')) tIdx = idx;
-                                        if (txt.includes('DAYA')) dIdx = idx;
-                                    });
-                                    
-                                    const trCells = Array.from(row3.querySelectorAll('td, .x-grid3-cell'));
-                                    if (nIdx >= 0 && trCells[nIdx]) nama = trCells[nIdx].textContent.trim();
-                                    if (tIdx >= 0 && trCells[tIdx]) tarif = trCells[tIdx].textContent.trim();
-                                    if (dIdx >= 0 && trCells[dIdx]) daya = trCells[dIdx].textContent.trim();
-                                }
-                            }
-                        } catch(e) {}
-                        
-                        return { token: token, nama: nama, tarif: tarif, daya: daya };
+                if (myRow) {
+                    const cells = Array.from(myRow.querySelectorAll('td'));
+                    // Cari cell dengan status 0, 1, 2, atau 3
+                    const statusCell = cells.find(c => ['0', '1', '2', '3'].includes(c.textContent.trim()));
+                    if (statusCell) {
+                        currentStatus = statusCell.textContent.trim();
                     }
-                    return 'WAIT'; // Baris 3 ada tapi token belum muncul atau masih No Agenda saja
+
+                    if (currentStatus === '3') {
+                        // Cari token (20 digit angka, tidak sama dengan No Agenda)
+                        const tokenCell = cells.find(c => {
+                            const val = c.textContent.trim().replace(/\s/g, '');
+                            return /^\d{20}$/.test(val) && val !== currentAgenda;
+                        });
+
+                        if (tokenCell) {
+                            token = tokenCell.textContent.trim().replace(/\s/g, '');
+
+                            // DOM Fallback ekstrak NAMA, TARIF, DAYA
+                            const gridHeader = document.querySelector('.x-grid3-header') || document.querySelector('thead');
+                            if (gridHeader) {
+                                const hdCells = Array.from(gridHeader.querySelectorAll('td, th, .x-grid3-hd'));
+                                let nIdx = -1, tIdx = -1, dIdx = -1;
+                                hdCells.forEach((hd, idx) => {
+                                    const txt = hd.textContent.toUpperCase();
+                                    if (txt.includes('NAMA')) nIdx = idx;
+                                    if (txt.includes('TARIF')) tIdx = idx;
+                                    if (txt.includes('DAYA')) dIdx = idx;
+                                });
+                                
+                                const trCells = Array.from(myRow.querySelectorAll('td, .x-grid3-cell'));
+                                if (nIdx >= 0 && trCells[nIdx]) nama = trCells[nIdx].textContent.trim();
+                                if (tIdx >= 0 && trCells[tIdx]) tarif = trCells[tIdx].textContent.trim();
+                                if (dIdx >= 0 && trCells[dIdx]) daya = trCells[dIdx].textContent.trim();
+                            }
+                        }
+                    }
                 }
-                return null; // Belum ada baris status 3
+                return { status: currentStatus, token: token, nama: nama, tarif: tarif, daya: daya };
             }, noAgenda);
 
-            if (foundData && foundData !== 'WAIT') {
+            if (foundData && foundData.status && foundData.status !== lastReportedStatus) {
+                lastReportedStatus = foundData.status;
+                bot.sendMessage(chatId, `🔄 Status No Agenda saat ini berubah menjadi: *${lastReportedStatus}*`, { parse_mode: 'Markdown' });
+            }
+
+            if (foundData && foundData.token) {
                 tokenCT = foundData.token;
                 namaCT = foundData.nama || '-';
                 tarifCT = foundData.tarif || '-';
@@ -4230,7 +4239,26 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             }
 
             retries++;
-            if (retries % 6 === 0) bot.sendMessage(chatId, `⏳ Masih menunggu status menjadi '3'...`);
+            if (retries % 6 === 0) {
+                bot.sendMessage(chatId, `⏳ Masih menunggu status menjadi '3' (Status saat ini: ${lastReportedStatus || 'Belum terdeteksi'})...`);
+                
+                // Cek kesehatan sesi AP2T
+                const isHealthy = await page.evaluate(() => {
+                    const menuItems = Array.from(document.querySelectorAll('.x-tree-node-anchor, .x-tree-node-text'));
+                    return menuItems.some(el => el.textContent.includes('PELAYANAN PELANGGAN') || el.textContent.includes('INFO PELANGGAN'));
+                }).catch(() => false);
+
+                if (!isHealthy) {
+                    bot.sendMessage(chatId, `⚠️ Sesi AP2T terputus saat menunggu status CT! Mencoba memulihkan...`);
+                    const recovered = await checkAndReloginIfNeeded(chatId).catch(() => false);
+                    if (recovered) {
+                        bot.sendMessage(chatId, `✅ Sesi berhasil dipulihkan ke Home Page. Namun karena layar ter-reset, pantauan No Agenda ini terhenti. (Anda bisa mengetik /resume nanti untuk melanjutkannya)`);
+                        throw new Error("Polling CT dihentikan karena sesi terputus.");
+                    } else {
+                        throw new Error("Gagal memulihkan sesi terputus.");
+                    }
+                }
+            }
         }
 
         if (tokenCT) {
