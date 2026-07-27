@@ -639,6 +639,7 @@ const SELECTORS = {
 
 // ===== STATE GLOBAL =====
 let browser = null;
+let heartbeatReloginCount = 0;
 let page = null;
 let isLoggedIn = false;
 let isLoggingIn = false;
@@ -6392,7 +6393,10 @@ setInterval(async () => {
             if (ok) {
                 isLoggedIn = true;
                 currentAccount = 'main';
-                if (adminChatId) bot.sendMessage(adminChatId, `🔄 *Sistem Auto-Relogin (Heartbeat)*\nSesi AP2T sempat terputus karena idle, namun bot telah berhasil login kembali secara otomatis.`, { parse_mode: 'Markdown' }).catch(()=>{});
+                heartbeatReloginCount++;
+                if (heartbeatReloginCount % 10 === 1) {
+                    broadcastMessage(`🔄 *Sistem Auto-Relogin (Heartbeat)*\nSesi AP2T sempat terputus karena idle, namun bot telah berhasil login kembali secara otomatis.\n_(Notifikasi ini dikirim 1 kali per 10 kali auto-relogin)_`);
+                }
             } else {
                 isLoggedIn = false;
             }
