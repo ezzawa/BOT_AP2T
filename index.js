@@ -2306,7 +2306,7 @@ async function executeUploadPerbaikan(msg) {
     
     bot.editMessageText(resultMsg, {
         chat_id: msg.chat.id,
-        message_id: activeStatusMsgId,
+        message_id: statusMsg.message_id,
         parse_mode: 'HTML'
     }).catch((e) => { console.error("Edit error:", e); });
 }
