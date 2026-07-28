@@ -706,8 +706,8 @@ async function checkPause(chatId) {
 
 // ===== FUNGSI: Eksekusi Antrean Global =====
 async function processQueue() {
-    console.log("[DEBUG] processQueue called. isProcessingCT=", isProcessingCT, " Queue length=", commandQueue.length);
-    if (isProcessingCT || commandQueue.length === 0) return;
+    console.log("[DEBUG] processQueue called. isProcessingCT=", isProcessingCT, " Queue length=", commandQueue.length, " isLoggingIn=", isLoggingIn);
+    if (isProcessingCT || commandQueue.length === 0 || isLoggingIn) return;
     isProcessingCT = true;
 
     const queueItem = commandQueue.shift();
@@ -3374,14 +3374,8 @@ async function processCT(idpel, nogan, chatId, userInfo) {
     console.log("[DEBUG] processCT STARTED for IDPEL:", idpel);
     activeChatId = chatId;
     try {
-        if (!isLoggedIn) {
-            console.log('[DEBUG] Calling login...');
-            const ok = await login('main', chatId, true);
-            console.log('[DEBUG] login returned:', ok);
-            if (!ok) return;
-            isLoggedIn = true;
-            currentAccount = 'main';
-        }
+        const isHealthy = await checkAndReloginIfNeeded(chatId).catch(() => false);
+        if (!isHealthy) return;
 
         let inputNomet = null;
         // DETEKSI 11 DIGIT (NOMOR METER)
@@ -3562,6 +3556,16 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 }).catch(() => false);
                 
                 if (unitIsFilled) break;
+                
+                if (waitUnit > 0 && waitUnit % 10 === 0) {
+                    await updateStatus(`🔄 Unit belum terisi, memancing sistem dengan tombol Clear...`);
+                    await targetFrame.evaluate(() => {
+                        const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+                        const clearBtn = btns.find(b => b.textContent.trim() === 'Clear' && b.getBoundingClientRect().width > 0);
+                        if (clearBtn) clearBtn.click();
+                    }).catch(()=>{});
+                }
+                
                 await new Promise(r => setTimeout(r, 500));
             }
 
@@ -4471,6 +4475,8 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
 // ===== FUNGSI: Ambil IDPEL dari Nomor Meter =====
 async function getIdpelFromNomet(nomet, chatId) {
+    const isHealthy = await checkAndReloginIfNeeded(chatId).catch(() => false);
+    if (!isHealthy) return null;
     await updateStatus(`🔍 Nomor Meter (11 digit) terdeteksi. Mengambil ID Pelanggan dari Info Pelanggan...`);
     await clickMenu(page, ['INFO PELANGGAN', 'Info Pelanggan']);
     await new Promise(r => setTimeout(r, 1500));
@@ -4490,16 +4496,22 @@ async function getIdpelFromNomet(nomet, chatId) {
     if (!infoFrame) infoFrame = page;
 
     // 1. Cari Dropdown secara Visual
-    const visualResult = await infoFrame.evaluate(() => {
-        const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
-            i.getBoundingClientRect().width > 0 && 
-            !i.closest('.x-hide-display') && 
-            !i.closest('.x-hide-offsets')
-        );
-        
-        const combo = allInputs.find(i => i.value && (i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama'));
-        
-        if (combo) {
+    let visualResult = 'COMBO_NOT_FOUND';
+    for (let wait = 0; wait < 30; wait++) {
+        visualResult = await infoFrame.evaluate(() => {
+            const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
+                i.getBoundingClientRect().width > 0 && 
+                !i.closest('.x-hide-display') && 
+                !i.closest('.x-hide-offsets')
+            );
+            
+            const combo = allInputs.find(i => {
+                if (!i.value) return false;
+                const val = i.value.trim().toLowerCase();
+                return val.includes('id pelanggan') || val.includes('nomor meter') || val.includes('nama');
+            });
+            
+            if (combo) {
             const rect = combo.getBoundingClientRect();
             const inputsOnSameLine = allInputs.filter(i => {
                 const iRect = i.getBoundingClientRect();
@@ -4520,6 +4532,9 @@ async function getIdpelFromNomet(nomet, chatId) {
         }
         return 'COMBO_NOT_FOUND';
     });
+        if (visualResult === 'OK') break;
+        await new Promise(r => setTimeout(r, 1000));
+    }
 
     if (visualResult !== 'OK') {
         await updateStatus(`❌ Gagal menemukan kolom dropdown di halaman Info Pelanggan (Visual: ${visualResult}).`);
@@ -4550,7 +4565,11 @@ async function getIdpelFromNomet(nomet, chatId) {
             !i.closest('.x-hide-display') && 
             !i.closest('.x-hide-offsets')
         );
-        const combo = allInputs.find(i => i.value && (i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama'));
+        const combo = allInputs.find(i => {
+            if (!i.value) return false;
+            const val = i.value.trim().toLowerCase();
+            return val.includes('id pelanggan') || val.includes('nomor meter') || val.includes('nama');
+        });
         if (combo) {
             const rect = combo.getBoundingClientRect();
             const inputsOnSameLine = allInputs.filter(i => {
@@ -4707,12 +4726,8 @@ async function getIdpelFromNomet(nomet, chatId) {
 // ===== FUNGSI: Eksekusi Cari Nomor Meter (/nomet) =====
 async function processCariPelanggan(target, chatId, statusMsg = null) {
 
-    if (!browser || !page || page.isClosed() || !isLoggedIn) {
-        const ok = await login('main', chatId);
-        if (!ok) return await updateStatus(`[!] Gagal login ke AP2T otomatis.`);
-        isLoggedIn = true;
-        currentAccount = 'main';
-    }
+    const isHealthy = await checkAndReloginIfNeeded(chatId).catch(() => false);
+    if (!isHealthy) return;
 
     try {
         await updateStatus(`[*] Membuka menu Info Pelanggan...`);
@@ -5362,7 +5377,7 @@ async function capturePdfAsImage(pdfUrl, browser, outputPath) {
             const bytes = new Uint8Array(arrayBuffer);
             let binary = '';
             for (let i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode([i]);
+                binary += String.fromCharCode(bytes[i]);
             }
             return window.btoa(binary);
         }, pdfUrl);
@@ -5371,7 +5386,7 @@ async function capturePdfAsImage(pdfUrl, browser, outputPath) {
             const pdfData = atob(b64);
             const uint8Array = new Uint8Array(pdfData.length);
             for (let i = 0; i < pdfData.length; i++) {
-                [i] = pdfData.charCodeAt(i);
+                uint8Array[i] = pdfData.charCodeAt(i);
             }
             renderPdf(uint8Array);
         }, base64Pdf);
@@ -5394,6 +5409,7 @@ async function updateStatus(msg, options = {}) {
         try {
             await bot.editMessageText(msg, { ...options, chat_id: activeChatId, message_id: activeStatusMsgId });
         } catch (e) {
+            if (e.message && e.message.includes('message is not modified')) return;
             try {
                 await bot.sendMessage(activeChatId, msg, options);
             } catch (ee) {}
