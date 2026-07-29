@@ -967,14 +967,14 @@ async function handleOwaSessionReset(chatId) {
         try {
             await mailPage.click('#username').catch(()=>{});
             await mailPage.evaluate(() => { const u = document.getElementById('username'); if(u) u.value = ''; });
-            await mailPage.type('#username', webUser).catch(()=>{});
+            await mailPage.type('#username', webUser, {delay: 50}).catch(()=>{});
             
             await mailPage.click('#passwordText').catch(()=>{});
             await mailPage.waitForSelector('#password', { timeout: 2000, visible: true }).catch(()=>{});
             
             await mailPage.click('#password').catch(()=>{});
             await mailPage.evaluate(() => { const p = document.getElementById('password'); if(p) p.value = ''; });
-            await mailPage.type('#password', credentials.webmail.password).catch(()=>{});
+            await mailPage.type('#password', credentials.webmail.password, {delay: 50}).catch(()=>{});
         } catch(e) {}
         
         await mailPage.evaluate((u, p) => {
@@ -984,6 +984,7 @@ async function handleOwaSessionReset(chatId) {
             if (userEl && userEl.value !== u) userEl.value = u;
         }, webUser, credentials.webmail.password).catch(()=>{});
 
+        await new Promise(r => setTimeout(r, 1500));
         await Promise.all([
             mailPage.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => null),
             mailPage.click('.signinbutton').catch(()=>null)
@@ -1293,14 +1294,14 @@ async function handleOwaMacReset(chatId, isManual = false) {
         try {
             await mailPage.click('#username').catch(()=>{});
             await mailPage.evaluate(() => { const u = document.getElementById('username'); if(u) u.value = ''; });
-            await mailPage.type('#username', webUser).catch(()=>{});
+            await mailPage.type('#username', webUser, {delay: 50}).catch(()=>{});
             
             await mailPage.click('#passwordText').catch(()=>{});
             await mailPage.waitForSelector('#password', { timeout: 2000, visible: true }).catch(()=>{});
             
             await mailPage.click('#password').catch(()=>{});
             await mailPage.evaluate(() => { const p = document.getElementById('password'); if(p) p.value = ''; });
-            await mailPage.type('#password', credentials.webmail.password).catch(()=>{});
+            await mailPage.type('#password', credentials.webmail.password, {delay: 50}).catch(()=>{});
         } catch(e) {}
         
         await mailPage.evaluate((u, p) => {
@@ -1310,6 +1311,7 @@ async function handleOwaMacReset(chatId, isManual = false) {
             if (userEl && userEl.value !== u) userEl.value = u;
         }, webUser, credentials.webmail.password).catch(()=>{});
 
+        await new Promise(r => setTimeout(r, 1500));
         await Promise.all([
             mailPage.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => null),
             mailPage.click('.signinbutton').catch(()=>null)
@@ -2070,13 +2072,13 @@ async function testWebmailLogin(chatId, userInfo = null) {
         await mailPage.waitForSelector('#username', { timeout: 15000 }).catch(()=>{});
         
         await mailPage.evaluate(() => { const u = document.getElementById('username'); if(u) u.value = ''; });
-        await mailPage.type('#username', webUser).catch(()=>{});
+        await mailPage.type('#username', webUser, {delay: 50}).catch(()=>{});
         
         await mailPage.click('#passwordText').catch(()=>{});
         await mailPage.waitForSelector('#password', { timeout: 2000, visible: true }).catch(()=>{});
         
         await mailPage.evaluate(() => { const p = document.getElementById('password'); if(p) p.value = ''; });
-        await mailPage.type('#password', credentials.webmail.password).catch(()=>{});
+        await mailPage.type('#password', credentials.webmail.password, {delay: 50}).catch(()=>{});
         
         await mailPage.evaluate((u, p) => {
             const passEl = document.getElementById('password');
