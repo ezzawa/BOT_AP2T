@@ -276,6 +276,17 @@ async function fetchStatus() {
         botStatus.style.background = 'rgba(16, 185, 129, 0.15)';
         botStatus.style.color = 'var(--accent)';
         botStatus.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+
+        const hwidEl = document.getElementById('sidebarHwid');
+        const licEl = document.getElementById('sidebarLicense');
+        if (hwidEl) hwidEl.textContent = data.hwid || 'UNKNOWN';
+        if (licEl) {
+            if (data.isLicensed) {
+                licEl.innerHTML = '<span style="color: #4ade80;">Aktif</span>';
+            } else {
+                licEl.innerHTML = '<span style="color: #f87171;">Tidak Aktif</span>';
+            }
+        }
     } catch (e) {
         const botStatus = document.getElementById('serverStatus');
         botStatus.innerHTML = '<i class="fas fa-times-circle"></i> Server Offline';
