@@ -4,7 +4,7 @@ const puppeteer = require('puppeteer');
 const { exec, execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { recordStat, getStats } = require('./stats');
+const { recordStat, getStats, recordFailedLog } = require('./stats');
 
 // Helper function to wait for an inline keyboard callback
 function waitForUserInteraction(messageId, timeoutMs = 300000) {
@@ -2874,8 +2874,13 @@ bot.onText(/\/ct(?:\s+(.+))?/, async (msg, match) => {
 
     enqueueCommand(chatId, msg.text, `[*] Perintah CT diterima. Sedang memproses...`, async () => {
         try {
-            await processCT(idpel, nogan, chatId, msg.from);
-            recordStat('cetak_token', 'success', getActiveProfileName(), msg.from);
+            const success = await processCT(idpel, nogan, chatId, msg.from);
+            if (success) {
+                recordStat('cetak_token', 'success', getActiveProfileName(), msg.from);
+            } else {
+                recordStat('cetak_token', 'fail', getActiveProfileName(), msg.from);
+                recordFailedLog('cetak_token', idpel, 'Proses berhenti sebelum selesai / gagal mengambil Token', getActiveProfileName(), msg.from);
+            }
         } catch (err) {
             await updateStatus(`❌ Terjadi kesalahan fatal CT: ${err.message}`);
             recordStat('cetak_token', 'fail', getActiveProfileName(), msg.from);
@@ -3856,7 +3861,6 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
         // AMBIL SCREENSHOT DENGAN POPUP MUNCUL (sebelum OK diklik)
         const postSaveSS = await page.screenshot({ fullPage: true }).catch(() => null);
-        if (postSaveSS) await bot.sendPhoto(chatId, postSaveSS, { reply_to_message_id: activeStatusMsgId, caption: "Status Form setelah Save (Ada Popup)" });
 
         // SEKARANG KLIK OK (Walaupun sukses atau error, kita harus klik OK dulu agar popup hilang)
         if (savePopupMsg) {
@@ -3911,6 +3915,36 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             throw new Error("Gagal memindai No Agenda dari layar. Berhenti.");
         }
         await updateStatus(`📝 No Agenda ditemukan: \`${noAgenda}\`.`, { parse_mode: 'Markdown' });
+
+        if (postSaveSS) {
+            const formInfo = await targetFrame.evaluate(() => {
+                const getVal = (labelTxt) => {
+                    const lbl = Array.from(document.querySelectorAll('label')).find(l => l.textContent.includes(labelTxt));
+                    if (lbl) {
+                        const inp = lbl.closest('.x-form-item').querySelector('input');
+                        return inp ? inp.value.trim() : '-';
+                    }
+                    return '-';
+                };
+                return {
+                    nama: getVal('Nama'),
+                    tarifDaya: getVal('Tarif / Daya')
+                };
+            }).catch(() => ({ nama: '-', tarifDaya: '-' }));
+            
+            let tarifStr = '-';
+            let dayaStr = '-';
+            if (formInfo.tarifDaya && formInfo.tarifDaya.includes('/')) {
+                const parts = formInfo.tarifDaya.split('/');
+                tarifStr = parts[0].trim();
+                dayaStr = parts[1].trim();
+            } else if (formInfo.tarifDaya) {
+                tarifStr = formInfo.tarifDaya;
+            }
+
+            const captionMsg = `Status Form setelah Save (Ada Popup)\nNama: ${formInfo.nama}\nID Pelanggan: ${idpel}\nTarif: ${tarifStr}\nDaya: ${dayaStr}\nNo Gangguan: ${nogan}\nNo Agenda: ${noAgenda}`;
+            await bot.sendPhoto(chatId, postSaveSS, { reply_to_message_id: activeStatusMsgId, caption: captionMsg }).catch(()=>{});
+        }
 
         // SIMPAN STATE
         updateCTState(idpel, { step: 'AKTIVASI_NO_METER', noAgenda: noAgenda, nogan: nogan, chatId: chatId, pembuat: userInfo ? userInfo.first_name : "User" });
@@ -4772,42 +4806,48 @@ async function processCariPelanggan(target, chatId, statusMsg = null) {
 
         // 1. Cari Dropdown secara Visual (seperti fitur CT) dengan Retry Loop
         let visualResult = 'COMBO_NOT_FOUND';
-        // Wait increased to 30 for slower loads
         for (let wait = 0; wait < 30; wait++) {
             visualResult = await infoFrame.evaluate(() => {
-                const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
+                const allInputs = Array.from(document.querySelectorAll('input[type="text"]')).filter(i => 
                     i.getBoundingClientRect().width > 0 && 
                     !i.closest('.x-hide-display') && 
                     !i.closest('.x-hide-offsets')
                 );
                 
-                // Cari combo yang isinya Id Pelanggan atau Nomor Meter (Lebih kebal)
-                const combo = allInputs.find(i => {
-                    if (!i.value) return false;
-                    const val = i.value.trim().toLowerCase();
-                    return val.includes('id pelanggan') || val.includes('nomor meter') || val.includes('nama');
-                });
+                // Cari dua input yang berada pada baris/ketinggian Y yang sama (sejajar horizontal)
+                // Di form AP2T, hanya dropdown Kriteria dan kolom Teks Pencarian yang bersebelahan.
+                let targetCombo = null;
+                let targetInput = null;
                 
-                if (combo) {
-                    const rect = combo.getBoundingClientRect();
-                    const inputsOnSameLine = allInputs.filter(i => {
-                        const iRect = i.getBoundingClientRect();
-                        // Toleransi Y (top) 15px, dan harus ada di sebelah kanannya atau elemen itu sendiri
-                        return Math.abs(iRect.top - rect.top) < 15 && iRect.left >= rect.left;
-                    });
-                    
-                    inputsOnSameLine.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-                    
-                    if (inputsOnSameLine.length >= 2) {
-                        inputsOnSameLine[0].id = 'filter_combo_nomet_visual';
-                        inputsOnSameLine[1].id = 'filter_input_nomet_visual';
-                        
-                        // Beri kotak merah & biru
-                        inputsOnSameLine[0].style.border = '3px solid red';
-                        inputsOnSameLine[1].style.border = '3px solid blue';
-                        return 'OK';
+                // Sort left-to-right first just in case
+                allInputs.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top || a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+                
+                for (let i = 0; i < allInputs.length - 1; i++) {
+                    const rect1 = allInputs[i].getBoundingClientRect();
+                    for (let j = i + 1; j < allInputs.length; j++) {
+                        const rect2 = allInputs[j].getBoundingClientRect();
+                        if (Math.abs(rect1.top - rect2.top) < 15) {
+                            // Ketemu pasangan sejajar!
+                            targetCombo = allInputs[i];
+                            targetInput = allInputs[j];
+                            
+                            // Pastikan urutan kiri ke kanan benar
+                            if (rect1.left > rect2.left) {
+                                targetCombo = allInputs[j];
+                                targetInput = allInputs[i];
+                            }
+                            break;
+                        }
                     }
-                    return 'ONLY_FOUND_' + inputsOnSameLine.length;
+                    if (targetCombo) break;
+                }
+                
+                if (targetCombo && targetInput) {
+                    targetCombo.id = 'filter_combo_nomet_visual';
+                    targetInput.id = 'filter_input_nomet_visual';
+                    targetCombo.style.border = '3px solid red';
+                    targetInput.style.border = '3px solid blue';
+                    return 'OK';
                 }
                 return 'COMBO_NOT_FOUND';
             });
@@ -5453,14 +5493,23 @@ bot.onText(/\/ambil_token(?:\s+(.+))?/, async (msg, match) => {
 
             if (!result.found) {
                 await updateStatus(`❌ Data tidak ditemukan untuk ${target}.`);
+                recordStat('ambil_token', 'fail', getActiveProfileName(), msg.from);
+                recordFailedLog('ambil_token', target, 'Data tidak ditemukan', getActiveProfileName(), msg.from);
             } else if (!result.isClearTamper) {
                 await updateStatus(`❌ Ini tidak ada CT (Transaksi bukan CLEAR TAMPER).`);
+                recordStat('ambil_token', 'fail', getActiveProfileName(), msg.from);
+                recordFailedLog('ambil_token', target, 'Bukan CT', getActiveProfileName(), msg.from);
             } else if (result.token) {
                 await updateStatus(`✅ **Token Berhasil Diambil:**\n\n\`${result.token}\``, { parse_mode: 'Markdown' });
+                recordStat('ambil_token', 'success', getActiveProfileName(), msg.from);
             } else {
                 await updateStatus(`❌ Status CLEAR TAMPER, tapi token 20 digit tidak ditemukan di tabel.`);
+                recordStat('ambil_token', 'fail', getActiveProfileName(), msg.from);
+                recordFailedLog('ambil_token', target, 'Token tidak ditemukan di tabel', getActiveProfileName(), msg.from);
             }
         } catch (e) {
+            recordStat('ambil_token', 'fail', getActiveProfileName(), msg.from);
+            recordFailedLog('ambil_token', target, e.message, getActiveProfileName(), msg.from);
             if (e.message === 'SESSION_EXPIRED') {
                 await updateStatus(`⚠️ Perintah /ambil_token dibatalkan karena sesi AP2T terputus di tengah jalan. Silakan ulangi perintah ini.`);
                 return;
@@ -6153,8 +6202,13 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
 
     enqueueCommand(chatId, msg.text, `[*] Perintah Aktivasi No Meter diterima. No Agenda: ${noAgenda}`, async () => {
         try {
-            await processAktivasiOnly(noAgenda, chatId, msg.from.first_name);
-            recordStat('aktivasi_no_meter', 'success', getActiveProfileName(), msg.from);
+            const successAct = await processAktivasiOnly(noAgenda, chatId, msg.from.first_name);
+            if (successAct) {
+                recordStat('aktivasi_no_meter', 'success', getActiveProfileName(), msg.from);
+            } else {
+                recordStat('aktivasi_no_meter', 'fail', getActiveProfileName(), msg.from);
+                recordFailedLog('aktivasi_no_meter', noAgenda, 'Gagal atau berhenti di tengah jalan', getActiveProfileName(), msg.from);
+            }
         } catch (err) {
             await updateStatus(`❌ Terjadi kesalahan Aktivasi: ${err.message}`);
             recordStat('aktivasi_no_meter', 'fail', getActiveProfileName(), msg.from);
@@ -6162,7 +6216,7 @@ bot.onText(/\/aktivasi_no_meter(?: \s*(.+))?/, async (msg, match) => {
     });
 });
 
-async function processAktivasiOnly(noAgenda, chatId, pembuat) {
+async function processAktivasiOnly(noAgenda, chatId, pembuat, isFromCT = false) {
     await checkAndReloginIfNeeded(chatId);
     
     try {
@@ -6461,8 +6515,8 @@ else await updateStatus( `⚠️ Lewat waktu menunggu 'OK', namun proses akan te
             throw new Error("Gagal menemukan kolom input No Agenda di halaman Aktivasi.");
         }
     } catch (e) {
-        const { recordStat } = require('./stats');
-        await recordStat('aktivasi_no_meter', 'fail');
+        const { recordStat, recordFailedLog } = require('./stats');
+        if (!isFromCT) recordStat('aktivasi_no_meter', 'fail');
         await updateStatus( `❌ Gagal dalam proses Aktivasi Manual: ${e.message}`);
         try {
             const ssBuffer = await page.screenshot({ encoding: 'buffer' });
