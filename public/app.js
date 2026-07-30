@@ -63,6 +63,7 @@ async function saveAdminPassword() {
 }
 
 function switchTab(tabId) {
+    if (tabId === 'failed') loadFailedLogs();
     const tabEl = document.getElementById('tab-' + tabId);
     if (!tabEl || tabEl.style.display === 'none') {
         return; // Prevent clicking hidden admin tabs
@@ -688,5 +689,62 @@ async function unlockField(id) {
         }
     } catch(e) {
         alert('Gagal memverifikasi password.');
+    }
+}
+
+function toggleAdminLogin() {
+    const sec = document.getElementById('adminLoginSection');
+    if (sec.style.display === 'none') {
+        sec.style.display = 'block';
+        document.getElementById('adminPwd').focus();
+    } else {
+        sec.style.display = 'none';
+    }
+}
+
+async function resetAllStats() {
+    if(!confirm("HATI-HATI! Anda yakin ingin MENGHAPUS SEMUA rekapitulasi data (Statistik & Log Gagal) secara permanen?")) return;
+    try {
+        const res = await fetch('/api/reset-stats', { method: 'POST' });
+        const result = await res.json();
+        if(result.success) {
+            alert('Semua data berhasil direset!');
+            fetchStats();
+            loadFailedLogs();
+        } else {
+            alert('Gagal mereset data: ' + result.error);
+        }
+    } catch(e) {
+        console.error(e);
+        alert('Gagal menghubungi server.');
+    }
+}
+
+async function loadFailedLogs() {
+    try {
+        const res = await fetch('/api/failed-logs');
+        const logs = await res.json();
+        const tbody = document.querySelector('#failedLogsTable tbody');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        if (logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Tidak ada data kegagalan.</td></tr>';
+            return;
+        }
+        
+        logs.forEach(log => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${log.waktu || '-'}</td>
+                <td><span class="status-badge">${log.perintah}</span></td>
+                <td>${log.target || '-'}</td>
+                <td>${log.profil || '-'}</td>
+                <td>${log.user || '-'}</td>
+                <td style="color: #ff4757;">${log.alasan || '-'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error(e);
     }
 }
