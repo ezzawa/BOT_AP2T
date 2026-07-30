@@ -13,10 +13,13 @@
     <div id="loginOverlay">
         <div class="login-box">
             <h2><i class="fas fa-lock" style="color: var(--primary); margin-bottom: 10px;"></i><br>Akses Terbatas</h2>
-            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Masukkan PASSWORD_ADMIN untuk mengelola Konfigurasi &amp; Fleet. Atau masuk sebagai User biasa.</p>
-            <input type="password" id="adminPwd" placeholder="PASSWORD_ADMIN">
-            <button class="btn-primary" style="width: 100%;" onclick="attemptLogin()">Login Admin</button>
-            <button class="btn-secondary" onclick="loginAsUser()">Masuk sebagai User (Live Log)</button>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Pilih cara masuk ke Dashboard.</p>
+            <button class="btn-secondary" style="width: 100%; margin-bottom: 10px;" onclick="loginAsUser()">Masuk sebagai User (Live Log)</button>
+            <button class="btn-primary" style="width: 100%; margin-bottom: 10px;" onclick="toggleAdminLogin()">Login Admin</button>
+            <div id="adminLoginSection" style="display: none; margin-top: 15px;">
+                <input type="password" id="adminPwd" placeholder="PASSWORD_ADMIN" style="margin-bottom: 10px;">
+                <button class="btn-primary" style="width: 100%;" onclick="attemptLogin()">Masuk</button>
+            </div>
         </div>
     </div>
 
@@ -25,6 +28,7 @@
         <h2><i class="fas fa-robot"></i> AP2T Bot</h2>
         <ul>
             <li id="tab-livelog" class="active" onclick="switchTab('livelog')"><i class="fas fa-desktop"></i> Live Log (PC Ini)</li>
+            <li id="tab-failed" onclick="switchTab('failed')"><i class="fas fa-exclamation-triangle"></i> Log Gagal</li>
             <li id="tab-config" onclick="switchTab('config')"><i class="fas fa-cog"></i> Config Utama</li>
             <li id="tab-akun" onclick="switchTab('akun')"><i class="fas fa-users"></i> Akun &amp; Profil</li>
             <li class="admin-only" id="tab-users" onclick="switchTab('users')"><i class="fas fa-server"></i> Fleet &amp; Users</li>
@@ -48,10 +52,51 @@
             <div class="card">
                 <h3><i class="fas fa-terminal"></i> Log Aktivitas Terakhir di PC ini</h3>
                 <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Memantau secara langsung proses Cetak Token, Aktivasi, dll yang sedang berjalan.</p>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label style="color: #ccc; font-size: 14px;">Pilih Periode:</label>
+                        <select id="statPeriod" onchange="fetchStats()" style="background: rgba(0,0,0,0.3); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 5px 10px; border-radius: 4px;">
+                            <option value="today">Hari Ini</option>
+                            <option value="total">Total Keseluruhan</option>
+                        </select>
+                    </div>
+                    <button class="btn-outline admin-only" onclick="resetAllStats()" style="color: #ff4757; border-color: #ff4757; display: none;"><i class="fas fa-trash"></i> Reset Semua Data</button>
+                </div>
+
                 <div id="statsContainer" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;"></div>
                 <div id="profileStatsContainer" style="margin-bottom: 15px;"></div>
                 <div class="log-box" id="liveLogBox">
                     <div style="color: #64748b; text-align: center; margin-top: 20px;">Memuat log...</div>
+                </div>
+            </div>
+        </section>
+
+        
+        <!-- FAILED LOGS TAB -->
+        <section id="failed" class="tab-content">
+            <div class="card">
+                <h3><i class="fas fa-exclamation-triangle" style="color: #ff4757;"></i> Rekap Kegagalan Proses</h3>
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">Daftar 100 proses terakhir yang gagal. Tabel ini membantu Anda memfokuskan perbaikan pada masalah tertentu.</p>
+                <div style="margin-bottom: 15px; display: flex; justify-content: flex-end;">
+                    <button class="btn-outline" onclick="loadFailedLogs()"><i class="fas fa-sync-alt"></i> Refresh Log Gagal</button>
+                </div>
+                <div class="table-container">
+                    <table id="failedLogsTable">
+                        <thead>
+                            <tr>
+                                <th>Waktu</th>
+                                <th>Perintah</th>
+                                <th>Target / IDPel</th>
+                                <th>Profil</th>
+                                <th>Pemicu (User)</th>
+                                <th>Alasan Kegagalan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="6" style="text-align: center;">Memuat log gagal...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </section>
