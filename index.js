@@ -140,10 +140,8 @@ setInterval(async () => {
             if (isLogoutPage || (!isDashboard && !currentUrl.includes('beranda') && !currentUrl.includes('menu') && !currentUrl.includes('default')) || !isSessionLive) {
                 console.log('[HEARTBEAT] Sesi AP2T tidak valid! Mencoba re-login otomatis...');
                 isLoggedIn = false;
-                const ssOut = await page.screenshot().catch(() => null);
                 const msg = `⚠️ *SESI AP2T TERPUTUS!*\nBot mendeteksi logout / sesi habis.\n🔄 Sedang melakukan re-login otomatis...`;
-                if (ssOut) await broadcastPhoto(ssOut, msg).catch(() => {});
-                else broadcastMessage(msg);
+                broadcastMessage(msg);
 
                 // Auto re-login
                 try {
@@ -940,14 +938,14 @@ async function handleOwaSessionReset(chatId) {
         try {
             await mailPage.click('#username').catch(()=>{});
             await mailPage.evaluate(() => { const u = document.getElementById('username'); if(u) u.value = ''; });
-            await mailPage.type('#username', webUser).catch(()=>{});
+            await mailPage.type('#username', webUser, { delay: 50 }).catch(()=>{});
             
             await mailPage.click('#passwordText').catch(()=>{});
             await mailPage.waitForSelector('#password', { timeout: 2000, visible: true }).catch(()=>{});
             
             await mailPage.click('#password').catch(()=>{});
             await mailPage.evaluate(() => { const p = document.getElementById('password'); if(p) p.value = ''; });
-            await mailPage.type('#password', credentials.webmail.password).catch(()=>{});
+            await mailPage.type('#password', credentials.webmail.password, { delay: 50 }).catch(()=>{});
         } catch(e) {}
         
         await mailPage.evaluate((u, p) => {
@@ -1266,14 +1264,14 @@ async function handleOwaMacReset(chatId, isManual = false) {
         try {
             await mailPage.click('#username').catch(()=>{});
             await mailPage.evaluate(() => { const u = document.getElementById('username'); if(u) u.value = ''; });
-            await mailPage.type('#username', webUser).catch(()=>{});
+            await mailPage.type('#username', webUser, { delay: 50 }).catch(()=>{});
             
             await mailPage.click('#passwordText').catch(()=>{});
             await mailPage.waitForSelector('#password', { timeout: 2000, visible: true }).catch(()=>{});
             
             await mailPage.click('#password').catch(()=>{});
             await mailPage.evaluate(() => { const p = document.getElementById('password'); if(p) p.value = ''; });
-            await mailPage.type('#password', credentials.webmail.password).catch(()=>{});
+            await mailPage.type('#password', credentials.webmail.password, { delay: 50 }).catch(()=>{});
         } catch(e) {}
         
         await mailPage.evaluate((u, p) => {
@@ -1923,8 +1921,7 @@ async function login(accountType, chatId, isAutoLogin = false, retryLevel = 0) {
                 if (okBtn) okBtn.click();
             }).catch(() => {});
             await new Promise(r => setTimeout(r, 1500));
-            const ssAfterOk = await page.screenshot().catch(() => null);
-            if (ssAfterOk) await bot.sendPhoto(chatId, ssAfterOk, { caption: '📋 Status setelah klik OK pada popup Reset Session' }).catch(()=>{});
+            // Screenshot 'Status setelah klik OK pada popup Reset Session' dihilangkan sesuai permintaan user
 
             await new Promise(r => setTimeout(r, 1000));
             bot.sendMessage(chatId, `ℹ️ Permintaan Reset Session dikirim. Memeriksa Webmail...`);
@@ -2043,13 +2040,13 @@ async function testWebmailLogin(chatId, userInfo = null) {
         await mailPage.waitForSelector('#username', { timeout: 15000 }).catch(()=>{});
         
         await mailPage.evaluate(() => { const u = document.getElementById('username'); if(u) u.value = ''; });
-        await mailPage.type('#username', webUser).catch(()=>{});
+        await mailPage.type('#username', webUser, { delay: 50 }).catch(()=>{});
         
         await mailPage.click('#passwordText').catch(()=>{});
         await mailPage.waitForSelector('#password', { timeout: 2000, visible: true }).catch(()=>{});
         
         await mailPage.evaluate(() => { const p = document.getElementById('password'); if(p) p.value = ''; });
-        await mailPage.type('#password', credentials.webmail.password).catch(()=>{});
+        await mailPage.type('#password', credentials.webmail.password, { delay: 50 }).catch(()=>{});
         
         await mailPage.evaluate((u, p) => {
             const passEl = document.getElementById('password');
@@ -2058,7 +2055,8 @@ async function testWebmailLogin(chatId, userInfo = null) {
             if (userEl && userEl.value !== u) userEl.value = u;
         }, webUser, credentials.webmail.password).catch(()=>{});
 
-        bot.sendMessage(chatId, `⏳ Memeriksa hasil login...`);
+        bot.sendMessage(chatId, `?? Memeriksa hasil login...`);
+        await new Promise(r => setTimeout(r, 1000)); // Extra wait before clicking
         await Promise.all([
             mailPage.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => null),
             mailPage.click('.signinbutton').catch(() => null)
@@ -3645,15 +3643,31 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
             // CEK TARIF PASCABAYAR
             bot.sendMessage(chatId, `🔍 Mengecek Tarif / Daya...`);
-            const tarifDaya = await targetFrame.evaluate(() => {
+            const extractedInfo = await targetFrame.evaluate(() => {
                 const labels = Array.from(document.querySelectorAll('label'));
-                const label = labels.find(l => l.textContent.includes('Tarif / Daya'));
-                if (label) {
-                    const input = label.closest('.x-form-item').querySelector('input');
-                    if (input) return input.value;
-                }
-                return null;
+                const getVal = (txt) => {
+                    const l = labels.find(lb => lb.textContent.includes(txt));
+                    if (l && l.closest('.x-form-item')) {
+                        const inp = l.closest('.x-form-item').querySelector('input');
+                        if (inp) return inp.value;
+                    }
+                    return '-';
+                };
+                return { tarifDaya: getVal('Tarif / Daya'), nama: getVal('Nama') };
             });
+            var tarifDaya = extractedInfo.tarifDaya !== '-' ? extractedInfo.tarifDaya : null;
+            var namaPemohon = extractedInfo.nama;
+            if (namaPemohon === '-') {
+                namaPemohon = await targetFrame.evaluate(() => {
+                    const labels = Array.from(document.querySelectorAll('label'));
+                    const l = labels.find(lb => lb.textContent.includes('Nama Pemohon'));
+                    if (l && l.closest('.x-form-item')) {
+                        const inp = l.closest('.x-form-item').querySelector('input');
+                        if (inp) return inp.value;
+                    }
+                    return '-';
+                });
+            }
 
             if (tarifDaya) {
                 // Contoh: "R1M / 900"
@@ -3668,8 +3682,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 }
             }
         } else {
-            const ss = await page.screenshot().catch(() => null);
-            if (ss) await bot.sendPhoto(chatId, ss, { caption: "Gagal menemukan kolom IDPEL." });
+            
             throw new Error("Gagal menemukan kolom input Id Pelanggan.");
         }
 
@@ -3816,7 +3829,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
         // AMBIL SCREENSHOT DENGAN POPUP MUNCUL (sebelum OK diklik)
         const postSaveSS = await page.screenshot({ fullPage: true }).catch(() => null);
-        if (postSaveSS) await bot.sendPhoto(chatId, postSaveSS, { caption: "Status Form setelah Save (Ada Popup)" });
+        // SS disimpan tapi tidak dikirim sekarang, akan dikirim bersama data No Agenda nanti
 
         // SEKARANG KLIK OK (Walaupun sukses atau error, kita harus klik OK dulu agar popup hilang)
         if (savePopupMsg) {
@@ -3870,7 +3883,12 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             if (ss) await bot.sendPhoto(chatId, ss, { caption: "No Agenda tidak ditemukan di layar." });
             throw new Error("Gagal memindai No Agenda dari layar. Berhenti.");
         }
-        bot.sendMessage(chatId, `📝 No Agenda ditemukan: \`${noAgenda}\`.`, { parse_mode: 'Markdown' });
+        const finalCaption = `✅ *PENGADUAN TERSIMPAN*\n\n👤 NAMA: ${namaPemohon}\n💳 IDPEL: ${idpel}\n⚡ TARIF/DAYA: ${tarifDaya}\n📝 NO GANGGUAN: ${nogan}\n🏷️ NO AGENDA: \`${noAgenda}\``;
+        if (postSaveSS) {
+            await bot.sendPhoto(chatId, postSaveSS, { caption: finalCaption, parse_mode: 'Markdown' });
+        } else {
+            bot.sendMessage(chatId, finalCaption, { parse_mode: 'Markdown' });
+        }
 
         // SIMPAN STATE
         updateCTState(idpel, { step: 'AKTIVASI_NO_METER', noAgenda: noAgenda, nogan: nogan, chatId: chatId, pembuat: userInfo ? userInfo.first_name : "User" });
@@ -4332,7 +4350,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
         if (tokenCT) {
             // Kirim token Clear Tamper beserta detail lainnya ke Telegram
-            bot.sendMessage(chatId, `🎉 *TOKEN CLEAR TAMPER:*\n\`${tokenCT}\`\n\n👤 NAMA: ${namaCT}\n💳 IDPEL: ${idpel}\n⚡ TARIF/DAYA: ${tarifCT}/${dayaCT}`, { parse_mode: 'Markdown' });
+            await updateStatus(`🎉 *TOKEN CLEAR TAMPER:*\n\`${tokenCT}\`\n\n👤 NAMA: ${namaCT}\n💳 IDPEL: ${idpel}\n⚡ TARIF/DAYA: ${tarifCT}/${dayaCT}`, { parse_mode: 'Markdown' });
 
             // Mengirim data ke Google Sheets Webhook
             if (process.env.GOOGLE_SHEETS_URL) {
@@ -4407,27 +4425,40 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
         console.error("CT Error:", e);
         
-        try {
-            if (page && !page.isClosed()) {
-                const errPath = require('path').join(__dirname, `error_ct_${Date.now()}.png`);
-                await page.screenshot({ path: errPath });
-                await bot.sendPhoto(chatId, errPath, { caption: `❌ Terjadi error saat proses CT:\n\`${e.message}\`\n\n📸 Tangkapan layar saat error terjadi:`, parse_mode: 'Markdown' });
-                require('fs').unlinkSync(errPath);
-            } else {
-                bot.sendMessage(chatId, `❌ Terjadi error saat proses CT (Browser tertutup): ${e.message}`, { parse_mode: 'Markdown' });
+        const isLoggedOut = e.message.includes('AP2T_TERLOGOUT') || (page && !page.isClosed() && page.url().toLowerCase().includes('login.aspx'));
+        
+        if (isLoggedOut) {
+            isLoggedIn = false;
+            bot.sendMessage(chatId, `⚠️ *SESI AP2T TERPUTUS/TERLOGOUT*\nSistem AP2T melakukan logout otomatis. Bot akan mencoba login kembali...`, { parse_mode: 'Markdown' });
+        } else {
+            try {
+                if (page && !page.isClosed()) {
+                    const errPath = require('path').join(__dirname, `error_ct_${Date.now()}.png`);
+                    await page.screenshot({ path: errPath });
+                    await bot.sendPhoto(chatId, errPath, { caption: `❌ Terjadi error saat proses CT:\n\`${e.message}\`\n\n📸 Tangkapan layar saat error terjadi:`, parse_mode: 'Markdown' });
+                    require('fs').unlinkSync(errPath);
+                } else {
+                    bot.sendMessage(chatId, `❌ Terjadi error saat proses CT (Browser tertutup): ${e.message}`, { parse_mode: 'Markdown' });
+                }
+            } catch(ssErr) {
+                bot.sendMessage(chatId, `❌ Terjadi error saat proses CT: ${e.message}\n\n_(Gagal mengambil screenshot: ${ssErr.message})_`, { parse_mode: 'Markdown' });
             }
-        } catch(ssErr) {
-            bot.sendMessage(chatId, `❌ Terjadi error saat proses CT: ${e.message}\n\n_(Gagal mengambil screenshot: ${ssErr.message})_`, { parse_mode: 'Markdown' });
         }
 
         // Cek apakah terlogout, jika ya maka relogin otomatis
-        bot.sendMessage(chatId, `🔄 Memeriksa status sesi browser paska error...`);
+        if (!isLoggedOut) {
+            bot.sendMessage(chatId, `🔄 Memeriksa status sesi browser paska error...`);
+        }
         try {
             const isHealthy = await checkAndReloginIfNeeded(chatId);
             if (!isHealthy) {
-                bot.sendMessage(chatId, `⚠️ Gagal memulihkan sesi AP2T secara otomatis. Silakan periksa manual atau gunakan /login_ap2t.`);
+                bot.sendMessage(chatId, `🚫 Gagal memulihkan sesi AP2T secara otomatis. Silakan periksa manual atau gunakan /login_ap2t.`);
             } else {
-                bot.sendMessage(chatId, `ℹ️ Sesi AP2T masih aktif/berhasil dipulihkan. Silakan ulangi perintah CT Anda jika diperlukan.`);
+                if (isLoggedOut) {
+                    bot.sendMessage(chatId, `✅ Sesi AP2T berhasil dipulihkan secara otomatis! Silakan ulangi perintah CT Anda.`);
+                } else {
+                    bot.sendMessage(chatId, `✅ Sesi AP2T masih aktif/berhasil dipulihkan. Silakan ulangi perintah CT Anda jika diperlukan.`);
+                }
             }
         } catch (checkErr) {
             bot.sendMessage(chatId, `❌ Gagal memeriksa sesi: ${checkErr.message}`);
@@ -4759,11 +4790,30 @@ async function processCariPelanggan(target, chatId) {
                 return 'COMBO_NOT_FOUND';
             });
 
-            if (visualResult === 'OK') break;
+            if (visualResult === 'OK' || visualResult === 'OK_FALLBACK') break;
             await new Promise(r => setTimeout(r, 1000));
         }
 
-        if (visualResult !== 'OK') {
+        // 2. Klik dan Ubah Dropdown (Hanya jika kita menggunakan combo pencarian visual biasa)
+        if (visualResult === 'OK') {
+            await infoFrame.evaluate(() => {
+                const input = document.getElementById('filter_combo_nomet_visual');
+                if (input && input.parentElement) {
+                    const trigger = input.parentElement.querySelector('.x-form-trigger');
+                    if (trigger) trigger.click();
+                }
+            });
+            await new Promise(r => setTimeout(r, 1000));
+            
+            await infoFrame.evaluate((fType) => {
+                const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
+                const targetItem = items.find(i => i.textContent.toUpperCase().includes(fType.toUpperCase()));
+                if (targetItem) targetItem.click();
+            }, dropdownText);
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
+        if (visualResult !== 'OK' && visualResult !== 'OK_FALLBACK') {
             throw new Error(`Kolom input tidak ditemukan secara visual (Result: ${visualResult}). Kemungkinan halaman AP2T lambat memuat form.`);
         }
 
@@ -6177,7 +6227,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
         for (let i = 0; i < 120; i++) {
             for (const frame of page.frames()) {
             const isAktivasi = await frame.evaluate(() => {
-                return !!Array.from(document.querySelectorAll('label, span')).find(l => l.textContent.trim().toLowerCase().includes('no. agenda') && l.getBoundingClientRect().width > 0 && l.children.length === 0);
+                return !!Array.from(document.querySelectorAll('label, span')).find(l => l.textContent.toLowerCase().replace(/\./g, '').replace(/\s+/g, '').includes('noagenda') && l.getBoundingClientRect().width > 0 && l.children.length === 0);
             });
             if (isAktivasi) {
                 const hasInput = await frame.evaluate(() => {
@@ -6197,7 +6247,7 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
         await updateStatus(`🔍 Memasukkan No Agenda di Aktivasi...`);
         const inputIdentified = await aktivasiFrame.evaluate((val) => {
             const labels = Array.from(document.querySelectorAll('label, span'));
-            const label = labels.find(l => l.textContent.toLowerCase().replace(/\./g, '').includes('no agenda') && l.getBoundingClientRect().width > 0);
+            const label = labels.find(l => l.textContent.toLowerCase().replace(/\./g, '').replace(/\s+/g, '').includes('noagenda') && l.getBoundingClientRect().width > 0);
             let target = null;
             if (label) {
                 target = label.closest('.x-form-item')?.querySelector('input') || label.parentElement.querySelector('input');
@@ -6402,7 +6452,16 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                                         const val = c.textContent.trim().replace(/\s/g, '');
                                         return /^\d{20}$/.test(val) && val !== currentAgenda;
                                     });
-                                    if (allTokens.length > 0) ctToken = allTokens[allTokens.length - 1].textContent.trim().replace(/\s/g, '');
+                                    if (allTokens.length > 0) {
+                                        ctToken = allTokens[allTokens.length - 1].textContent.trim().replace(/\s/g, '');
+                                        try {
+                                            const cells2 = Array.from(myRow.querySelectorAll('.x-grid3-cell-inner'));
+                                            const safeCell = cells2.length > 3 ? cells2[3] : myRow;
+                                            safeCell.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                                            safeCell.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                                            safeCell.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                                        } catch(e){}
+                                    }
                                 }
                             }
                             return { status: currentStatus, token: ctToken };
@@ -6422,13 +6481,11 @@ async function processAktivasiOnly(noAgenda, chatId, pembuat) {
                     if (clearTamperToken) {
                         await updateStatus(`✅ Status sudah 3! Menyimpan Token Clear Tamper...`);
                         try {
-                            const ssBuffer = await page.screenshot({ encoding: 'buffer' });
-                            updateStatus(`✅ **Aktivasi Berhasil!** Screenshot dan token ada di bawah.`, { parse_mode: 'Markdown' });
-                            await bot.sendPhoto(chatId, ssBuffer, { 
-                                caption: `✅ **AKTIVASI BERHASIL**\n\nNo Agenda: ${noAgenda}\nToken CLEAR TAMPER:\n\`${clearTamperToken}\``, 
-                                parse_mode: 'Markdown' 
-                            }, { filename: "success.png", contentType: 'image/png' });
-                        } catch(ex) {}
+                            const captionText = `✅ **AKTIVASI BERHASIL**\n\nNo Agenda: ${noAgenda}\nToken CLEAR TAMPER:\n\`${clearTamperToken}\``;
+                            await processCetakPDF(browser, monitorFrame, captionText, chatId, activeStatusMsgId);
+                        } catch(ex) {
+                            console.error(ex);
+                        }
                     }
                     else {
                         await updateStatus(`⚠️ Waktu pantau habis (5 menit) atau Token Clear Tamper tidak ditemukan.`);
@@ -6576,3 +6633,139 @@ setInterval(async () => {
         console.error("Gagal menjalankan heartbeat:", e.message);
     }
 }, 30 * 1000); // Cek setiap 30 detik
+
+async function processCetakPDF(browser, monitorFrame, captionText, chatId, statusMsgId) {
+    let newPage = null;
+    let ssBuffer = null;
+    try {
+        await bot.editMessageText(`⏳ Menunggu hasil cetak Token PDF...`, { chat_id: chatId, message_id: statusMsgId }).catch(()=>{});
+
+        const newPagePromise = new Promise(x => browser.once('targetcreated', target => x(target.page())));
+        
+        // Klik tombol Cetak
+        await monitorFrame.evaluate(() => {
+            const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
+            const cetak = btns.find(b => b.textContent.toLowerCase().includes('cetak') && b.getBoundingClientRect().width > 0);
+            if (cetak) cetak.click();
+        });
+
+        const timeoutPromise = new Promise(r => setTimeout(r, 8000));
+        const targetPage = await Promise.race([newPagePromise, timeoutPromise]);
+        if (targetPage) {
+            await targetPage.waitForFunction(() => location.href !== 'about:blank', { timeout: 10000 }).catch(() => {});
+            newPage = targetPage;
+        }
+
+        if (newPage) {
+            await new Promise(r => setTimeout(r, 2000)); // Tunggu render
+            const pdfUrl = newPage.url();
+            let downloadPdfUrl = pdfUrl;
+            
+            if (pdfUrl.includes('.rpt') || pdfUrl.includes('ReportServlet')) {
+                downloadPdfUrl = pdfUrl.replace('.rpt', '.pdf').replace(/&format=\w+/g, '') + '&format=pdf#toolbar=0&view=FitH';
+                
+                await bot.editMessageText(`⏳ Merender PDF dan memotong *Background* abu-abu...`, { chat_id: chatId, message_id: statusMsgId, parse_mode: 'Markdown' }).catch(()=>{});
+                
+                await newPage.setViewport({ width: 1200, height: 1600 });
+                await newPage.goto(downloadPdfUrl, { waitUntil: 'networkidle0', timeout: 30000 }).catch(() => {});
+                
+                await new Promise(r => setTimeout(r, 1500));
+                
+                const rawBuffer = await newPage.screenshot({ fullPage: false, captureBeyondViewport: false });
+                
+                // PROSES PEMOTONGAN PINTAR (SMART CROP)
+                const cropPage = await browser.newPage();
+                try {
+                    const base64Image = rawBuffer.toString('base64');
+                    const dataUrl = `data:image/png;base64,${base64Image}`;
+                    
+                    await cropPage.setContent(`
+                        <!DOCTYPE html>
+                        <html>
+                        <body style="margin:0; padding:0; background: white;">
+                            <canvas id="canvas"></canvas>
+                        </body>
+                        </html>
+                    `);
+                    
+                    const cropBox = await cropPage.evaluate((imgUrl) => {
+                        return new Promise((resolve) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                const canvas = document.getElementById('canvas');
+                                canvas.width = img.width;
+                                canvas.height = img.height;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0);
+                                
+                                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                                const data = imgData.data;
+                                
+                                let minPx = canvas.width, minPy = canvas.height, maxPx = 0, maxPy = 0;
+                                for (let y = 0; y < canvas.height; y++) {
+                                    for (let x = 0; x < canvas.width; x++) {
+                                        const i = (y * canvas.width + x) * 4;
+                                        if (data[i] > 200 && data[i+1] > 200 && data[i+2] > 200) {
+                                            if (x < minPx) minPx = x;
+                                            if (x > maxPx) maxPx = x;
+                                            if (y < minPy) minPy = y;
+                                            if (y > maxPy) maxPy = y;
+                                        }
+                                    }
+                                }
+                                
+                                if (minPx >= maxPx) { minPx = 0; minPy = 0; maxPx = canvas.width; maxPy = canvas.height; }
+                                
+                                let minTx = canvas.width, minTy = canvas.height, maxTx = 0, maxTy = 0;
+                                for (let y = minPy; y <= maxPy; y++) {
+                                    for (let x = minPx; x <= maxPx; x++) {
+                                        const i = (y * canvas.width + x) * 4;
+                                        if (data[i] < 220 || data[i+1] < 220 || data[i+2] < 220) {
+                                            if (x < minTx) minTx = x;
+                                            if (x > maxTx) maxTx = x;
+                                            if (y < minTy) minTy = y;
+                                            if (y > maxTy) maxTy = y;
+                                        }
+                                    }
+                                }
+                                
+                                if (minTx >= maxTx) { minTx = minPx; minTy = minPy; maxTx = maxPx; maxTy = maxPy; }
+                                
+                                const pad = 20;
+                                resolve({
+                                    x: Math.max(0, minTx - pad),
+                                    y: Math.max(0, minTy - pad),
+                                    width: Math.min(canvas.width, (maxTx - minTx) + (pad * 2)),
+                                    height: Math.min(canvas.height, (maxTy - minTy) + (pad * 2))
+                                });
+                            };
+                            img.src = imgUrl;
+                        });
+                    }, dataUrl);
+                    
+                    const canvasEl = await cropPage.$('#canvas');
+                    ssBuffer = await canvasEl.screenshot({ clip: cropBox });
+                } finally {
+                    await cropPage.close().catch(() => {});
+                }
+            } else {
+                ssBuffer = await newPage.screenshot({ fullPage: true });
+            }
+
+            await bot.sendPhoto(chatId, ssBuffer, { caption: captionText, parse_mode: 'Markdown' }, { filename: `cetak_token.png`, contentType: 'image/png' });
+            await bot.deleteMessage(chatId, statusMsgId).catch(() => {});
+            
+        } else {
+            throw new Error("Gagal membuka tab PDF Cetak Token.");
+        }
+    } catch (e) {
+        console.error("Cetak PDF Error:", e);
+        const fallbackBuffer = await monitorFrame.page().screenshot({ encoding: 'buffer' }).catch(() => null);
+        if (fallbackBuffer) {
+            await bot.sendPhoto(chatId, fallbackBuffer, { caption: captionText + `\n\n_(Gagal merender PDF: ${e.message})_`, parse_mode: 'Markdown' }, { filename: "fallback.png", contentType: 'image/png' });
+            await bot.deleteMessage(chatId, statusMsgId).catch(() => {});
+        }
+    } finally {
+        if (newPage) await newPage.close().catch(() => {});
+    }
+}
