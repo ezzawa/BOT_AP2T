@@ -43,7 +43,12 @@ function saveEnv(env) {
 
 let cachedHWID = null; function getHWID() { if (cachedHWID) return cachedHWID; try { const output = execSync('powershell -NoProfile -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"').toString(); cachedHWID = output.trim() || 'UNKNOWN_HWID'; return cachedHWID; } catch (e) { return 'UNKNOWN_HWID'; } }
 
-let liveLogs = []; app.get('/api/stats', (req, res) => { try { const fs = require('fs'); const stats = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'stats.json'), 'utf8')); res.json(stats); } catch(e) { res.json({}); } });
+let liveLogs = []; app.get('/api/failed-logs', (req, res) => {
+    const { getFailedLogs } = require('./stats');
+    res.json(getFailedLogs());
+});
+
+app.get('/api/stats', (req, res) => { try { const fs = require('fs'); const stats = JSON.parse(fs.readFileSync(require('path').join(__dirname, 'stats.json'), 'utf8')); res.json(stats); } catch(e) { res.json({}); } });
 exports.addLiveLog = function(msg) {
     if (!msg || typeof msg !== 'string') return;
     const time = new Date().toLocaleTimeString('id-ID');
@@ -340,3 +345,13 @@ app.listen(PORT, () => {
 
 
 
+
+app.post('/api/reset-stats', (req, res) => {
+    try {
+        const { resetAllStats } = require('./stats');
+        resetAllStats();
+        res.json({ success: true });
+    } catch (e) {
+        res.json({ success: false, error: e.message });
+    }
+});
