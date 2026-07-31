@@ -119,9 +119,11 @@ async function broadcastPhoto(photoPath, caption, excludeChatId = null) {
     }
 }
 
-
 // --- SISTEM HEARTBEAT (ANTI-LOGOUT) + AUTO RE-LOGIN ---
 setInterval(async () => {
+    // Jangan jalankan jika sedang login atau sedang memproses command berat
+    if (isLoggingIn || (typeof isProcessingCT !== 'undefined' && isProcessingCT)) return;
+
     if (isLoggedIn && page && !page.isClosed()) {
         try {
             const currentUrl = page.url().toLowerCase();
