@@ -3366,20 +3366,19 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             }
             
             if (foundIdpel) {
-                bot.sendMessage(chatId, `✅ Berhasil menemukan riwayat ID Pelanggan: *${foundIdpel}* dari Nomor Meter ${inputNomet}.`, { parse_mode: 'Markdown' });
+                await updateStatus(`✅ Berhasil menemukan riwayat ID Pelanggan: *${foundIdpel}* dari Nomor Meter ${inputNomet}.`, { parse_mode: 'Markdown' });
                 idpel = foundIdpel;
             } else {
                 const realIdpel = await getIdpelFromNomet(idpel, chatId);
                 if (!realIdpel) {
                     return bot.sendMessage(chatId, `❌ Gagal menemukan ID Pelanggan untuk Nomor Meter ${idpel}. Silakan masukkan ID Pelanggan secara manual.`);
                 }
-                bot.sendMessage(chatId, `✅ Berhasil mendapatkan ID Pelanggan: *${realIdpel}*. Melanjutkan proses CT...`, { parse_mode: 'Markdown' });
+                await updateStatus(`✅ Berhasil mendapatkan ID Pelanggan: *${realIdpel}*. Melanjutkan proses CT...`, { parse_mode: 'Markdown' });
                 idpel = realIdpel;
             }
         }
 
         let currentState = getCTState(idpel) || { step: 'START', noAgenda: null, nogan: null };
-        let isResuming = false;
         
         if (currentState.step !== 'START') {
             if (currentState.nogan && currentState.nogan !== nogan) {
@@ -3387,30 +3386,16 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 clearCTState(idpel);
                 currentState = { step: 'START', noAgenda: null, nogan: null };
             } else if (currentState.step === 'DONE') {
-                // Hitung berapa hari lalu token dibuat
                 const now = Date.now();
                 const tokenAge = currentState.timestamp ? (now - currentState.timestamp) : 0;
-                const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-
-                if (tokenAge > THIRTY_DAYS_MS) {
-                    // Lebih dari 30 hari: izinkan buat CT baru
-                    const hariLalu = Math.floor(tokenAge / (24 * 60 * 60 * 1000));
-                    bot.sendMessage(chatId, `♻️ Riwayat CT ditemukan namun sudah *${hariLalu} hari* lalu (melewati batas 30 hari).\nMemulai pembuatan CT baru...`, { parse_mode: 'Markdown' });
-                    clearCTState(idpel);
-                    currentState = { step: 'START', noAgenda: null, nogan: null };
-                } else {
-                    // Masih dalam 30 hari: kirim token lama + peringatan
-                    const hariLalu = tokenAge < 86400000
-                        ? `${Math.floor(tokenAge / 3600000)} jam`
-                        : `${Math.floor(tokenAge / (24 * 60 * 60 * 1000))} hari`;
-                    bot.sendMessage(chatId,
-                        `✅ *TOKEN SUDAH TERSEDIA (Riwayat ${hariLalu} lalu)*\n\`${currentState.tokenCT}\`\n\n👤 NAMA: ${currentState.namaCT}\n💳 IDPEL: ${idpel}\n⚡ TARIF/DAYA: ${currentState.tarifCT}/${currentState.dayaCT}\n\n⚠️ _ID Pelanggan dan No Gangguan ini pernah dibuatkan CT ${hariLalu} lalu. Tidak dapat membuat CT baru dengan No Gangguan yang sama.\nMohon masukkan *No Gangguan yang berbeda* jika ingin membuat CT baru._`,
-                        { parse_mode: 'Markdown' }
-                    );
-                    return;
-                }
+                const hariLalu = tokenAge < 86400000
+                    ? `${Math.floor(tokenAge / 3600000)} jam`
+                    : `${Math.floor(tokenAge / (24 * 60 * 60 * 1000))} hari`;
+                
+                await updateStatus(`✅ *TOKEN SUDAH TERSEDIA (Riwayat ${hariLalu} lalu)*\n\`${currentState.tokenCT}\`\n\n👤 NAMA: ${currentState.namaCT}\n💳 IDPEL: ${idpel}\n⚡ TARIF/DAYA: ${currentState.tarifCT}/${currentState.dayaCT}\n\n⚠️ _Untuk membuat pengaduan CT baru pada pelanggan ini, silakan gunakan No Gangguan yang berbeda (contoh: tambah angka 2 di belakang namanya)._`, { parse_mode: 'Markdown' });
+                return;
             } else {
-                bot.sendMessage(chatId, `ℹ️ Memori kerja terdeteksi (IDPEL dan NOGAN sama)!\nMelompat langsung ke tahap **Monitoring Token**...`, { parse_mode: 'Markdown' });
+                await updateStatus(`⚠️ Memori kerja terdeteksi (IDPEL dan NOGAN sama)!\nMelompat langsung ke tahap **Monitoring Token**...`, { parse_mode: 'Markdown' });
                 currentState.step = 'MONITORING';
                 isResuming = true;
             }
