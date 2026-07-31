@@ -1,7 +1,7 @@
 {
   "pc_name": "wayhalim",
   "bot_version": "1.0.90",
-  "last_online": "31/7/2026, 16.33.02",
+  "last_online": "31/7/2026, 16.33.16",
   "last_updated": "31/7/2026, 16.31.37",
   "registered_users": [
     {
@@ -44,6 +44,13 @@
       "nama": "DIVA",
       "full_name": "seyna",
       "username": "@beingsuc",
+      "disabled": false
+    },
+    {
+      "id": "8191796384",
+      "nama": "ANISA",
+      "full_name": "Anisa Anisa",
+      "username": "-",
       "disabled": false
     }
   ]
