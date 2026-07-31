@@ -4329,7 +4329,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
             retries++;
             if (retries % 6 === 0) {
-                await updateStatus(`⏳ Masih menunggu status menjadi \'3\' (Status saat ini: ${lastReportedStatus || \'Belum terdeteksi\'})...`);
+                await updateStatus(`⏳ Masih menunggu status menjadi '3' (Status saat ini: ${lastReportedStatus || 'Belum terdeteksi'})...`);
                 
                 // Cek kesehatan sesi AP2T
                 const isHealthy = await page.evaluate(() => {
