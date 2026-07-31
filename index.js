@@ -4226,7 +4226,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                 if (filterBtn) filterBtn.click();
             });
 
-            bot.sendMessage(chatId, `✅ Filter berhasil diisi! Memantau Token...`);
+            await updateStatus(`✅ Filter berhasil diisi! Memantau Token...`);
         } else {
             bot.sendMessage(chatId, `❌ Gagal deteksi: ${visualResult}. Proses dihentikan.`);
             return;
@@ -4298,11 +4298,11 @@ async function processCT(idpel, nogan, chatId, userInfo) {
                         // Cari token (20 digit angka, tidak sama dengan No Agenda)
                         const tokenCell = cells.find(c => {
                             const val = c.textContent.trim().replace(/\s/g, '');
-                            return /^\d{20}$/.test(val) && val !== currentAgenda;
+                            const cleanVal = val.replace(/\D/g, ''); return /^\d{20}$/.test(cleanVal) && cleanVal !== currentAgenda;
                         });
 
                         if (tokenCell) {
-                            token = tokenCell.textContent.trim().replace(/\s/g, '');
+                            token = tokenCell.textContent.trim().replace(/\D/g, '');
                         }
 
                         // DOM Ekstrak NAMA, TARIF, DAYA
@@ -4316,7 +4316,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
             if (foundData && foundData.status && foundData.status !== lastReportedStatus) {
                 lastReportedStatus = foundData.status;
-                bot.sendMessage(chatId, `🔄 Status No Agenda saat ini berubah menjadi: *${lastReportedStatus}*`, { parse_mode: 'Markdown' });
+                await updateStatus(`🔄 Status No Agenda saat ini berubah menjadi: *${lastReportedStatus}*`, { parse_mode: 'Markdown' });
             }
 
             if (foundData && foundData.token) {
@@ -4329,7 +4329,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
 
             retries++;
             if (retries % 6 === 0) {
-                bot.sendMessage(chatId, `⏳ Masih menunggu status menjadi '3' (Status saat ini: ${lastReportedStatus || 'Belum terdeteksi'})...`);
+                await updateStatus(`⏳ Masih menunggu status menjadi \'3\' (Status saat ini: ${lastReportedStatus || \'Belum terdeteksi\'})...`);
                 
                 // Cek kesehatan sesi AP2T
                 const isHealthy = await page.evaluate(() => {
