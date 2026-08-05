@@ -3240,6 +3240,17 @@ async function closePopups(page) {
     } catch (e) { }
 }
 
+
+// Memeriksa apakah halaman saat ini adalah halaman login karena AP2T terlogout
+async function isLoggedOut(page) {
+    if (!page || page.isClosed()) return true;
+    return await page.evaluate(() => {
+        const text = document.body ? document.body.innerText.toLowerCase() : '';
+        const title = document.title ? document.title.toLowerCase() : '';
+        return (text.includes('aplikasi pelayanan pelanggan terpusat') && (text.includes('username') || text.includes('password'))) || title.includes('login');
+    }).catch(() => false);
+}
+
 async function clickMenu(page, menuPath) {
     for (const menuName of menuPath) {
         console.log(`Mencoba klik menu: ${menuName}`);
@@ -3273,7 +3284,11 @@ async function clickMenu(page, menuPath) {
                 return false;
             }, menuName);
 
-            if (!forceClicked) throw new Error(`Menu "${menuName}" tidak ditemukan`);
+            if (!forceClicked) {
+            const loggedOut = await isLoggedOut(page);
+            if (loggedOut) throw new Error('AP2T_TERLOGOUT: Menu "' + menuName + '" tidak ditemukan karena sistem ter-logout.');
+            throw new Error(`Menu "${menuName}" tidak ditemukan`);
+        }
         }
         await new Promise(r => setTimeout(r, 800));
 
@@ -4724,65 +4739,62 @@ async function processCariPelanggan(target, chatId) {
         // 1. Cari Dropdown secara Visual (seperti fitur CT) dengan Retry Loop
         let visualResult = 'COMBO_NOT_FOUND';
         let infoFrame = null;
-        for (let wait = 0; wait < 15; wait++) {
-            // Coba cari frame tiap detik jika belum dapat (karena loading lambat)
+        for (let wait = 0; wait < 30; wait++) {
             const frames = page.frames();
             for (const frame of frames) {
                 try {
-                    const isInfo = await frame.evaluate(() => {
-                        const txt = document.body ? document.body.innerText : '';
-                        return txt.includes('Unit UPI') || txt.includes('Main Result') || txt.includes('Id Pelanggan');
+                    const tempResult = await frame.evaluate(() => {
+                        const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
+                            i.getBoundingClientRect().width > 0 && 
+                            !i.closest('.x-hide-display') && 
+                            !i.closest('.x-hide-offsets')
+                        );
+                        
+                        // Cari combo yang isinya Id Pelanggan atau Nomor Meter
+                        const combo = allInputs.find(i => {
+                            if (!i.value) return false;
+                            const val = i.value.trim().toLowerCase();
+                            return val === 'id pelanggan' || val === 'nomor meter' || val === 'nama';
+                        });
+                        
+                        if (combo) {
+                            const rect = combo.getBoundingClientRect();
+                            const inputsOnSameLine = allInputs.filter(i => {
+                                const iRect = i.getBoundingClientRect();
+                                return Math.abs(iRect.top - rect.top) < 15 && iRect.left >= rect.left;
+                            });
+                            
+                            inputsOnSameLine.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+                            
+                            if (inputsOnSameLine.length >= 2) {
+                                inputsOnSameLine[0].id = 'filter_combo_nomet_visual';
+                                inputsOnSameLine[1].id = 'filter_input_nomet_visual';
+                                inputsOnSameLine[0].style.border = '3px solid red';
+                                inputsOnSameLine[1].style.border = '3px solid blue';
+                                return 'OK';
+                            }
+                            return 'ONLY_FOUND_' + inputsOnSameLine.length;
+                        }
+                        return 'COMBO_NOT_FOUND';
                     });
-                    if (isInfo) { infoFrame = frame; break; }
+                    
+                    if (tempResult === 'OK' || tempResult === 'OK_FALLBACK') {
+                        visualResult = tempResult;
+                        infoFrame = frame;
+                        break;
+                    } else if (tempResult !== 'COMBO_NOT_FOUND') {
+                        visualResult = tempResult;
+                    }
                 } catch (e) { }
             }
-            const evalFrame = infoFrame || page;
             
-            visualResult = await evalFrame.evaluate(() => {
-                const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
-                    i.getBoundingClientRect().width > 0 && 
-                    !i.closest('.x-hide-display') && 
-                    !i.closest('.x-hide-offsets')
-                );
-                
-                // Cari combo yang isinya Id Pelanggan atau Nomor Meter (Lebih kebal)
-                const combo = allInputs.find(i => {
-                    if (!i.value) return false;
-                    const val = i.value.trim().toLowerCase();
-                    return val.includes('id pelanggan') || val.includes('nomor meter') || val.includes('nama');
-                });
-                
-                if (combo) {
-                    const rect = combo.getBoundingClientRect();
-                    const inputsOnSameLine = allInputs.filter(i => {
-                        const iRect = i.getBoundingClientRect();
-                        // Toleransi Y (top) 15px, dan harus ada di sebelah kanannya atau elemen itu sendiri
-                        return Math.abs(iRect.top - rect.top) < 15 && iRect.left >= rect.left;
-                    });
-                    
-                    inputsOnSameLine.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-                    
-                    if (inputsOnSameLine.length >= 2) {
-                        inputsOnSameLine[0].id = 'filter_combo_nomet_visual';
-                        inputsOnSameLine[1].id = 'filter_input_nomet_visual';
-                        
-                        // Beri kotak merah & biru
-                        inputsOnSameLine[0].style.border = '3px solid red';
-                        inputsOnSameLine[1].style.border = '3px solid blue';
-                        return 'OK';
-                    }
-                    return 'ONLY_FOUND_' + inputsOnSameLine.length;
-                }
-                return 'COMBO_NOT_FOUND';
-            });
-
             if (visualResult === 'OK' || visualResult === 'OK_FALLBACK') break;
             await new Promise(r => setTimeout(r, 1000));
         }
 
-        // 2. Klik dan Ubah Dropdown (Hanya jika kita menggunakan combo pencarian visual biasa)
+        // 2. Klik dan Ubah Dropdown
         if (visualResult === 'OK') {
-            await (infoFrame || page).evaluate(() => {
+            await infoFrame.evaluate(() => {
                 const input = document.getElementById('filter_combo_nomet_visual');
                 if (input && input.parentElement) {
                     const trigger = input.parentElement.querySelector('.x-form-trigger');
@@ -4791,7 +4803,7 @@ async function processCariPelanggan(target, chatId) {
             });
             await new Promise(r => setTimeout(r, 1000));
             
-            await (infoFrame || page).evaluate((fType) => {
+            await infoFrame.evaluate((fType) => {
                 const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
                 const targetItem = items.find(i => i.textContent.toUpperCase().includes(fType.toUpperCase()));
                 if (targetItem) targetItem.click();
@@ -4800,25 +4812,12 @@ async function processCariPelanggan(target, chatId) {
         }
 
         if (visualResult !== 'OK' && visualResult !== 'OK_FALLBACK') {
+            const loggedOut = await isLoggedOut(page);
+            if (loggedOut) throw new Error('AP2T_TERLOGOUT: Kolom input tidak ditemukan karena sistem ter-logout.');
             throw new Error(`Kolom input tidak ditemukan secara visual (Result: ${visualResult}). Kemungkinan halaman AP2T lambat memuat form.`);
         }
 
-        // 2. Klik dan Ubah Dropdown
-        await (infoFrame || page).evaluate(() => {
-            const input = document.getElementById('filter_combo_nomet_visual');
-            if (input && input.parentElement) {
-                const trigger = input.parentElement.querySelector('.x-form-trigger');
-                if (trigger) trigger.click();
-            }
-        });
-        await new Promise(r => setTimeout(r, 1000));
         
-        await (infoFrame || page).evaluate((fType) => {
-            const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
-            const targetItem = items.find(i => i.textContent.toUpperCase().includes(fType.toUpperCase()));
-            if (targetItem) targetItem.click();
-        }, dropdownText);
-        await new Promise(r => setTimeout(r, 1000));
 
         // 3. ExtJS bisa me-refresh DOM saat dropdown diganti, kita ulang pencarian input secara visual
         const finalInputId = await (infoFrame || page).evaluate(() => {
