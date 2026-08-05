@@ -3378,6 +3378,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
             }
         }
 
+        let isResuming = false;
         let currentState = getCTState(idpel) || { step: 'START', noAgenda: null, nogan: null };
         
         if (currentState.step !== 'START') {
@@ -4182,7 +4183,7 @@ async function processCT(idpel, nogan, chatId, userInfo) {
         let searchValue = null;
 
         if (visualResult === 'OK') {
-            const isUsingIdpel = isResuming || !noAgenda;
+            const isUsingIdpel = !noAgenda;
             const searchType = isUsingIdpel ? 'PER IDPEL' : 'PER NOAGENDA';
             searchValue = isUsingIdpel ? idpel : noAgenda;
 
