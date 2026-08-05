@@ -1,7 +1,15 @@
 {
   "pc_name": "DESKTOP-1A8PP6V",
   "bot_version": "1.0.92",
-  "last_online": "5/8/2026, 11.31.21",
+  "last_online": "5/8/2026, 11.35.58",
   "last_updated": "5/8/2026, 11.25.58",
-  "registered_users": []
+  "registered_users": [
+    {
+      "id": "5590322784",
+      "nama": "test",
+      "full_name": "Horatius",
+      "username": "@Horaitus",
+      "disabled": false
+    }
+  ]
 }
