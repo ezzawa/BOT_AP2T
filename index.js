@@ -2192,34 +2192,15 @@ bot.onText(/\/upload_perbaikan/, async (msg) => {
             ]
         }
     };
-    bot.sendMessage(msg.chat.id, `⚠️ <b>KONFIRMASI UPLOAD PERBAIKAN</b>\n\nApakah Anda yakin ingin mengunggah file bot dari PC ini ke GitHub?\n<i>Pastikan Anda hanya menekan ini di PC Cabang yang source code-nya sudah final/diperbaiki.</i>`, opts);
+    bot.sendMessage(msg.chat.id, `🔄 <b>KONFIRMASI UPLOAD PERBAIKAN</b>\n\nApakah Anda yakin ingin mengunggah file bot dari PC ini ke GitHub?\n<i>Pastikan Anda hanya menekan ini di PC Cabang yang source code-nya sudah final/diperbaiki.</i>`, opts);
 });
 
 async function executeUploadPerbaikan(msg) {
-    if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "⛔ Akses ditolak.");
+    if (msg.chat.id.toString() !== adminChatId) return bot.sendMessage(msg.chat.id, "❌ Akses ditolak.");
     const token = process.env.GITHUB_TOKEN;
     const repo = process.env.GITHUB_REPO;
     const branch = process.env.GITHUB_BRANCH || 'main';
     if (!token || !repo) return bot.sendMessage(msg.chat.id, "❌ Konfigurasi GITHUB_TOKEN atau GITHUB_REPO belum diatur di .env");
-    
-    // BUMP VERSION DI PACKAGE.JSON
-    try {
-        const path = require('path');
-        const pkgPath = path.join(__dirname, 'package.json');
-        if (fs.existsSync(pkgPath)) {
-            let pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-            if (pkg.version) {
-                let vParts = pkg.version.split('.');
-                if (vParts.length === 3) {
-                    vParts[2] = parseInt(vParts[2]) + 1;
-                    pkg.version = vParts.join('.');
-                    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
-                    updateGitHubStatus();
-                    await bot.sendMessage(msg.chat.id, `🆙 Versi bot dinaikkan menjadi: v${pkg.version}`, { parse_mode: 'HTML' });
-                }
-            }
-        }
-    } catch(e) { console.error("Gagal bump version", e); }
 
     const statusMsg = await bot.sendMessage(msg.chat.id, "⏳ Sedang memeriksa dan mengunggah perbaikan ke GitHub...\nMohon tunggu sebentar...");
     const filesToSync = ['index.js', 'server.js', 'stats.js', 'public/index.html', 'public/style.css', 'public/app.js', 'package.json'];
@@ -2230,11 +2211,12 @@ async function executeUploadPerbaikan(msg) {
     
     for (const file of filesToSync) {
         try {
+            const path = require('path');
             const filePath = path.join(__dirname, ...file.split('/'));
             if (!fs.existsSync(filePath)) continue;
             
-            const content = fs.readFileSync(filePath, 'utf8');
-            const contentBase64 = Buffer.from(content).toString('base64');
+            const fileContent = fs.readFileSync(filePath, 'utf8');
+            const contentBase64 = Buffer.from(fileContent).toString('base64');
             
             const url = `https://api.github.com/repos/${repo}/contents/${file}?ref=${branch}`;
             const headers = { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' };
@@ -2266,14 +2248,33 @@ async function executeUploadPerbaikan(msg) {
     }
     
     let resultMsg = `<b>Hasil Sinkronisasi GitHub:</b>\n`;
-    if (successCount > 0) resultMsg += `\u2705 <b>${successCount} File Diunggah</b>\n`;
-    if (sameCount > 0) resultMsg += `\u2139\uFE0F <b>${sameCount} File Sudah Versi Terbaru</b> (Tidak ada perubahan)\n`;
-    if (failCount > 0) resultMsg += `\u274C <b>${failCount} File Gagal</b>\n`;
+    if (successCount > 0) resultMsg += `✅ <b>${successCount} File Diunggah</b>\n`;
+    if (sameCount > 0) resultMsg += `ℹ️ <b>${sameCount} File Sudah Versi Terbaru</b> (Tidak ada perubahan)\n`;
+    if (failCount > 0) resultMsg += `❌ <b>${failCount} File Gagal</b>\n`;
     
     if (successCount > 0) {
-        resultMsg += `\nSekarang Anda bisa menjalankan <code>/update_bot</code> di PC lain.`;
+        resultMsg += `\nSekarang Anda bisa menjalankan <code>/update_bot</code> di PC lain.\n`;
     }
-    
+
+    // BUMP VERSION DI PACKAGE.JSON (Dilakukan SETELAH upload agar tidak memicu auto-restart sebelum selesai)
+    try {
+        const path = require('path');
+        const pkgPath = path.join(__dirname, 'package.json');
+        if (fs.existsSync(pkgPath)) {
+            let pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            if (pkg.version) {
+                let vParts = pkg.version.split('.');
+                if (vParts.length === 3) {
+                    vParts[2] = parseInt(vParts[2]) + 1;
+                    pkg.version = vParts.join('.');
+                    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+                    updateGitHubStatus();
+                    resultMsg = `🆙 Versi bot dinaikkan menjadi: v${pkg.version}\n\n` + resultMsg;
+                }
+            }
+        }
+    } catch(e) { console.error("Gagal bump version", e); }
+
     bot.editMessageText(resultMsg, {
         chat_id: msg.chat.id,
         message_id: statusMsg.message_id,
@@ -4475,7 +4476,7 @@ async function getIdpelFromNomet(nomet, chatId) {
     if (!infoFrame) infoFrame = page;
 
     // 1. Cari Dropdown secara Visual
-    const visualResult = await infoFrame.evaluate(() => {
+    const visualResult = await (infoFrame || page).evaluate(() => {
         const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
             i.getBoundingClientRect().width > 0 && 
             !i.closest('.x-hide-display') && 
@@ -4512,7 +4513,7 @@ async function getIdpelFromNomet(nomet, chatId) {
     }
 
     // 2. Klik dan Ubah Dropdown ke Nomor Meter
-    await infoFrame.evaluate(() => {
+    await (infoFrame || page).evaluate(() => {
         const input = document.getElementById('filter_combo_nomet_auto_visual');
         if (input && input.parentElement) {
             const trigger = input.parentElement.querySelector('.x-form-trigger');
@@ -4521,7 +4522,7 @@ async function getIdpelFromNomet(nomet, chatId) {
     });
     await new Promise(r => setTimeout(r, 1000));
     
-    await infoFrame.evaluate(() => {
+    await (infoFrame || page).evaluate(() => {
         const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
         const targetItem = items.find(i => i.textContent.toUpperCase().includes('NOMOR METER'));
         if (targetItem) targetItem.click();
@@ -4529,7 +4530,7 @@ async function getIdpelFromNomet(nomet, chatId) {
     await new Promise(r => setTimeout(r, 1000));
 
     // 3. Cari ulang input secara visual karena ExtJS bisa mereset DOM
-    const finalInputId = await infoFrame.evaluate(() => {
+    const finalInputId = await (infoFrame || page).evaluate(() => {
         const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
             i.getBoundingClientRect().width > 0 && 
             !i.closest('.x-hide-display') && 
@@ -4572,7 +4573,7 @@ async function getIdpelFromNomet(nomet, chatId) {
     await new Promise(r => setTimeout(r, 500));
 
     // Bersihkan grid sebelum mencari agar tidak salah ambil data lama
-    await infoFrame.evaluate(() => {
+    await (infoFrame || page).evaluate(() => {
         try {
             if (typeof Ext !== 'undefined' && Ext.ComponentMgr) {
                 Ext.ComponentMgr.all.each(function(cmp) {
@@ -4588,7 +4589,7 @@ async function getIdpelFromNomet(nomet, chatId) {
     });
 
     // Klik Search
-    await infoFrame.evaluate(() => {
+    await (infoFrame || page).evaluate(() => {
         const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
         const searchBtn = btns.find(b => b.textContent.includes('Search') && b.getBoundingClientRect().width > 0);
         if (searchBtn) searchBtn.click();
@@ -4649,7 +4650,7 @@ async function getIdpelFromNomet(nomet, chatId) {
         }
 
         // Ekstrak IDPEL dari Grid
-        let gridResult = await infoFrame.evaluate(() => {
+        let gridResult = await (infoFrame || page).evaluate(() => {
             let result = null;
             try {
                 if (typeof Ext !== 'undefined' && Ext.ComponentMgr) {
@@ -4704,34 +4705,17 @@ async function processCariPelanggan(target, chatId) {
         await new Promise(r => setTimeout(r, 2000));
 
         // Bersihkan popup jika muncul
-        await bot.sendMessage(chatId, `🔄 Menghapus popup jika ada...`).catch(console.error);
+        await await updateStatus(`🔄 Menghapus popup jika ada...`).catch(console.error);
         for (let i = 0; i < 3; i++) {
             await closePopups(page);
             await new Promise(r => setTimeout(r, 500));
         }
 
-        // Cari frame Info Pelanggan
-        let infoFrame = null;
-        const frames = page.frames();
-        for (const frame of frames) {
-            try {
-                const isInfo = await frame.evaluate(() => {
-                    const txt = document.body ? document.body.innerText : '';
-                    return txt.includes('Unit UPI') || txt.includes('Main Result');
-                });
-                if (isInfo) {
-                    infoFrame = frame;
-                    break;
-                }
-            } catch (e) { }
-        }
-        if (!infoFrame) infoFrame = page;
-
         // Pembersihan ekstra: Kadang popup lambat muncul dan menutupi form
         await closePopups(page);
         await new Promise(r => setTimeout(r, 500));
 
-        await bot.sendMessage(chatId, `🔄 Mencari data pelanggan: ${target}...`).catch(console.error);
+        await await updateStatus(`🔄 Mencari data pelanggan: ${target}...`).catch(console.error);
 
         // Tentukan tipe pencarian (11 digit = Nomor Meter, 12 digit = Id Pelanggan)
         const isNomet = target.length === 11;
@@ -4739,8 +4723,22 @@ async function processCariPelanggan(target, chatId) {
 
         // 1. Cari Dropdown secara Visual (seperti fitur CT) dengan Retry Loop
         let visualResult = 'COMBO_NOT_FOUND';
+        let infoFrame = null;
         for (let wait = 0; wait < 15; wait++) {
-            visualResult = await infoFrame.evaluate(() => {
+            // Coba cari frame tiap detik jika belum dapat (karena loading lambat)
+            const frames = page.frames();
+            for (const frame of frames) {
+                try {
+                    const isInfo = await frame.evaluate(() => {
+                        const txt = document.body ? document.body.innerText : '';
+                        return txt.includes('Unit UPI') || txt.includes('Main Result') || txt.includes('Id Pelanggan');
+                    });
+                    if (isInfo) { infoFrame = frame; break; }
+                } catch (e) { }
+            }
+            const evalFrame = infoFrame || page;
+            
+            visualResult = await evalFrame.evaluate(() => {
                 const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
                     i.getBoundingClientRect().width > 0 && 
                     !i.closest('.x-hide-display') && 
@@ -4784,7 +4782,7 @@ async function processCariPelanggan(target, chatId) {
 
         // 2. Klik dan Ubah Dropdown (Hanya jika kita menggunakan combo pencarian visual biasa)
         if (visualResult === 'OK') {
-            await infoFrame.evaluate(() => {
+            await (infoFrame || page).evaluate(() => {
                 const input = document.getElementById('filter_combo_nomet_visual');
                 if (input && input.parentElement) {
                     const trigger = input.parentElement.querySelector('.x-form-trigger');
@@ -4793,7 +4791,7 @@ async function processCariPelanggan(target, chatId) {
             });
             await new Promise(r => setTimeout(r, 1000));
             
-            await infoFrame.evaluate((fType) => {
+            await (infoFrame || page).evaluate((fType) => {
                 const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
                 const targetItem = items.find(i => i.textContent.toUpperCase().includes(fType.toUpperCase()));
                 if (targetItem) targetItem.click();
@@ -4806,7 +4804,7 @@ async function processCariPelanggan(target, chatId) {
         }
 
         // 2. Klik dan Ubah Dropdown
-        await infoFrame.evaluate(() => {
+        await (infoFrame || page).evaluate(() => {
             const input = document.getElementById('filter_combo_nomet_visual');
             if (input && input.parentElement) {
                 const trigger = input.parentElement.querySelector('.x-form-trigger');
@@ -4815,7 +4813,7 @@ async function processCariPelanggan(target, chatId) {
         });
         await new Promise(r => setTimeout(r, 1000));
         
-        await infoFrame.evaluate((fType) => {
+        await (infoFrame || page).evaluate((fType) => {
             const items = Array.from(document.querySelectorAll('.x-combo-list-item')).filter(i => i.getBoundingClientRect().width > 0);
             const targetItem = items.find(i => i.textContent.toUpperCase().includes(fType.toUpperCase()));
             if (targetItem) targetItem.click();
@@ -4823,7 +4821,7 @@ async function processCariPelanggan(target, chatId) {
         await new Promise(r => setTimeout(r, 1000));
 
         // 3. ExtJS bisa me-refresh DOM saat dropdown diganti, kita ulang pencarian input secara visual
-        const finalInputId = await infoFrame.evaluate(() => {
+        const finalInputId = await (infoFrame || page).evaluate(() => {
             const allInputs = Array.from(document.querySelectorAll('input, select')).filter(i => 
                 i.getBoundingClientRect().width > 0 && 
                 !i.closest('.x-hide-display') && 
@@ -4864,7 +4862,7 @@ async function processCariPelanggan(target, chatId) {
         await new Promise(r => setTimeout(r, 1000));
 
         // Bersihkan grid sebelum mencari
-        await infoFrame.evaluate(() => {
+        await (infoFrame || page).evaluate(() => {
             try {
                 if (typeof Ext !== 'undefined' && Ext.ComponentMgr) {
                     Ext.ComponentMgr.all.each(function(cmp) {
@@ -4880,8 +4878,8 @@ async function processCariPelanggan(target, chatId) {
         });
 
         // 3. Klik Search
-        bot.sendMessage(chatId, `🔄 Mencari data pelanggan...`);
-        await infoFrame.evaluate(() => {
+        await updateStatus(`🔄 Mencari data pelanggan...`);
+        await (infoFrame || page).evaluate(() => {
             const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
             const searchBtn = btns.find(b => b.textContent.trim() === 'Search' && b.getBoundingClientRect().width > 0);
             if (searchBtn) searchBtn.click();
@@ -4889,7 +4887,7 @@ async function processCariPelanggan(target, chatId) {
 
         
         // 4. Tunggu hasil dengan Polling (maksimal 60 detik)
-        bot.sendMessage(chatId, `⏳ Menunggu loading data pelanggan...`);
+        await updateStatus(`⏳ Menunggu loading data pelanggan...`);
         let gridLoaded = false;
         let notFoundFast = false;
         
@@ -4897,7 +4895,7 @@ async function processCariPelanggan(target, chatId) {
             await new Promise(r => setTimeout(r, 1000));
             
             // Cek popup "Data tidak ditemukan"
-            const nf = await infoFrame.evaluate(() => {
+            const nf = await (infoFrame || page).evaluate(() => {
                 const wins = Array.from(document.querySelectorAll('.x-window'));
                 const infoWin = wins.find(w => w.textContent.includes('Data tidak ditemukan') && w.getBoundingClientRect().width > 0);
                 if (infoWin) {
@@ -4910,14 +4908,14 @@ async function processCariPelanggan(target, chatId) {
             if (nf) { notFoundFast = true; break; }
             
             // Tunggu mask loading hilang (jika ada)
-            const isMasked = await infoFrame.evaluate(() => {
+            const isMasked = await (infoFrame || page).evaluate(() => {
                 const mask = document.querySelector('.ext-el-mask-msg');
                 return mask && mask.getBoundingClientRect().width > 0 && mask.textContent.toLowerCase().includes('wait a few');
             });
             if (isMasked) continue; // Skip jika masih loading
 
             // Cek apakah tabel sudah berisi baris data
-            const gl = await infoFrame.evaluate(() => {
+            const gl = await (infoFrame || page).evaluate(() => {
                 const grids = Array.from(document.querySelectorAll('.x-grid3')).filter(g => g.getBoundingClientRect().width > 0);
                 const gridView = grids[0];
                 if (gridView) {
@@ -4937,7 +4935,7 @@ async function processCariPelanggan(target, chatId) {
         }
 
         // Cek popup "Data tidak ditemukan" (untuk jaga-jaga kalau lolos dari polling)
-        const notFound = await infoFrame.evaluate(() => {
+        const notFound = await (infoFrame || page).evaluate(() => {
             const wins = Array.from(document.querySelectorAll('.x-window'));
             const infoWin = wins.find(w => w.textContent.includes('Data tidak ditemukan') && w.getBoundingClientRect().width > 0);
             if (infoWin) {
@@ -4994,10 +4992,10 @@ async function processCariPelanggan(target, chatId) {
             await new Promise(r => setTimeout(r, 1000));
             
             if (nedisysData2.idpel) {
-                bot.sendMessage(chatId, `🔄 Menemukan ID Pelanggan dari popup: ${nedisysData2.idpel}. Melakukan pencarian ulang...`);
+                await updateStatus(`🔄 Menemukan ID Pelanggan dari popup: ${nedisysData2.idpel}. Melakukan pencarian ulang...`);
                 
                 // Ubah Dropdown ke 'Id Pelanggan'
-                await infoFrame.evaluate(() => {
+                await (infoFrame || page).evaluate(() => {
                     const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
                     const combo = inputs.find(i => i.value === 'Id Pelanggan' || i.value === 'Nomor Meter' || i.value === 'Nama' || i.id === 'filter_combo_nomet');
                     if (combo) combo.id = 'filter_combo_nomet_retry';
@@ -5011,7 +5009,7 @@ async function processCariPelanggan(target, chatId) {
                 await new Promise(r => setTimeout(r, 1000));
                 
                 // Isi target input
-                await infoFrame.evaluate(() => {
+                await (infoFrame || page).evaluate(() => {
                     const inputs = Array.from(document.querySelectorAll('.x-form-text')).filter(i => i.getBoundingClientRect().width > 0 && !i.closest('.x-hide-display') && !i.closest('.x-hide-offsets') && i.type === 'text');
                     const combo = inputs.find(i => i.id === 'filter_combo_nomet_retry');
                     if (combo) {
@@ -5029,7 +5027,7 @@ async function processCariPelanggan(target, chatId) {
                 await new Promise(r => setTimeout(r, 500));
                 
                 // Klik Search lagi
-                await infoFrame.evaluate(() => {
+                await (infoFrame || page).evaluate(() => {
                     const btns = Array.from(document.querySelectorAll('button, .x-btn-text'));
                     const searchBtn = btns.find(b => b.textContent.includes('Search') && b.getBoundingClientRect().width > 0);
                     if (searchBtn) searchBtn.click();
@@ -5038,7 +5036,7 @@ async function processCariPelanggan(target, chatId) {
             }
         }
         // 5. Ekstrak Hasil dari Grid secara dinamis
-        const result = await infoFrame.evaluate(() => {
+        const result = await (infoFrame || page).evaluate(() => {
             const grids = Array.from(document.querySelectorAll('.x-grid3')).filter(g => g.getBoundingClientRect().width > 0);
             const gridView = grids[0];
             if (!gridView) return null;
