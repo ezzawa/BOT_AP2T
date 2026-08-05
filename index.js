@@ -2209,13 +2209,38 @@ async function executeUploadPerbaikan(msg) {
     let sameCount = 0;
     let failCount = 0;
     
+    // BUMP VERSION DI MEMORI (Agar versi yang dikirim ke GitHub adalah versi baru)
+    let newPkgJsonStr = null;
+    let newVersionString = null;
+    const path = require('path');
+    const pkgPath = path.join(__dirname, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+        try {
+            let pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            if (pkg.version) {
+                let vParts = pkg.version.split('.');
+                if (vParts.length === 3) {
+                    vParts[2] = parseInt(vParts[2]) + 1;
+                    pkg.version = vParts.join('.');
+                    newVersionString = pkg.version;
+                    newPkgJsonStr = JSON.stringify(pkg, null, 2);
+                }
+            }
+        } catch(e) { console.error("Gagal parse package.json awal", e); }
+    }
+
     for (const file of filesToSync) {
         try {
-            const path = require('path');
             const filePath = path.join(__dirname, ...file.split('/'));
             if (!fs.existsSync(filePath)) continue;
             
-            const fileContent = fs.readFileSync(filePath, 'utf8');
+            let fileContent = '';
+            // Jika yang di-upload adalah package.json, gunakan versi memori yang sudah dinaikkan
+            if (file === 'package.json' && newPkgJsonStr) {
+                fileContent = newPkgJsonStr;
+            } else {
+                fileContent = fs.readFileSync(filePath, 'utf8');
+            }
             const contentBase64 = Buffer.from(fileContent).toString('base64');
             
             const url = `https://api.github.com/repos/${repo}/contents/${file}?ref=${branch}`;
@@ -2249,31 +2274,21 @@ async function executeUploadPerbaikan(msg) {
     
     let resultMsg = `<b>Hasil Sinkronisasi GitHub:</b>\n`;
     if (successCount > 0) resultMsg += `✅ <b>${successCount} File Diunggah</b>\n`;
-    if (sameCount > 0) resultMsg += `ℹ️ <b>${sameCount} File Sudah Versi Terbaru</b> (Tidak ada perubahan)\n`;
+    if (sameCount > 0) resultMsg += `⚠️ <b>${sameCount} File Sudah Versi Terbaru</b> (Tidak ada perubahan)\n`;
     if (failCount > 0) resultMsg += `❌ <b>${failCount} File Gagal</b>\n`;
     
     if (successCount > 0) {
         resultMsg += `\nSekarang Anda bisa menjalankan <code>/update_bot</code> di PC lain.\n`;
     }
 
-    // BUMP VERSION DI PACKAGE.JSON (Dilakukan SETELAH upload agar tidak memicu auto-restart sebelum selesai)
-    try {
-        const path = require('path');
-        const pkgPath = path.join(__dirname, 'package.json');
-        if (fs.existsSync(pkgPath)) {
-            let pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-            if (pkg.version) {
-                let vParts = pkg.version.split('.');
-                if (vParts.length === 3) {
-                    vParts[2] = parseInt(vParts[2]) + 1;
-                    pkg.version = vParts.join('.');
-                    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
-                    updateGitHubStatus();
-                    resultMsg = `🆙 Versi bot dinaikkan menjadi: v${pkg.version}\n\n` + resultMsg;
-                }
-            }
-        }
-    } catch(e) { console.error("Gagal bump version", e); }
+    // TULIS VERSI BARU KE DISK (Memicu auto-restart setelah semua upload sukses)
+    if (newPkgJsonStr) {
+        try {
+            fs.writeFileSync(pkgPath, newPkgJsonStr);
+            updateGitHubStatus();
+            resultMsg = `🆙 Versi bot dinaikkan menjadi: v${newVersionString}\n\n` + resultMsg;
+        } catch(e) { console.error("Gagal simpan package.json", e); }
+    }
 
     bot.editMessageText(resultMsg, {
         chat_id: msg.chat.id,
