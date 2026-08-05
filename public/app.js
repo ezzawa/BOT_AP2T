@@ -422,6 +422,41 @@ function resetProfileForm() {
     document.getElementById('profWebPass').value = '';
 }
 
+async function saveProfileFromForm() {
+    const name = document.getElementById('profName').value.trim();
+    const ap2tUser = document.getElementById('profAp2tUser').value.trim();
+    const ap2tPass = document.getElementById('profAp2tPass').value;
+    const webUser = document.getElementById('profWebUser').value.trim();
+    const webPass = document.getElementById('profWebPass').value;
+    
+    if (!name || !ap2tUser || !ap2tPass || !webUser || !webPass) {
+        alert("Harap isi semua kolom profil.");
+        return;
+    }
+    
+    currentProfiles[name] = {
+        ap2t: { username: ap2tUser, password: ap2tPass },
+        webmail: { username: webUser, password: webPass }
+    };
+    
+    try {
+        const res = await fetch('/api/profiles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(currentProfiles)
+        });
+        if (res.ok) {
+            alert("Profil berhasil disimpan.");
+            resetProfileForm();
+            loadProfiles();
+        } else {
+            alert("Gagal menyimpan profil.");
+        }
+    } catch (e) {
+        alert("Gagal menghubungi server.");
+    }
+}
+
 async function setProfileActive(nama) {
     if(!confirm('Gunakan profil ' + nama + ' sebagai akun aktif? Bot akan di-restart otomatis.')) return;
     try {
