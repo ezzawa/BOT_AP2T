@@ -1,7 +1,7 @@
 {
   "pc_name": "sidomulyo",
   "bot_version": "1.0.99",
-  "last_online": "6/8/2026, 17.29.12",
+  "last_online": "6/8/2026, 17.32.01",
   "last_updated": "5/8/2026, 20.28.57",
   "registered_users": [
     {
@@ -29,6 +29,13 @@
       "id": "8820751552",
       "nama": "Sarif",
       "full_name": "Sarif Hidayat",
+      "username": "-",
+      "disabled": false
+    },
+    {
+      "id": "8997124687",
+      "nama": "Binsar",
+      "full_name": "Ceri Cerimerah",
       "username": "-",
       "disabled": false
     }
