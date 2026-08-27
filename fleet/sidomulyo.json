@@ -1,7 +1,7 @@
 {
   "pc_name": "sidomulyo",
   "bot_version": "1.0.100",
-  "last_online": "27/8/2026, 08.16.26",
+  "last_online": "27/8/2026, 08.18.45",
   "last_updated": "27/8/2026, 08.10.24",
   "registered_users": [
     {
@@ -37,6 +37,13 @@
       "nama": "Binsar",
       "full_name": "Ceri Cerimerah",
       "username": "-",
+      "disabled": false
+    },
+    {
+      "id": "7907017060",
+      "nama": "Angel pkl",
+      "full_name": "yolLOL",
+      "username": "@zyyLOL",
       "disabled": false
     }
   ]
