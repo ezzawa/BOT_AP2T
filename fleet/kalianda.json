@@ -1,7 +1,7 @@
 {
   "pc_name": "kalianda",
   "bot_version": "1.0.100",
-  "last_online": "19/10/2026, 08.43.07",
+  "last_online": "19/10/2026, 08.48.07",
   "last_updated": "9/9/2026, 20.42.15",
   "registered_users": [
     {
@@ -16,7 +16,7 @@
       "nama": "bos",
       "full_name": "faiz",
       "username": "@agusharihari",
-      "disabled": false
+      "disabled": true
     },
     {
       "id": "5632467575",
